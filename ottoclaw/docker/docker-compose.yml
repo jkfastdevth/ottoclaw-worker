@@ -1,0 +1,34 @@
+services:
+  # ─────────────────────────────────────────────
+  # OttoClaw Agent (one-shot query)
+  #   docker compose -f docker/docker-compose.yml run --rm ottoclaw-agent -m "Hello"
+  # ─────────────────────────────────────────────
+  ottoclaw-agent:
+    image: docker.io/sipeed/ottoclaw:latest
+    container_name: ottoclaw-agent
+    profiles:
+      - agent
+    # Uncomment to access host network; leave commented unless needed.
+    #extra_hosts:
+    #  - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/root/.ottoclaw
+    entrypoint: ["ottoclaw", "agent"]
+    stdin_open: true
+    tty: true
+
+  # ─────────────────────────────────────────────
+  # OttoClaw Gateway (Long-running Bot)
+  #   docker compose -f docker/docker-compose.yml up ottoclaw-gateway
+  # ─────────────────────────────────────────────
+  ottoclaw-gateway:
+    image: docker.io/sipeed/ottoclaw:latest
+    container_name: ottoclaw-gateway
+    restart: on-failure
+    profiles:
+      - gateway
+    # Uncomment to access host network; leave commented unless needed.
+    #extra_hosts:
+    #  - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/root/.ottoclaw

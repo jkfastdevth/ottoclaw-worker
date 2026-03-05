@@ -1,0 +1,31 @@
+{
+  "key": "agent:main:main",
+  "messages": [
+    {
+      "role": "user",
+      "content": "ตรวจสอบสถานะเซิร์ฟเวอร์ และบอกจำนวน node ที่ online"
+    },
+    {
+      "role": "assistant",
+      "content": "จะตรวจสอบสถานะเซิร์ฟเวอร์โดยใช้ `siam_get_metrics` และดูจำนวน node ที่กำลังทำงาน\n\n```json\n{}\n```\n\nกำลังรอผลตอบกลับจากเซิร์ฟเวอร์..."
+    },
+    {
+      "role": "user",
+      "content": "use tool siam_spawn_agent to create a very small agent named 'mini-me'"
+    },
+    {
+      "role": "assistant",
+      "content": "จะสร้าง agent ใหม่โดยใช้ `siam_spawn_agent` \n\n```json\n{\n  \"agent_id\": \"mini-me\",\n  \"mission\": \"small task\",\n  \"node_ip\": \"local\",\n  \"agent_image\": \"small-agent\"\n}\n```"
+    },
+    {
+      "role": "user",
+      "content": "hi"
+    },
+    {
+      "role": "assistant",
+      "content": "สวัสดีครับ/ค่ะ! ต้องการความช่วยเหลืออะไรไหมครับ/ค่ะ? \n\n(อัปเดต /app/workspace/v2/memory/MEMORY.md: ผู้ใช้พูดคุย)"
+    }
+  ],
+  "created": "2026-03-05T21:05:44.453783168Z",
+  "updated": "2026-03-05T21:16:03.817797233Z"
+}
