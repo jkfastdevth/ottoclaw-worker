@@ -1,30 +1,97 @@
 # Siam-Synapse Autonomous Health Check
 
-ทำตามขั้นตอนนี้ทุกครั้งที่ heartbeat ทำงาน:
+Logic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**
 
-## 1. ดูสถานะระบบ
+ไม่เกี่ยวกับ chat ของผู้ใช้
 
-เรียก `siam_get_metrics` เพื่อดู CPU, node count, scaling mode
+---
 
-## 2. ตรวจ Sub-Agents
+# Step 1 — Get Metrics
 
-เรียก `siam_get_agents` เพื่อดู agents ที่ทำงานอยู่
+เรียก
 
-## 3. ตัดสินใจ (เลือก 1 อย่าง)
+siam_get_metrics
 
-- ถ้า **CPU > 80%** หรือ **ไม่มี worker agents** และมี node > 0:
-  - เรียก `siam_get_skills` แล้ว `siam_spawn_agent` สร้าง worker ใหม่
-  - รายงานว่า spawn แล้ว
+เพื่อดู:
 
-- ถ้า **CPU < 20%** และมี agents > 3:
-  - terminate agents ที่ไม่จำเป็น ด้วย `siam_terminate_agent`
-  - รายงานว่า terminate แล้ว
+* CPU
+* node count
+* scaling mode
 
-- ถ้า **ระบบปกติ** (CPU อยู่ระหว่าง 20-80%, มี workers เพียงพอ):
-  - ตอบ HEARTBEAT_OK เท่านั้น ห้ามส่งข้อความเพิ่ม
+---
 
-## กฎ
+# Step 2 — Check Agents
 
-- ถ้าไม่มีอะไรต้องทำ → ตอบ **HEARTBEAT_OK** เท่านั้น (ประหยัด API quota)
-- ห้าม spawn agents ซ้ำถ้ามีอยู่แล้ว
-- ห้าม terminate agents ที่กำลังทำ mission สำคัญอยู่
+เรียก
+
+siam_get_agents
+
+เพื่อตรวจ workers
+
+---
+
+# Step 3 — Decision Logic
+
+เลือกเพียง **หนึ่ง action**
+
+---
+
+## Case 1 — High Load
+
+เงื่อนไข:
+
+CPU > 80%
+
+หรือ
+
+ไม่มี worker agents
+
+Action:
+
+1. เรียก siam_get_skills
+2. เรียก siam_spawn_agent
+
+รายงานว่า spawn worker ใหม่
+
+---
+
+## Case 2 — Low Load
+
+เงื่อนไข:
+
+CPU < 20%
+และ agents > 3
+
+Action:
+
+terminate worker บางตัว
+
+ใช้
+
+siam_terminate_agent
+
+---
+
+## Case 3 — Normal
+
+CPU ระหว่าง 20-80%
+
+Action:
+
+ตอบ
+
+HEARTBEAT_OK
+
+เท่านั้น
+
+---
+
+# Safety Rules
+
+1. ห้าม spawn agents ซ้ำ
+2. ห้าม terminate agents ที่กำลังทำงานสำคัญ
+3. ถ้าไม่มี action ให้ตอบ
+
+HEARTBEAT_OK
+
+เท่านั้น

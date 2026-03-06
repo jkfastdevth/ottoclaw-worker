@@ -1,90 +1,175 @@
-# Siam-Synapse Orchestrator Tools
+# Siam-Synapse Tool Reference
 
-คุณมีเครื่องมือต่อไปนี้สำหรับจัดการ Siam-Synapse network:
+OttoClaw สามารถใช้เครื่องมือต่อไปนี้เพื่อจัดการ Siam-Synapse network
 
-## System Tools
+---
 
-### `siam_get_metrics`
-ดู CPU, node count, scaling mode ปัจจุบัน
-```
+# System Tools
+
+## siam_get_metrics
+
+ดูสถานะระบบ
+
+เช่น:
+
+* CPU usage
+* node count
+* scaling mode
+
+Input:
+
 {}
-```
 
-### `siam_get_agents`
-ดู sub-agents ทั้งหมดที่กำลังทำงาน
-```
+---
+
+## siam_get_agents
+
+ดู agents ที่กำลังทำงานอยู่
+
+Input:
+
 {}
-```
 
-### `siam_get_skills`
-ดู skills และ Docker images ที่ใช้ได้ — **เรียกก่อน spawn เสมอ**
-```
+---
+
+## siam_get_skills
+
+ดู Docker images / skills ที่สามารถใช้ spawn agents ได้
+
+ต้องเรียกก่อน `siam_spawn_agent`
+
+Input:
+
 {}
-```
 
-### `siam_scale`
-Scale workers ขึ้น/ลง
-```json
-{"action": "up" | "down"}
-```
+---
 
-## Agent Management
+## siam_scale
 
-### `siam_spawn_agent`
-Spawn Docker worker agent ใหม่
-```json
+Scale worker nodes
+
+Input:
+
 {
-  "agent_id": "unique-name",
-  "mission": "focused task description",
-  "node_ip": "local",
-  "agent_image": "docker-image (from siam_get_skills)"
+"action": "up" | "down"
 }
-```
 
-### `siam_terminate_agent`
-หยุดและลบ agent
-```json
-{"agent_id": "name-to-stop"}
-```
+---
 
-## OttoClaw One-Shot Jobs
+# Agent Management
 
-### `siam_get_jobs`
-ดู one-shot jobs ทั้งหมด (state: deployed/running/succeeded/failed)
-```
+## siam_spawn_agent
+
+สร้าง worker agent ใหม่
+
+Input:
+
+{
+"agent_id": "unique-name",
+"mission": "task description",
+"node_ip": "target-node",
+"agent_image": "image-from-skills"
+}
+
+ใช้เมื่อ:
+
+* ต้องการ worker ระยะยาว
+* ต้องการ agent ทำงานต่อเนื่อง
+
+---
+
+## siam_terminate_agent
+
+หยุด agent
+
+Input:
+
+{
+"agent_id": "agent-name"
+}
+
+---
+
+# OttoClaw One-Shot Jobs
+
+## siam_get_jobs
+
+ดู jobs ทั้งหมด
+
+Input:
+
 {}
-```
 
-### `siam_submit_job`
-Submit one-shot job: สร้าง container ใหม่, ส่ง LLM message, จับ output, จบแล้ว exit
-(ใช้สำหรับการสั่งงานแบบ Auto-dispatch: โยนภารกิจให้ Master จัดหา Worker/Skill มารันให้แบบ "Fire and Forget")
-```json
+---
+
+## siam_submit_job
+
+รันงานแบบ one-shot
+
+เหมาะสำหรับ:
+
+* สรุปข้อมูล
+* งาน AI
+* งาน compute
+
+Input:
+
 {
-  "message": "task to run",
-  "model_id": "llama-3.3-70b-versatile"
+"message": "task description",
+"model_id": "model name"
 }
-```
 
-### `siam_run_command`
-ส่งคำสั่ง Shell ไปรันที่ Node ปลายทางโดยตรง (เช่น 'ls -la', 'ps aux')
-```json
+---
+
+# Node Commands
+
+## siam_run_command
+
+ใช้รันคำสั่งบน node
+
+⚠️ ใช้เฉพาะเมื่อจำเป็นจริง
+
+Input:
+
 {
-  "node_id": "target-node-name",
-  "command": "shell command to run"
+"node_id": "node name",
+"command": "safe command"
 }
-```
 
-## ตัวอย่าง Workflow
+ห้ามใช้คำสั่งที่อันตราย เช่น
 
-### User: "สถานะระบบเป็นยังไง"
-1. เรียก `siam_get_metrics` → รายงาน CPU, nodes
-2. เรียก `siam_get_agents` → รายงาน agents ที่ทำงาน
+* rm -rf
+* shutdown
+* format disk
+* delete system files
 
-### User: "สร้าง agent ใหม่ทำ X"
-1. `siam_get_skills` — หา image ที่เหมาะสม
-2. `siam_spawn_agent` — spawn ด้วย mission ที่ชัดเจน
-3. แจ้ง job ID กลับผู้ใช้
+---
 
-### User: "รัน task แบบ one-shot"
-1. `siam_submit_job` — ส่ง message
-2. แจ้ง job_id กลับ, ผู้ใช้ตามดูสถานะได้ที่ dashboard หรือ `siam_get_jobs`
+# Tool Execution Rules
+
+1. หากต้องใช้ tool ให้ส่ง tool request
+2. รอผลลัพธ์จากระบบก่อนตอบ
+3. ห้ามสร้างผลลัพธ์เอง
+4. ถ้า tool ไม่จำเป็น อย่าเรียก
+
+---
+
+# Example Workflows
+
+User: "สถานะระบบเป็นยังไง"
+
+→ siam_get_metrics
+→ ตอบ CPU และ node count
+
+---
+
+User: "สร้าง worker ใหม่"
+
+→ siam_get_skills
+→ siam_spawn_agent
+
+---
+
+User: "รันงานสรุปข่าว"
+
+→ siam_submit_job
