@@ -804,8 +804,24 @@
     {
       "role": "assistant",
       "content": "เรียก siam_get_metrics เพื่อดูสถานะระบบ"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-06 15:44:28\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "เรียก siam_get_metrics เพื่อดูสถานะระบบ"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-06 15:50:27\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "เพื่อดำเนินการตามขั้นตอนของ Siam-Synapse Autonomous Health Check ฉันจะเริ่มต้นด้วยการเรียกใช้ `siam_get_metrics` เพื่อดูสถานะระบบปัจจุบัน รวมถึง CPU usage, node count, และ scaling mode\n\nการเรียก `siam_get_metrics` จะให้ข้อมูลที่จำเป็นสำหรับการตัดสินใจในขั้นตอนต่อไปว่าจะดำเนินการใดๆ ต่อระบบหรือไม่\n\nหลังจากได้รับข้อมูลจาก `siam_get_metrics` ฉันจะดำเนินการตามเงื่อนไขที่กำหนดใน Case 1, Case 2, หรือ Case 3 เพื่อตรวจสอบว่าระบบอยู่ในสถานะที่ต้องการหรือไม่ และดำเนินการตามที่จำเป็นเพื่อรักษาสถานะที่เหมาะสมของระบบ\n\nหากไม่มีการกระทำที่จำเป็นต้องดำเนินการ ฉันจะตอบกลับด้วย \"HEARTBEAT_OK\" เพื่อยืนยันว่าระบบอยู่ในสถานะที่ถูกต้องและไม่ต้องการการแทรกแซงใดๆ ในขณะนี้\n\nเรียก `siam_get_metrics` เพื่อเริ่มต้นการตรวจสอบระบบ"
     }
   ],
   "created": "2026-03-05T19:33:28.880853295Z",
-  "updated": "2026-03-06T14:53:49.505828788Z"
+  "updated": "2026-03-06T15:50:46.104802445Z"
 }
