@@ -600,3 +600,23 @@
 [2026-03-06 12:21:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
   Status: 500
   Body:   {"error":"Post \"http://localhost:11434/api/chat\": dial tcp [::1]:11434: connect: connection refused"}
+[2026-03-06 12:27:01] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-06 12:27:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"Post \"http://localhost:11434/api/chat\": dial tcp [::1]:11434: connect: connection refused"}
+[2026-03-06 12:33:01] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-06 12:33:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"Post \"http://localhost:11434/api/chat\": dial tcp [::1]:11434: connect: connection refused"}
+[2026-03-06 12:39:01] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-06 12:39:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"Post \"http://localhost:11434/api/chat\": dial tcp [::1]:11434: connect: connection refused"}
+[2026-03-06 12:45:01] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-06 12:45:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"Post \"http://localhost:11434/api/chat\": dial tcp [::1]:11434: connect: connection refused"}
+[2026-03-06 12:51:01] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-06 12:51:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"Post \"http://localhost:11434/api/chat\": dial tcp [::1]:11434: connect: connection refused"}
