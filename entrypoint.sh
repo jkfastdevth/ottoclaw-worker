@@ -125,6 +125,12 @@ echo "💪 Starting siam-worker arm..."
 WORKER_PID=$!
 
 # ── 3. Start OttoClaw Brain ───────────────────────────────────────────────
+if [ "${OTTOCLAW_MODE:-}" = "baremetal" ]; then
+  echo "💤 Worker is an empty body. Foregoing immediate Brain launch."
+  echo "💪 Executing siam-worker arm as main process..."
+  exec /app/siam-worker
+fi
+
 echo "🧠 Starting OttoClaw brain..."
 
 if [ -n "${OTTOCLAW_ONESHOT_MESSAGE:-}" ]; then
