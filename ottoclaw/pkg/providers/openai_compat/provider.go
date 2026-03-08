@@ -37,7 +37,7 @@ type Provider struct {
 
 type Option func(*Provider)
 
-const defaultRequestTimeout = 120 * time.Second
+const defaultRequestTimeout = 600 * time.Second
 
 func WithMaxTokensField(maxTokensField string) Option {
 	return func(p *Provider) {
