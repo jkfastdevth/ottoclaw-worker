@@ -4,7 +4,6 @@
 
 # Use SIAM_MASTER_URL or MASTER_URL before falling back to local host
 MASTER_URL="${SIAM_MASTER_URL:-${MASTER_URL:-http://siam-synapse-master:8080}}"
-NODE_ID="${NODE_ID:-ottoclaw-worker-01}"
 API_KEY="${MASTER_API_KEY:-}"
 
 echo "🔌 Waiting for Master at ${MASTER_URL}..."
