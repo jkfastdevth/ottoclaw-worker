@@ -96,6 +96,10 @@ type asyncTask struct {
 // Implements PlaceholderRecorder.
 func (m *Manager) RecordPlaceholder(channel, chatID, placeholderID string) {
 	key := channel + ":" + chatID
+	if v, loaded := m.placeholders.LoadAndDelete(key); loaded {
+		// Just remove old one; placeholders have no stop func
+		_ = v
+	}
 	m.placeholders.Store(key, placeholderEntry{id: placeholderID, createdAt: time.Now()})
 }
 
@@ -103,6 +107,11 @@ func (m *Manager) RecordPlaceholder(channel, chatID, placeholderID string) {
 // Implements PlaceholderRecorder.
 func (m *Manager) RecordTypingStop(channel, chatID string, stop func()) {
 	key := channel + ":" + chatID
+	if v, loaded := m.typingStops.LoadAndDelete(key); loaded {
+		if entry, ok := v.(typingEntry); ok {
+			entry.stop()
+		}
+	}
 	m.typingStops.Store(key, typingEntry{stop: stop, createdAt: time.Now()})
 }
 
@@ -110,6 +119,11 @@ func (m *Manager) RecordTypingStop(channel, chatID string, stop func()) {
 // Implements PlaceholderRecorder.
 func (m *Manager) RecordReactionUndo(channel, chatID string, undo func()) {
 	key := channel + ":" + chatID
+	if v, loaded := m.reactionUndos.LoadAndDelete(key); loaded {
+		if entry, ok := v.(reactionEntry); ok {
+			entry.undo()
+		}
+	}
 	m.reactionUndos.Store(key, reactionEntry{undo: undo, createdAt: time.Now()})
 }
 

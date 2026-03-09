@@ -30,13 +30,19 @@ prompt_val() {
     local default="$2"
     local secret="${3:-false}"
     local value=""
+
+    local display_default="$default"
+    if [[ "$secret" == "true" && -n "$default" ]]; then
+        # Censor the default value with asterisks of the same length
+        display_default=$(echo -n "$default" | sed 's/./*/g')
+    fi
     
     if [[ "$secret" == "true" ]]; then
         # Redirect prompt to stderr so it's not captured by $(prompt_val ...)
-        echo -ne "  ${CYAN}?${RESET}  ${label}: " >&2
-        read -rs value; echo "" >&2
+        echo -ne "  ${CYAN}?${RESET}  ${label} [${display_default}]: " >&2
+        read -s value; echo "" >&2
     else
-        echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: " >&2
+        echo -ne "  ${CYAN}?${RESET}  ${label} [${display_default}]: " >&2
         read -r value
     fi
     
@@ -159,7 +165,7 @@ run_config_wizard() {
 
     # ── [2/3] Telegram (Optional) ─────────────────────────────────────────────
     echo -e "${BOLD}[2/3] Telegram Channel (Optional — press Enter to skip)${RESET}"
-    TELEGRAM_BOT_TOKEN=$( prompt_val "Telegram Bot Token"                    "${TELEGRAM_BOT_TOKEN:-}")
+    TELEGRAM_BOT_TOKEN=$( prompt_val "Telegram Bot Token"                    "${TELEGRAM_BOT_TOKEN:-}" "true")
     TELEGRAM_ALLOW_FROM=""
     TELEGRAM_BRIDGE_CHAT_ID=""
     TELEGRAM_ORCHESTRATION_ENABLED="false"
