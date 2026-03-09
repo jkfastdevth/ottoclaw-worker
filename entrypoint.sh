@@ -33,19 +33,20 @@ export OTTOCLAW_AGENTS_DEFAULTS_WORKSPACE="$WORKSPACE_DIR"
 
 mkdir -p "$OTTOCLAW_HOME_DIR" "$WORKSPACE_DIR"
 
-# ── Telegram channel JSON fragment ─────────────────────────────────────────
+# ── Channels JSON fragment (SiamSync + Optional Telegram) ──────────────────
+SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${MASTER_URL}\", \"api_key\": \"${MASTER_API_KEY}\" }"
 TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
-TG_JSON=""
+TG_FRAG=""
 if [ -n "$TG_TOKEN" ]; then
   ALLOW_FRAGMENT=""
   if [ -n "$TG_ALLOW_FROM" ]; then
-    # Convert comma-separated list to JSON array of strings
-    ALLOW_FRAGMENT="\"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')], "
+    ALLOW_FRAGMENT=", \"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')]"
   fi
-  TG_JSON=", \"channels\": { \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\", ${ALLOW_FRAGMENT}\"typing\": {\"enabled\": true} } }"
+  TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAGMENT}, \"typing\": {\"enabled\": true} }"
   echo "📱 Telegram channel: enabled"
 fi
+CHANNELS_JSON=", \"channels\": { ${SIAM_SYNC_FRAG}${TG_FRAG} }"
 
 # ── Heartbeat JSON fragment (orchestrator mode: 6-min autonomous health loop) ─
 HEARTBEAT_JSON=""
@@ -76,7 +77,7 @@ if [ ! -f "$CONFIG_PATH" ]; then
       "api_base": "${API_BASE_OVERRIDE}",
       "api_key": "${API_KEY_OVERRIDE}"
     }
-  ]${TG_JSON}${HEARTBEAT_JSON}
+  ]${CHANNELS_JSON}${HEARTBEAT_JSON}
 }
 EOF
   elif [ -n "$MODEL_ID" ] && [ -n "${LLM_API_KEY:-}" ]; then
@@ -97,7 +98,7 @@ EOF
       "model": "${MODEL_ID}",
       "api_key": "${LLM_API_KEY}"
     }
-  ]${TG_JSON}${HEARTBEAT_JSON}
+  ]${CHANNELS_JSON}${HEARTBEAT_JSON}
 }
 EOF
   fi

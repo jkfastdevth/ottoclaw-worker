@@ -417,17 +417,19 @@ MODEL_ID="${OTTOCLAW_MODEL_ID:-default}"
 API_BASE="${OTTOCLAW_API_BASE:-}"
 API_KEY="${OTTOCLAW_API_KEY:-}"
 
-# ── Telegram JSON fragment ────────────────────────────────────
+# ── Channels JSON fragment (SiamSync + Optional Telegram) ──────
+SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${MASTER_URL}\", \"api_key\": \"${MASTER_API_KEY}\" }"
 TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
-TG_JSON=""
+TG_FRAG=""
 if [ -n "$TG_TOKEN" ]; then
     ALLOW_FRAG=""
     if [ -n "$TG_ALLOW_FROM" ]; then
-        ALLOW_FRAG="\"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')], "
+        ALLOW_FRAG=", \"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')]"
     fi
-    TG_JSON=", \"channels\": { \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\", ${ALLOW_FRAG}\"typing\": {\"enabled\": true} } }"
+    TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAG}, \"typing\": {\"enabled\": true} }"
 fi
+CHANNELS_JSON=", \"channels\": { ${SIAM_SYNC_FRAG}${TG_FRAG} }"
 
 HEARTBEAT_JSON=""
 [ "${OTTOCLAW_MODE:-}" = "orchestrator" ] && \
@@ -460,7 +462,7 @@ printf '{
     "${MODEL_ID}" \
     "${API_BASE}" \
     "${API_KEY}" \
-    "${TG_JSON}" \
+    "${CHANNELS_JSON}" \
     "${HEARTBEAT_JSON}" > "${CONFIG}"
 
 echo "✓ Config generated: ${CONFIG}"
