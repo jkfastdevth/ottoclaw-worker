@@ -5,8 +5,13 @@
 # Installs ottoclaw (Brain) + siam-worker (Arm) as native binaries with
 # a systemd service, allowing full host OS access for the AI agent.
 #
-# Usage:  sudo bash install.sh
-#         sudo bash install.sh --uninstall
+# Usage:
+#   sudo bash install.sh          → Install / Reinstall
+#
+# After install, use the `ottoclaw` command:
+#   ottoclaw config               → Reconfigure settings
+#   ottoclaw uninstall            → Remove the system
+#   ottoclaw gateway --debug      → Start manually (same as service)
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -18,37 +23,20 @@ banner() { echo -e "\n${CYAN}${BOLD}══ $1 ══${RESET}\n"; }
 info()   { echo -e "  ${GREEN}✓${RESET}  $1"; }
 warn()   { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
 error()  { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
-prompt() {
-    local var_name="$1"
-    local display="$2"
-    local default="$3"
-    local secret="${4:-false}"
-    local value=""
 
-    if [ "$secret" = "true" ]; then
-        read -rsp "  ${CYAN}?${RESET}  ${display} [${default:+hidden}${default:+}]: " value
-        echo ""
+prompt_val() {
+    # Usage: prompt_val "Display label" "default_value" [secret]
+    local label="$1"
+    local default="$2"
+    local secret="${3:-false}"
+    local value=""
+    if [[ "$secret" == "true" ]]; then
+        read -rsp "  ${CYAN}?${RESET}  ${label}: " value; echo ""
     else
-        read -rp  "  ${CYAN}?${RESET}  ${display} [${default}]: " value
+        read -rp  "  ${CYAN}?${RESET}  ${label} [${default}]: " value
     fi
     echo "${value:-$default}"
 }
-
-# ── Uninstall Mode ────────────────────────────────────────────────────────────
-if [[ "${1:-}" == "--uninstall" ]]; then
-    banner "Uninstalling OttoClaw Worker"
-    systemctl stop  ottoclaw-worker siam-worker 2>/dev/null || true
-    systemctl disable ottoclaw-worker siam-worker 2>/dev/null || true
-    rm -f /etc/systemd/system/ottoclaw-worker.service
-    rm -f /etc/systemd/system/siam-worker.service
-    rm -f /usr/local/bin/ottoclaw
-    rm -f /usr/local/bin/siam-worker
-    rm -f /etc/ottoclaw/env
-    systemctl daemon-reload
-    info "OttoClaw Worker uninstalled."
-    info "Note: workspace data in /var/lib/ottoclaw was NOT removed."
-    exit 0
-fi
 
 # ── Root Check ────────────────────────────────────────────────────────────────
 if [[ "$EUID" -ne 0 ]]; then
@@ -65,259 +53,341 @@ case "$ARCH" in
 esac
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-# ── Check Build Tools ─────────────────────────────────────────────────────────
-banner "Checking Prerequisites"
-if ! command -v go &>/dev/null; then
-    warn "Go not found. Installing Go 1.21..."
-    TMP_GO=$(mktemp -d)
-    GO_VERSION="1.21.8"
-    curl -fsSL "https://go.dev/dl/go${GO_VERSION}.${OS}-${GO_ARCH}.tar.gz" -o "${TMP_GO}/go.tar.gz"
-    tar -C /usr/local -xzf "${TMP_GO}/go.tar.gz"
-    export PATH="/usr/local/go/bin:$PATH"
-    info "Go ${GO_VERSION} installed."
-fi
-info "Go: $(go version)"
-
 # ── Locate Source ─────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-info "Source root: ${REPO_ROOT}"
 
-# ── Build Binaries ────────────────────────────────────────────────────────────
-banner "Building OttoClaw Binaries"
+# ══════════════════════════════════════════════════════════════════════════════
+# SHARED: Config wizard (used by both install and `ottoclaw config`)
+# ══════════════════════════════════════════════════════════════════════════════
+run_config_wizard() {
+    local is_reconfigure="${1:-false}"
 
-echo -e "  Building ${BOLD}ottoclaw${RESET} (Brain)..."
-pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-mkdir -p cmd/ottoclaw/internal/onboard
-cp -r "${SCRIPT_DIR}/workspace" cmd/ottoclaw/internal/onboard/workspace 2>/dev/null || true
-CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw ./cmd/ottoclaw
-popd >/dev/null
-info "ottoclaw → /usr/local/bin/ottoclaw"
+    if [[ "$is_reconfigure" == "true" ]]; then
+        banner "OttoClaw Reconfiguration"
+        echo -e "${YELLOW}Current config: /etc/ottoclaw/env${RESET}"
+        echo -e "Enter new values, or press ${CYAN}Enter${RESET} to keep existing.\n"
+        # Load existing values as defaults
+        # shellcheck disable=SC1091
+        set -o allexport; source /etc/ottoclaw/env 2>/dev/null || true; set +o allexport
+    else
+        banner "Configuration Setup"
+        echo -e "Press ${CYAN}Enter${RESET} to accept the default value in brackets.\n"
+        # Set starter defaults
+        MASTER_HOST="${MASTER_HOST:-192.168.1.1}"
+        MASTER_API_KEY="${MASTER_API_KEY:-}"
+        NODE_SECRET="${NODE_SECRET:-}"
+        TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+        TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
+    fi
 
-echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
-pushd "${REPO_ROOT}/worker" >/dev/null
-CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
-popd >/dev/null
-info "siam-worker → /usr/local/bin/siam-worker"
+    # Extract MASTER_HOST from existing MASTER_URL if reconfiguring
+    if [[ -n "${MASTER_URL:-}" && -z "${MASTER_HOST:-}" ]]; then
+        MASTER_HOST=$(echo "${MASTER_URL}" | sed 's|http://||;s|:8080||')
+    fi
+    MASTER_HOST="${MASTER_HOST:-192.168.1.1}"
 
-# ── Interactive Configuration ─────────────────────────────────────────────────
-banner "Configuration Setup"
-echo -e "${BOLD}Please provide the following configuration values.${RESET}"
-echo -e "Press ${CYAN}Enter${RESET} to accept the default value shown in brackets.\n"
+    # ── [1/3] Master Server ───────────────────────────────────────────────────
+    echo -e "${BOLD}[1/3] Master Server — Network Type${RESET}"
+    echo ""
+    echo -e "  เลือกประเภทการเชื่อมต่อ:"
+    echo -e "    ${CYAN}1${RESET}) Local LAN     — เครื่องอยู่วง network เดียวกัน (e.g. 192.168.x.x)"
+    echo -e "    ${CYAN}2${RESET}) Tailscale VPN — เชื่อมผ่าน Tailscale mesh (e.g. 100.x.x.x)"
+    echo -e "    ${CYAN}3${RESET}) VPS / Public  — Master อยู่ cloud หรือ domain สาธารณะ"
+    echo ""
+    NET_TYPE=$(prompt_val "Network type [1/2/3]" "${NET_TYPE:-1}")
 
-# --- Section 1: Agent Identity ---
-echo -e "${BOLD}[1/5] Agent Identity${RESET}"
-NODE_ID=$(        prompt "NODE_ID"    "Node ID (unique name for this machine)"           "worker-$(hostname)")
-AGENT_NAME=$(     prompt "AGENT_NAME" "Agent Soul Name (e.g. nova-spire, zephyr-flux)"   "nova-spire")
-OTTOCLAW_MODE=$(  prompt "MODE"       "Mode: worker / orchestrator / baremetal"           "worker")
+    PROTOCOL="http"
+    case "$NET_TYPE" in
+      2)
+        NET_LABEL="Tailscale VPN"
+        DEFAULT_HOST="${MASTER_HOST:-100.x.x.x}"
+        HOST_HINT="Tailscale IP (100.x.x.x) หรือ machine name (e.g. master.tail1234.ts.net)"
+        ;;
+      3)
+        NET_LABEL="VPS / Public IP"
+        DEFAULT_HOST="${MASTER_HOST:-1.2.3.4}"
+        HOST_HINT="Public IP หรือ domain (e.g. master.example.com)"
+        echo ""
+        echo -e "  ใช้ HTTPS? (กรณี Master มี SSL certificate)"
+        USE_HTTPS=$(prompt_val "Use HTTPS? [y/N]" "n")
+        [[ "${USE_HTTPS,,}" == "y" ]] && PROTOCOL="https"
+        ;;
+      *)
+        NET_LABEL="Local LAN"
+        DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}"
+        HOST_HINT="IP ของเครื่อง Master ในวง LAN (e.g. 192.168.1.100)"
+        ;;
+    esac
 
-echo ""
+    echo ""
+    info "Network: ${NET_LABEL} (${PROTOCOL})"
+    echo -e "\n  ${YELLOW}Hint:${RESET} ${HOST_HINT}"
+    echo -e "  Ports → HTTP API :8080   gRPC :50051\n"
 
-# --- Section 2: Master Connection ---
-echo -e "${BOLD}[2/5] Master Connection${RESET}"
-MASTER_URL=$(      prompt "MASTER_URL"      "Master HTTP URL (for REST API)"                  "http://master:8080")
-MASTER_GRPC_URL=$( prompt "MASTER_GRPC_URL" "Master gRPC address (host:port)"                 "master:50051")
-MASTER_API_URL=$(  prompt "MASTER_API_URL"  "Master API base URL (for agent API)"              "${MASTER_URL}")
-MASTER_API_KEY=$(  prompt "MASTER_API_KEY"  "Master API Key"                                   "" "true")
-NODE_SECRET=$(     prompt "NODE_SECRET"     "Node Secret (shared with Master)"                 "" "true")
+    MASTER_HOST=$(    prompt_val "Master address" "${DEFAULT_HOST}")
+    MASTER_API_KEY=$( prompt_val "Master API Key" "${MASTER_API_KEY:-}" "true")
+    NODE_SECRET=$(    prompt_val "Node Secret"    "${NODE_SECRET:-}"    "true")
 
-echo ""
-
-# --- Section 3: LLM Configuration ---
-echo -e "${BOLD}[3/5] LLM Configuration${RESET}"
-echo -e "  ${YELLOW}Tip:${RESET} Use Master Proxy to keep API keys central (recommended)."
-echo -e "  → Set API Base to: ${CYAN}${MASTER_URL}/api/agent/v1/llm/proxy${RESET}"
-echo -e "  → Set API Key to your Master API Key above"
-echo ""
-LLM_MODE=$(prompt "LLM_MODE" "LLM Mode: proxy (use Master) / direct (own key)" "proxy")
-
-if [[ "$LLM_MODE" == "proxy" ]]; then
+    # Derive all URLs from a single master host + protocol
+    MASTER_URL="${PROTOCOL}://${MASTER_HOST}:8080"
+    MASTER_GRPC_URL="${MASTER_HOST}:50051"
+    MASTER_API_URL="${MASTER_URL}"
+    SIAM_MASTER_URL="${MASTER_URL}"
+    SIAM_API_KEY="${MASTER_API_KEY}"
     OTTOCLAW_API_BASE="${MASTER_URL}/api/agent/v1/llm/proxy"
     OTTOCLAW_API_KEY="${MASTER_API_KEY}"
     OTTOCLAW_MODEL_ID="default"
     OTTOCLAW_MODEL_NAME="default"
-    info "Using Master LLM Proxy → ${OTTOCLAW_API_BASE}"
-else
-    echo -e "  ${BOLD}Direct LLM Provider:${RESET}"
-    LLM_PROVIDER=$(   prompt "PROVIDER"    "Provider (groq/openai/anthropic/ollama/...)"    "groq")
-    LLM_API_KEY=$(    prompt "LLM_API_KEY" "LLM API Key"                                    "" "true")
-    LLM_MODEL=$(      prompt "MODEL"       "Model ID (e.g. groq/llama-3.3-70b-versatile)"   "groq/llama-3.3-70b-versatile")
-    LLM_MODEL_NAME=$( prompt "MODEL_NAME"  "Model display name (e.g. llama-3.3)"             "llama-3.3")
 
-    OTTOCLAW_API_BASE=$(prompt "API_BASE"  "Provider API base URL"                           "https://api.groq.com/openai/v1")
-    OTTOCLAW_API_KEY="${LLM_API_KEY}"
-    OTTOCLAW_MODEL_ID="${LLM_MODEL}"
-    OTTOCLAW_MODEL_NAME="${LLM_MODEL_NAME}"
-fi
+    echo ""
+    info "Master HTTP → ${MASTER_URL}"
+    info "Master gRPC → ${MASTER_GRPC_URL}"
+    info "LLM Proxy   → ${OTTOCLAW_API_BASE}"
+    echo ""
 
-echo ""
+    # ── [2/3] Telegram (Optional) ─────────────────────────────────────────────
+    echo -e "${BOLD}[2/3] Telegram Channel (Optional — press Enter to skip)${RESET}"
+    TELEGRAM_BOT_TOKEN=$( prompt_val "Telegram Bot Token"                    "${TELEGRAM_BOT_TOKEN:-}")
+    TELEGRAM_ALLOW_FROM=""
+    if [[ -n "$TELEGRAM_BOT_TOKEN" ]]; then
+        TELEGRAM_ALLOW_FROM=$(prompt_val "Allowed User IDs (comma-separated)" "${TELEGRAM_ALLOW_FROM:-}")
+    fi
 
-# --- Section 4: Telegram (Optional) ---
-echo -e "${BOLD}[4/5] Telegram Channel (Optional)${RESET}"
-TELEGRAM_BOT_TOKEN=$(prompt "TELEGRAM_BOT_TOKEN" "Telegram Bot Token (leave blank to skip)"  "")
-TELEGRAM_ALLOW_FROM=""
-if [[ -n "$TELEGRAM_BOT_TOKEN" ]]; then
-    TELEGRAM_ALLOW_FROM=$(prompt "TELEGRAM_ALLOW_FROM" "Allowed Telegram IDs (comma-separated)" "")
-fi
+    echo ""
 
-echo ""
+    # ── [3/3] Service User (Optional) ─────────────────────────────────────────
+    echo -e "${BOLD}[3/3] Service Options (Optional)${RESET}"
+    SERVICE_USER_INPUT=$(prompt_val "Run service as user (leave blank = root)" "${RUN_AS_USER:-}")
 
-# --- Section 5: Paths & Workspace ---
-echo -e "${BOLD}[5/5] Paths & Workspace${RESET}"
-OTTOCLAW_HOME=$(    prompt "OTTOCLAW_HOME"    "OttoClaw home dir (config, cache)"               "/var/lib/ottoclaw")
-OTTOCLAW_WORKSPACE=$(prompt "OTTOCLAW_WORKSPACE" "Agent workspace dir (markdown files, tools)"  "${OTTOCLAW_HOME}/workspace")
-RUN_AS_USER=$(       prompt "RUN_AS_USER"     "Run service as user (leave blank = root)"          "")
+    # Fixed defaults — identical to Docker container behaviour
+    NODE_ID="$(hostname)"
+    OTTOCLAW_MODE="worker"
+    OTTOCLAW_HOME="/var/lib/ottoclaw"
+    OTTOCLAW_WORKSPACE="${OTTOCLAW_HOME}/workspace"
+    RUN_AS_USER="${SERVICE_USER_INPUT}"
 
-echo ""
+    echo ""
+}
 
-# ── Create Directories & User ─────────────────────────────────────────────────
-banner "Setting Up System"
-mkdir -p "${OTTOCLAW_HOME}" "${OTTOCLAW_WORKSPACE}/v2" /etc/ottoclaw
-
-# Copy workspace files from source
-if [[ -d "${SCRIPT_DIR}/workspace" ]]; then
-    cp -rn "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
-    info "Workspace files copied to ${OTTOCLAW_WORKSPACE}"
-fi
-
-# Copy SIAM skills
-if [[ -d "${SCRIPT_DIR}/skills" ]]; then
-    mkdir -p "${OTTOCLAW_HOME}/workspace/skills"
-    cp -rn "${SCRIPT_DIR}/skills/." "${OTTOCLAW_HOME}/workspace/skills/" 2>/dev/null || true
-    info "Skills copied to ${OTTOCLAW_HOME}/workspace/skills"
-fi
-
-# Assign ownership if running as specific user
-SERVICE_USER="root"
-if [[ -n "$RUN_AS_USER" ]]; then
-    SERVICE_USER="$RUN_AS_USER"
-    chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${OTTOCLAW_HOME}" /etc/ottoclaw
-fi
-
-# ── Write Environment File ────────────────────────────────────────────────────
-banner "Writing Environment Configuration"
-cat > /etc/ottoclaw/env << EOF
+# ══════════════════════════════════════════════════════════════════════════════
+# SHARED: Write /etc/ottoclaw/env
+# ══════════════════════════════════════════════════════════════════════════════
+write_env_file() {
+    mkdir -p /etc/ottoclaw
+    cat > /etc/ottoclaw/env << EOF
 # ═══════════════════════════════════════════════════════════════
 # OttoClaw Worker — Environment Configuration
-# Generated by install.sh on $(date)
-# Edit this file to update configuration, then:
-#   sudo systemctl restart ottoclaw-worker siam-worker
+# Generated on $(date)
+# Edit with:  sudo ottoclaw config
+#   then:     sudo systemctl restart siam-worker ottoclaw-worker
 # ═══════════════════════════════════════════════════════════════
 
-# ── Agent Identity ───────────────────────────────────────────
+# ── Agent Identity (auto from hostname) ──────────────────────
 NODE_ID=${NODE_ID}
-AGENT_NAME=${AGENT_NAME}
 OTTOCLAW_MODE=${OTTOCLAW_MODE}
 
-# ── Master Connection ────────────────────────────────────────
+# ── Master Connection ─────────────────────────────────────────
 MASTER_URL=${MASTER_URL}
 MASTER_GRPC_URL=${MASTER_GRPC_URL}
 MASTER_API_URL=${MASTER_API_URL}
 MASTER_API_KEY=${MASTER_API_KEY}
-SIAM_MASTER_URL=${MASTER_URL}
-SIAM_API_KEY=${MASTER_API_KEY}
+SIAM_MASTER_URL=${SIAM_MASTER_URL}
+SIAM_API_KEY=${SIAM_API_KEY}
 NODE_SECRET=${NODE_SECRET}
 
-# ── LLM Configuration ────────────────────────────────────────
+# ── LLM (via Master Proxy — auto-derived) ────────────────────
 OTTOCLAW_API_BASE=${OTTOCLAW_API_BASE}
 OTTOCLAW_API_KEY=${OTTOCLAW_API_KEY}
 OTTOCLAW_MODEL_ID=${OTTOCLAW_MODEL_ID}
 OTTOCLAW_MODEL_NAME=${OTTOCLAW_MODEL_NAME}
 
-# ── Telegram Channel ─────────────────────────────────────────
+# ── Telegram Channel ──────────────────────────────────────────
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 
-# ── Paths ────────────────────────────────────────────────────
+# ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
 OTTOCLAW_WORKSPACE=${OTTOCLAW_WORKSPACE}/v2
 EOF
+    chmod 600 /etc/ottoclaw/env
+    info "Environment saved → /etc/ottoclaw/env (mode 600)"
+}
 
-chmod 600 /etc/ottoclaw/env
-info "Environment saved → /etc/ottoclaw/env (mode 600)"
+# ══════════════════════════════════════════════════════════════════════════════
+# BUILD
+# ══════════════════════════════════════════════════════════════════════════════
+build_binaries() {
+    banner "Building OttoClaw Binaries"
 
-# ── Create systemd Service: siam-worker (Arm) ─────────────────────────────────
-banner "Creating systemd Services"
-cat > /etc/systemd/system/siam-worker.service << EOF
+    if ! command -v go &>/dev/null; then
+        warn "Go not found. Installing Go 1.21..."
+        TMP_GO=$(mktemp -d)
+        GO_VERSION="1.21.8"
+        curl -fsSL "https://go.dev/dl/go${GO_VERSION}.${OS}-${GO_ARCH}.tar.gz" -o "${TMP_GO}/go.tar.gz"
+        tar -C /usr/local -xzf "${TMP_GO}/go.tar.gz"
+        export PATH="/usr/local/go/bin:$PATH"
+        info "Go ${GO_VERSION} installed."
+    fi
+
+    echo -e "  Building ${BOLD}ottoclaw${RESET} (Brain)..."
+    pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
+    mkdir -p cmd/ottoclaw/internal/onboard
+    cp -r "${SCRIPT_DIR}/workspace" cmd/ottoclaw/internal/onboard/workspace 2>/dev/null || true
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    popd >/dev/null
+    info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
+
+    echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
+    pushd "${REPO_ROOT}/worker" >/dev/null
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    popd >/dev/null
+    info "siam-worker → /usr/local/bin/siam-worker"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CREATE WRAPPER: /usr/local/bin/ottoclaw
+# Intercepts: config, uninstall — passes everything else to ottoclaw-brain
+# ══════════════════════════════════════════════════════════════════════════════
+install_wrapper() {
+    cat > /usr/local/bin/ottoclaw << 'WRAPEOF'
+#!/usr/bin/env bash
+# OttoClaw CLI Wrapper — Intercepts management commands
+BRAIN="/usr/local/bin/ottoclaw-brain"
+INSTALL_SH="$(find /opt/siam-synapse /home -name install.sh -path "*/ottoclaw-worker/*" 2>/dev/null | head -1)"
+
+case "${1:-}" in
+  config)
+    # ── Reconfigure settings ──────────────────────────────────
+    if [[ "$EUID" -ne 0 ]]; then
+        exec sudo bash "$0" config
+    fi
+    # Source config wizard from installer
+    source "${INSTALL_SH}" --source-only
+    run_config_wizard "true"
+    write_env_file
+    echo ""
+    echo "Restart services to apply changes:"
+    echo "  sudo systemctl restart siam-worker ottoclaw-worker"
+    ;;
+
+  uninstall)
+    # ── Remove the system ─────────────────────────────────────
+    if [[ "$EUID" -ne 0 ]]; then
+        exec sudo bash "$0" uninstall
+    fi
+    echo -e "\n\033[1;33m⚠  This will stop and remove all OttoClaw services and binaries.\033[0m"
+    read -rp "  Are you sure? [y/N]: " confirm
+    if [[ "${confirm,,}" != "y" ]]; then
+        echo "Aborted."; exit 0
+    fi
+    systemctl stop  ottoclaw-worker siam-worker 2>/dev/null || true
+    systemctl disable ottoclaw-worker siam-worker 2>/dev/null || true
+    rm -f /etc/systemd/system/ottoclaw-worker.service
+    rm -f /etc/systemd/system/siam-worker.service
+    rm -f /usr/local/bin/ottoclaw-brain
+    rm -f /usr/local/bin/ottoclaw
+    rm -f /usr/local/bin/siam-worker
+    rm -f /usr/local/bin/ottoclaw-setup
+    rm -f /etc/ottoclaw/env
+    systemctl daemon-reload
+    echo ""
+    echo "✓ OttoClaw Worker removed."
+    echo "  Workspace data at /var/lib/ottoclaw was preserved."
+    echo "  Remove manually: sudo rm -rf /var/lib/ottoclaw"
+    ;;
+
+  help|--help|-h)
+    echo ""
+    echo "  OttoClaw Worker — Management CLI"
+    echo ""
+    echo "  ottoclaw config      Reconfigure Master URL, API key, Telegram, etc."
+    echo "  ottoclaw uninstall   Remove services and binaries"
+    echo "  ottoclaw [args...]   Start the AI brain (forwards to ottoclaw-brain)"
+    echo ""
+    ;;
+
+  *)
+    # Forward everything else to the real brain binary
+    exec "$BRAIN" "$@"
+    ;;
+esac
+WRAPEOF
+    chmod +x /usr/local/bin/ottoclaw
+    info "ottoclaw wrapper   → /usr/local/bin/ottoclaw"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SYSTEMD SERVICES
+# ══════════════════════════════════════════════════════════════════════════════
+install_services() {
+    local svc_user="${1:-root}"
+
+    cat > /etc/systemd/system/siam-worker.service << EOF
 [Unit]
 Description=Siam-Synapse gRPC Arm (siam-worker)
-Documentation=https://github.com/jkfastdevth/Siam-Synapse
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
-User=${SERVICE_USER}
+User=${svc_user}
 EnvironmentFile=/etc/ottoclaw/env
 ExecStart=/usr/local/bin/siam-worker
 Restart=on-failure
 RestartSec=10s
-StandardOutput=journal
-StandardError=journal
 SyslogIdentifier=siam-worker
-
-# Allow full host access
 PrivateTmp=no
 ProtectSystem=no
 ProtectHome=no
-NoNewPrivileges=no
 
 [Install]
 WantedBy=multi-user.target
 EOF
-info "siam-worker.service created"
 
-# ── Create systemd Service: ottoclaw-worker (Brain) ───────────────────────────
-cat > /etc/systemd/system/ottoclaw-worker.service << EOF
+    cat > /etc/systemd/system/ottoclaw-worker.service << EOF
 [Unit]
 Description=Siam-Synapse OttoClaw Brain (ottoclaw-worker)
-Documentation=https://github.com/jkfastdevth/Siam-Synapse
 After=network.target siam-worker.service
 Requires=siam-worker.service
 
 [Service]
 Type=simple
-User=${SERVICE_USER}
+User=${svc_user}
 EnvironmentFile=/etc/ottoclaw/env
 WorkingDirectory=${OTTOCLAW_HOME}
-
-# ── Config Generation (runs before ExecStart) ────────────────
 ExecStartPre=/usr/local/bin/ottoclaw-setup
-
-# ── Launch Brain ─────────────────────────────────────────────
-ExecStart=/usr/local/bin/ottoclaw gateway --debug
+ExecStart=/usr/local/bin/ottoclaw-brain gateway --debug
 Restart=on-failure
 RestartSec=15s
-StandardOutput=journal
-StandardError=journal
 SyslogIdentifier=ottoclaw-brain
-
-# Allow full host access (native mode - intentional)
 PrivateTmp=no
 ProtectSystem=no
 ProtectHome=no
-NoNewPrivileges=no
 
 [Install]
 WantedBy=multi-user.target
 EOF
-info "ottoclaw-worker.service created"
 
-# ── Create Setup Helper Script ─────────────────────────────────────────────────
-cat > /usr/local/bin/ottoclaw-setup << 'SETUPEOF'
+    info "siam-worker.service created"
+    info "ottoclaw-worker.service created"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ottoclaw-setup helper (generates config.json before service starts)
+# ══════════════════════════════════════════════════════════════════════════════
+install_setup_helper() {
+    cat > /usr/local/bin/ottoclaw-setup << 'SETUPEOF'
 #!/usr/bin/env bash
-# Generates OttoClaw config.json from environment before service start
 set -euo pipefail
 
-OTTOCLAW_HOME_DIR="${OTTOCLAW_HOME:-/var/lib/ottoclaw}"
-CONFIG_PATH="${OTTOCLAW_CONFIG:-${OTTOCLAW_HOME_DIR}/config.json}"
-WORKSPACE_DIR="${OTTOCLAW_WORKSPACE:-${OTTOCLAW_HOME_DIR}/workspace}"
+HOME_DIR="${OTTOCLAW_HOME:-/var/lib/ottoclaw}"
+CONFIG="${OTTOCLAW_CONFIG:-${HOME_DIR}/config.json}"
+WORKSPACE="${OTTOCLAW_WORKSPACE:-${HOME_DIR}/workspace}"
 
-export OTTOCLAW_HOME="$OTTOCLAW_HOME_DIR"
-export OTTOCLAW_CONFIG="$CONFIG_PATH"
-export OTTOCLAW_AGENTS_DEFAULTS_WORKSPACE="$WORKSPACE_DIR"
-
-mkdir -p "${OTTOCLAW_HOME_DIR}" "${WORKSPACE_DIR}"
+export OTTOCLAW_HOME="$HOME_DIR"
+export OTTOCLAW_CONFIG="$CONFIG"
+export OTTOCLAW_AGENTS_DEFAULTS_WORKSPACE="$WORKSPACE"
+mkdir -p "${HOME_DIR}" "${WORKSPACE}"
 
 MODEL_NAME="${OTTOCLAW_MODEL_NAME:-default}"
 MODEL_ID="${OTTOCLAW_MODEL_ID:-default}"
@@ -326,23 +396,22 @@ TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_JSON=""
 if [ -n "$TG_TOKEN" ]; then
-    ALLOW_FRAGMENT=""
+    ALLOW_FRAG=""
     if [ -n "$TG_ALLOW_FROM" ]; then
-        ALLOW_FRAGMENT="\"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')], "
+        ALLOW_FRAG="\"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')], "
     fi
-    TG_JSON=", \"channels\": { \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\", ${ALLOW_FRAGMENT}\"typing\": {\"enabled\": true} } }"
+    TG_JSON=", \"channels\": { \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\", ${ALLOW_FRAG}\"typing\": {\"enabled\": true} } }"
 fi
 
 HEARTBEAT_JSON=""
-if [ "${OTTOCLAW_MODE:-}" = "orchestrator" ]; then
+[ "${OTTOCLAW_MODE:-}" = "orchestrator" ] && \
     HEARTBEAT_JSON=", \"heartbeat\": { \"enabled\": true, \"interval\": 6 }"
-fi
 
-cat > "${CONFIG_PATH}" << EOF
+cat > "${CONFIG}" << EOF
 {
   "agents": {
     "defaults": {
-      "workspace": "${WORKSPACE_DIR}",
+      "workspace": "${WORKSPACE}",
       "model": "${MODEL_NAME}",
       "max_tokens": 8192,
       "max_tool_iterations": 20
@@ -358,42 +427,86 @@ cat > "${CONFIG_PATH}" << EOF
   ]${TG_JSON}${HEARTBEAT_JSON}
 }
 EOF
-
-echo "✓ OttoClaw config generated: ${CONFIG_PATH}"
+echo "✓ Config generated: ${CONFIG}"
 SETUPEOF
-chmod +x /usr/local/bin/ottoclaw-setup
-info "ottoclaw-setup helper → /usr/local/bin/ottoclaw-setup"
+    chmod +x /usr/local/bin/ottoclaw-setup
+    info "ottoclaw-setup     → /usr/local/bin/ottoclaw-setup"
+}
 
-# ── Register SIAM Skills ───────────────────────────────────────────────────────
-if [[ -f "${SCRIPT_DIR}/skills/siam/register.sh" ]]; then
-    cp "${SCRIPT_DIR}/skills/siam/register.sh" /usr/local/bin/siam-register.sh
-    chmod +x /usr/local/bin/siam-register.sh
-    info "SIAM skills register script → /usr/local/bin/siam-register.sh"
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN INSTALL FLOW
+# ══════════════════════════════════════════════════════════════════════════════
+# If sourced by the wrapper for `ottoclaw config`, provide functions only
+if [[ "${1:-}" == "--source-only" ]]; then
+    return 0 2>/dev/null || exit 0
 fi
 
-# ── Enable & Start Services ───────────────────────────────────────────────────
-banner "Enabling Services"
+echo -e "\n${CYAN}${BOLD}"
+echo "  ╔═══════════════════════════════════════════╗"
+echo "  ║   🦞  Siam-Synapse OttoClaw Installer     ║"
+echo "  ║       Native Binary Mode                  ║"
+echo "  ╚═══════════════════════════════════════════╝"
+echo -e "${RESET}"
+
+# 1. Build binaries
+build_binaries
+
+# 2. Run config wizard
+run_config_wizard "false"
+
+# 3. Setup directories & workspace
+banner "Setting Up System"
+SERVICE_USER="root"
+[[ -n "${RUN_AS_USER:-}" ]] && SERVICE_USER="${RUN_AS_USER}"
+
+mkdir -p "${OTTOCLAW_HOME}" "${OTTOCLAW_WORKSPACE}/v2" /etc/ottoclaw
+
+[[ -d "${SCRIPT_DIR}/workspace" ]] && \
+    cp -rn "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
+
+if [[ -d "${SCRIPT_DIR}/skills" ]]; then
+    mkdir -p "${OTTOCLAW_HOME}/workspace/skills"
+    cp -rn "${SCRIPT_DIR}/skills/." "${OTTOCLAW_HOME}/workspace/skills/" 2>/dev/null || true
+    info "Skills copied"
+fi
+
+[[ -n "${RUN_AS_USER:-}" ]] && \
+    chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${OTTOCLAW_HOME}" /etc/ottoclaw
+
+# 4. Write env file
+banner "Writing Configuration"
+write_env_file
+
+# 5. Install wrapper + helper + services
+install_wrapper
+install_setup_helper
+banner "Creating systemd Services"
+install_services "${SERVICE_USER}"
+
+# 6. Copy installer to known location for wrapper
+mkdir -p /opt/siam-synapse
+cp "${BASH_SOURCE[0]}" /opt/siam-synapse/install.sh
+chmod +x /opt/siam-synapse/install.sh
+info "Installer copied  → /opt/siam-synapse/install.sh"
+
+# 7. Enable & start
+banner "Starting Services"
 systemctl daemon-reload
 systemctl enable siam-worker ottoclaw-worker
 systemctl restart siam-worker
 sleep 2
 systemctl restart ottoclaw-worker
 
-# ── Print Final Status ────────────────────────────────────────────────────────
+# 8. Summary
 banner "Installation Complete!"
-echo -e "  ${GREEN}✓${RESET}  ${BOLD}ottoclaw-worker${RESET} (Brain) running as native binary"
-echo -e "  ${GREEN}✓${RESET}  ${BOLD}siam-worker${RESET} (Arm) running as native binary"
+echo -e "  ${GREEN}✓${RESET}  ottoclaw-brain (Brain) running as native systemd service"
+echo -e "  ${GREEN}✓${RESET}  siam-worker    (Arm)   running as native systemd service"
 echo ""
-echo -e "${BOLD}📋 Management Commands:${RESET}"
-echo -e "  View Brain logs:  ${CYAN}journalctl -u ottoclaw-worker -f${RESET}"
-echo -e "  View Arm logs:    ${CYAN}journalctl -u siam-worker -f${RESET}"
-echo -e "  Restart both:     ${CYAN}systemctl restart siam-worker ottoclaw-worker${RESET}"
-echo -e "  Stop both:        ${CYAN}systemctl stop ottoclaw-worker siam-worker${RESET}"
-echo -e "  Edit config:      ${CYAN}nano /etc/ottoclaw/env${RESET}"
-echo -e "  Uninstall:        ${CYAN}sudo bash ${SCRIPT_DIR}/install.sh --uninstall${RESET}"
+echo -e "${BOLD}📋 Quick Commands:${RESET}"
+echo -e "  ${CYAN}ottoclaw config${RESET}                   → Reconfigure settings"
+echo -e "  ${CYAN}ottoclaw uninstall${RESET}                → Remove services & binaries"
+echo -e "  ${CYAN}journalctl -u ottoclaw-worker -f${RESET}  → View brain logs"
+echo -e "  ${CYAN}journalctl -u siam-worker -f${RESET}      → View arm logs"
 echo ""
-echo -e "${BOLD}📁 Paths:${RESET}"
-echo -e "  Config/Env:    ${CYAN}/etc/ottoclaw/env${RESET}"
-echo -e "  Ottoclaw Home: ${CYAN}${OTTOCLAW_HOME}${RESET}"
-echo -e "  Workspace:     ${CYAN}${OTTOCLAW_WORKSPACE}${RESET}"
+echo -e "${BOLD}📁 Config path:${RESET}  ${CYAN}/etc/ottoclaw/env${RESET}"
 echo ""
