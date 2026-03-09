@@ -35,7 +35,9 @@ prompt_val() {
     else
         read -rp  "  ${CYAN}?${RESET}  ${label} [${default}]: " value
     fi
-    echo "${value:-$default}"
+    local result="${value:-$default}"
+    # Strip any accidental newlines or carriage returns from copy-pasting
+    echo "$result" | tr -d '\r\n'
 }
 
 # ── Root Check ────────────────────────────────────────────────────────────────
