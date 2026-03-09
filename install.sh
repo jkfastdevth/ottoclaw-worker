@@ -32,16 +32,18 @@ prompt_val() {
     local value=""
     
     if [[ "$secret" == "true" ]]; then
-        echo -ne "  ${CYAN}?${RESET}  ${label}: "
-        read -rs value; echo ""
+        # Redirect prompt to stderr so it's not captured by $(prompt_val ...)
+        echo -ne "  ${CYAN}?${RESET}  ${label}: " >&2
+        read -rs value; echo "" >&2
     else
-        echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: "
+        echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: " >&2
         read -r value
     fi
     
     local result="${value:-$default}"
     # Strip any accidental newlines or carriage returns from copy-pasting
-    echo "$result" | tr -d '\r\n'
+    # and output to stdout for capture
+    echo -n "$result" | tr -d '\r\n'
 }
 
 # ── Root Check ────────────────────────────────────────────────────────────────
