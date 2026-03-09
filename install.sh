@@ -209,6 +209,7 @@ TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 # ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
 OTTOCLAW_WORKSPACE=${OTTOCLAW_WORKSPACE}/v2
+OTTOCLAW_CONFIG=${OTTOCLAW_HOME}/config.json
 
 # ── Native Binary Path (for siam-worker to find brain) ───────
 OTTOCLAW_BIN=/usr/local/bin/ottoclaw-brain
