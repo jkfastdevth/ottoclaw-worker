@@ -11,12 +11,39 @@ until curl -sf "${MASTER_URL}/api/public/v1/health" > /dev/null; do
   sleep 3
 done
 
-echo "📚 Registering skills with Master Skill Registry..."
-curl -s -X POST "${MASTER_URL}/api/agent/v1/agents/${NODE_ID}/skills" \
+# ── 1. Register Node Metadata ────────────────────────────────────────────────
+# Gather basic specs to help Master identify this vessel
+OS_INFO=$(uname -sr)
+SYSTEM_SPEC="$(nproc) Cores, $(free -h | awk '/^Mem:/ {print $2}') RAM"
+IP_ADDR=$(hostname -I | awk '{print $1}')
+
+echo "📞 Registering Vessel [${NODE_ID}] at ${MASTER_URL}..."
+curl -s -X POST "${MASTER_URL}/api/agent/v1/nodes/register" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  -d '{
-    "skills": ["shell", "python", "system-info", "web-scrape"],
-    "image": "siam-synapse-ottoclaw-worker:latest",
-    "description": "OttoClaw Brain + Siam Worker Arm"
-  }' && echo "✅ Skills registered for ${NODE_ID}"
+  -d "{
+    \"id\": \"${NODE_ID}\",
+    \"ip\": \"${IP_ADDR}\",
+    \"os_info\": \"${OS_INFO}\",
+    \"system_spec\": \"${SYSTEM_SPEC}\",
+    \"vessel_type\": \"Native Worker\"
+  }"
+
+# ── 2. Register Skills (Individual calls) ────────────────────────────────────
+# Master endpoint: POST /api/agent/v1/agents/:id/skills
+# Expects: { skill_name, agent_image, description }
+echo "📚 Registering skills with Master..."
+
+SKILLS="shell python system-info web-scrape"
+for skill in $SKILLS; do
+  curl -s -X POST "${MASTER_URL}/api/agent/v1/agents/${NODE_ID}/skills" \
+    -H "Content-Type: application/json" \
+    -H "X-API-Key: ${API_KEY}" \
+    -d "{
+      \"skill_name\": \"${skill}\",
+      \"agent_image\": \"siam-synapse-ottoclaw-worker:latest\",
+      \"description\": \"Running natively on ${NODE_ID}\"
+    }" > /dev/null && echo "  ✅ Skill: ${skill}"
+done
+
+echo "🎉 Awakening complete for ${NODE_ID}"
