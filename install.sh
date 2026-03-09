@@ -30,11 +30,15 @@ prompt_val() {
     local default="$2"
     local secret="${3:-false}"
     local value=""
+    
     if [[ "$secret" == "true" ]]; then
-        read -rsp "  ${CYAN}?${RESET}  ${label}: " value; echo ""
+        echo -ne "  ${CYAN}?${RESET}  ${label}: "
+        read -rs value; echo ""
     else
-        read -rp  "  ${CYAN}?${RESET}  ${label} [${default}]: " value
+        echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: "
+        read -r value
     fi
+    
     local result="${value:-$default}"
     # Strip any accidental newlines or carriage returns from copy-pasting
     echo "$result" | tr -d '\r\n'
@@ -340,7 +344,7 @@ User=${svc_user}
 EnvironmentFile=/etc/ottoclaw/env
 WorkingDirectory=${OTTOCLAW_HOME}
 ExecStart=/usr/local/bin/siam-worker
-ExecStartPost=/bin/bash -c "sleep 2 && ${OTTOCLAW_HOME}/workspace/skills/siam/register.sh"
+ExecStartPost=/bin/bash -c "sleep 2 && /bin/bash ${OTTOCLAW_HOME}/workspace/skills/siam/register.sh"
 Restart=on-failure
 RestartSec=10s
 SyslogIdentifier=siam-worker
