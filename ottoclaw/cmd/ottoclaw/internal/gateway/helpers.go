@@ -21,6 +21,7 @@ import (
 	_ "github.com/sipeed/ottoclaw/pkg/channels/onebot"
 	_ "github.com/sipeed/ottoclaw/pkg/channels/pico"
 	_ "github.com/sipeed/ottoclaw/pkg/channels/qq"
+	_ "github.com/sipeed/ottoclaw/pkg/channels/siam"
 	_ "github.com/sipeed/ottoclaw/pkg/channels/slack"
 	_ "github.com/sipeed/ottoclaw/pkg/channels/telegram"
 	_ "github.com/sipeed/ottoclaw/pkg/channels/wecom"

@@ -266,6 +266,10 @@ func (m *Manager) initChannels() error {
 	if m.config.Channels.Pico.Enabled && m.config.Channels.Pico.Token != "" {
 		m.initChannel("pico", "Pico")
 	}
+	
+	if m.config.Channels.SiamSync.Enabled {
+		m.initChannel("siam_sync", "Siam Sync")
+	}
 
 	logger.InfoCF("channels", "Channel initialization completed", map[string]any{
 		"enabled_channels": len(m.channels),

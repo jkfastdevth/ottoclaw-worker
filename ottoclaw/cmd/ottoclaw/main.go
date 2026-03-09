@@ -62,7 +62,7 @@ const (
 )
 
 func main() {
-	fmt.Printf("%s", banner)
+	//fmt.Printf("%s", banner)
 	cmd := NewPicoclawCommand()
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
