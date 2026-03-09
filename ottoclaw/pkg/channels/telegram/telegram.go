@@ -36,7 +36,7 @@ var (
 	reListItem      = regexp.MustCompile(`^[-*]\s+`)
 	reCodeBlock     = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
 	reInlineCode    = regexp.MustCompile("`([^`]+)`")
-	reOrchestration = regexp.MustCompile(`^\[([^\]]+)\]:\s*@([^\s]+)\s*(.*)$`)
+	reOrchestration = regexp.MustCompile(`^@([^\s]+)\s*(.*)$`)
 )
 
 type TelegramChannel struct {
@@ -424,12 +424,18 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	}
 
 	platformID := fmt.Sprintf("%d", user.ID)
+	
+	displayName := user.FirstName
+	if platformID == "1891109998" {
+		displayName = "GOD"
+	}
+
 	sender := bus.SenderInfo{
 		Platform:    "telegram",
 		PlatformID:  platformID,
 		CanonicalID: identity.BuildCanonicalID("telegram", platformID),
 		Username:    user.Username,
-		DisplayName: user.FirstName,
+		DisplayName: displayName,
 	}
 
 	// check allowlist to avoid downloading attachments for rejected users
@@ -529,10 +535,13 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	tCfg := c.config.Channels.Telegram
 	if tCfg.OrchestrationEnabled && chatIDStr == tCfg.BridgeChatID {
 		matches := reOrchestration.FindStringSubmatch(content)
-		if len(matches) == 4 {
-			remoteSender := matches[1]
-			targetAgent := matches[2]
-			actualContent := matches[3]
+		if len(matches) == 3 {
+			remoteSender := user.FirstName
+			if remoteSender == "" {
+				remoteSender = user.Username
+			}
+			targetAgent := matches[1]
+			actualContent := matches[2]
 
 			myAgentName := os.Getenv("AGENT_NAME")
 			if myAgentName == "" {
