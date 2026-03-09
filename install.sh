@@ -209,6 +209,9 @@ TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 # ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
 OTTOCLAW_WORKSPACE=${OTTOCLAW_WORKSPACE}/v2
+
+# ── Native Binary Path (for siam-worker to find brain) ───────
+OTTOCLAW_BIN=/usr/local/bin/ottoclaw-brain
 EOF
     chmod 600 /etc/ottoclaw/env
     info "Environment saved → /etc/ottoclaw/env (mode 600)"
@@ -391,7 +394,10 @@ mkdir -p "${HOME_DIR}" "${WORKSPACE}"
 
 MODEL_NAME="${OTTOCLAW_MODEL_NAME:-default}"
 MODEL_ID="${OTTOCLAW_MODEL_ID:-default}"
+API_BASE="${OTTOCLAW_API_BASE:-}"
+API_KEY="${OTTOCLAW_API_KEY:-}"
 
+# ── Telegram JSON fragment ────────────────────────────────────
 TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_JSON=""
@@ -407,27 +413,40 @@ HEARTBEAT_JSON=""
 [ "${OTTOCLAW_MODE:-}" = "orchestrator" ] && \
     HEARTBEAT_JSON=", \"heartbeat\": { \"enabled\": true, \"interval\": 6 }"
 
-cat > "${CONFIG}" << EOF
-{
+# ── Force-regenerate config.json (always fresh) ───────────────
+rm -f "${CONFIG}"
+
+printf '{
   "agents": {
     "defaults": {
-      "workspace": "${WORKSPACE}",
-      "model": "${MODEL_NAME}",
+      "workspace": "%s",
+      "model": "%s",
       "max_tokens": 8192,
       "max_tool_iterations": 20
     }
   },
   "model_list": [
     {
-      "model_name": "${MODEL_NAME}",
-      "model": "${MODEL_ID}",
-      "api_base": "${OTTOCLAW_API_BASE:-}",
-      "api_key": "${OTTOCLAW_API_KEY:-}"
+      "model_name": "%s",
+      "model": "%s",
+      "api_base": "%s",
+      "api_key": "%s"
     }
-  ]${TG_JSON}${HEARTBEAT_JSON}
-}
-EOF
+  ]%s%s
+}\n' \
+    "${WORKSPACE}" \
+    "${MODEL_NAME}" \
+    "${MODEL_NAME}" \
+    "${MODEL_ID}" \
+    "${API_BASE}" \
+    "${API_KEY}" \
+    "${TG_JSON}" \
+    "${HEARTBEAT_JSON}" > "${CONFIG}"
+
 echo "✓ Config generated: ${CONFIG}"
+echo "  model_name: ${MODEL_NAME}"
+echo "  model: ${MODEL_ID}"
+echo "  api_base: ${API_BASE}"
 SETUPEOF
     chmod +x /usr/local/bin/ottoclaw-setup
     info "ottoclaw-setup     → /usr/local/bin/ottoclaw-setup"
