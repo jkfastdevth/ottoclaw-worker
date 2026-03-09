@@ -43,7 +43,11 @@ if [ -n "$TG_TOKEN" ]; then
   if [ -n "$TG_ALLOW_FROM" ]; then
     ALLOW_FRAGMENT=", \"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')]"
   fi
-  TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAGMENT}, \"typing\": {\"enabled\": true} }"
+  ORCH_FRAG=""
+  if [ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" = "true" ] && [ -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]; then
+    ORCH_FRAG=", \"orchestration_enabled\": true, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
+  fi
+  TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAGMENT}${ORCH_FRAG}, \"typing\": {\"enabled\": true} }"
   echo "📱 Telegram channel: enabled"
 fi
 CHANNELS_JSON=", \"channels\": { ${SIAM_SYNC_FRAG}${TG_FRAG} }"

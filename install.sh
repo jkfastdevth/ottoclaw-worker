@@ -160,8 +160,19 @@ run_config_wizard() {
     echo -e "${BOLD}[2/3] Telegram Channel (Optional — press Enter to skip)${RESET}"
     TELEGRAM_BOT_TOKEN=$( prompt_val "Telegram Bot Token"                    "${TELEGRAM_BOT_TOKEN:-}")
     TELEGRAM_ALLOW_FROM=""
+    TELEGRAM_BRIDGE_CHAT_ID=""
+    TELEGRAM_ORCHESTRATION_ENABLED="false"
     if [[ -n "$TELEGRAM_BOT_TOKEN" ]]; then
         TELEGRAM_ALLOW_FROM=$(prompt_val "Allowed User IDs (comma-separated)" "${TELEGRAM_ALLOW_FROM:-}")
+        echo ""
+        echo -e "  ${YELLOW}Telegram Bridge Orchestration${RESET}"
+        echo -e "  อนุญาตให้ Agent คุยกันเองผ่าน Telegram Group หรือไม่?"
+        ENABLE_ORCH=$(prompt_val "Enable Agent-to-Agent via Telegram? [y/N]" "n")
+        if [[ "${ENABLE_ORCH,,}" == "y" ]]; then
+            TELEGRAM_ORCHESTRATION_ENABLED="true"
+            echo -e "  ${CYAN}Hint:${RESET} นำ Bot ไปเข้ากลุ่ม Private แล้วนำ Group ID (e.g. -100123456) มาใส่"
+            TELEGRAM_BRIDGE_CHAT_ID=$(prompt_val "Telegram Bridge Group ID" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
+        fi
     fi
 
     echo ""
@@ -215,6 +226,8 @@ OTTOCLAW_MODEL_NAME=${OTTOCLAW_MODEL_NAME}
 # ── Telegram Channel ──────────────────────────────────────────
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
+TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID}
+TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED}
 
 # ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
@@ -427,7 +440,11 @@ if [ -n "$TG_TOKEN" ]; then
     if [ -n "$TG_ALLOW_FROM" ]; then
         ALLOW_FRAG=", \"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')]"
     fi
-    TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAG}, \"typing\": {\"enabled\": true} }"
+    ORCH_FRAG=""
+    if [ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" = "true" ] && [ -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]; then
+        ORCH_FRAG=", \"orchestration_enabled\": true, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
+    fi
+    TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAG}${ORCH_FRAG}, \"typing\": {\"enabled\": true} }"
 fi
 CHANNELS_JSON=", \"channels\": { ${SIAM_SYNC_FRAG}${TG_FRAG} }"
 

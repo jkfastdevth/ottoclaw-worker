@@ -256,15 +256,17 @@ type WhatsAppConfig struct {
 }
 
 type TelegramConfig struct {
-	Enabled            bool                `json:"enabled"                 env:"OTTOCLAW_CHANNELS_TELEGRAM_ENABLED"`
-	Token              string              `json:"token"                   env:"OTTOCLAW_CHANNELS_TELEGRAM_TOKEN"`
-	BaseURL            string              `json:"base_url"                env:"OTTOCLAW_CHANNELS_TELEGRAM_BASE_URL"`
-	Proxy              string              `json:"proxy"                   env:"OTTOCLAW_CHANNELS_TELEGRAM_PROXY"`
-	AllowFrom          FlexibleStringSlice `json:"allow_from"              env:"OTTOCLAW_CHANNELS_TELEGRAM_ALLOW_FROM"`
-	GroupTrigger       GroupTriggerConfig  `json:"group_trigger,omitempty"`
-	Typing             TypingConfig        `json:"typing,omitempty"`
-	Placeholder        PlaceholderConfig   `json:"placeholder,omitempty"`
-	ReasoningChannelID string              `json:"reasoning_channel_id"    env:"OTTOCLAW_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID"`
+	Enabled              bool                `json:"enabled"                 env:"OTTOCLAW_CHANNELS_TELEGRAM_ENABLED"`
+	Token                string              `json:"token"                   env:"OTTOCLAW_CHANNELS_TELEGRAM_TOKEN"`
+	BaseURL              string              `json:"base_url"                env:"OTTOCLAW_CHANNELS_TELEGRAM_BASE_URL"`
+	Proxy                string              `json:"proxy"                   env:"OTTOCLAW_CHANNELS_TELEGRAM_PROXY"`
+	AllowFrom            FlexibleStringSlice `json:"allow_from"              env:"OTTOCLAW_CHANNELS_TELEGRAM_ALLOW_FROM"`
+	GroupTrigger         GroupTriggerConfig  `json:"group_trigger,omitempty"`
+	Typing               TypingConfig        `json:"typing,omitempty"`
+	Placeholder          PlaceholderConfig   `json:"placeholder,omitempty"`
+	ReasoningChannelID   string              `json:"reasoning_channel_id"    env:"OTTOCLAW_CHANNELS_TELEGRAM_REASONING_CHANNEL_ID"`
+	BridgeChatID         string              `json:"bridge_chat_id"          env:"OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID"`
+	OrchestrationEnabled bool                `json:"orchestration_enabled"   env:"OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED"`
 }
 
 type FeishuConfig struct {

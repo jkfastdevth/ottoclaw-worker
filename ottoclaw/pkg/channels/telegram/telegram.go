@@ -33,9 +33,10 @@ var (
 	reBoldUnder  = regexp.MustCompile(`__(.+?)__`)
 	reItalic     = regexp.MustCompile(`_([^_]+)_`)
 	reStrike     = regexp.MustCompile(`~~(.+?)~~`)
-	reListItem   = regexp.MustCompile(`^[-*]\s+`)
-	reCodeBlock  = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
-	reInlineCode = regexp.MustCompile("`([^`]+)`")
+	reListItem      = regexp.MustCompile(`^[-*]\s+`)
+	reCodeBlock     = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
+	reInlineCode    = regexp.MustCompile("`([^`]+)`")
+	reOrchestration = regexp.MustCompile(`^\[([^\]]+)\]:\s*@([^\s]+)\s*(.*)$`)
 )
 
 type TelegramChannel struct {
@@ -522,6 +523,43 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 
 	if content == "" {
 		content = "[empty message]"
+	}
+
+	// ── Telegram Orchestration (Simulated DM / Bridge) ─────────────
+	tCfg := c.config.Channels.Telegram
+	if tCfg.OrchestrationEnabled && chatIDStr == tCfg.BridgeChatID {
+		matches := reOrchestration.FindStringSubmatch(content)
+		if len(matches) == 4 {
+			remoteSender := matches[1]
+			targetAgent := matches[2]
+			actualContent := matches[3]
+
+			myAgentName := os.Getenv("AGENT_NAME")
+			if myAgentName == "" {
+				// Fallback to model name if AGENT_NAME is not set
+				myAgentName = c.config.Agents.Defaults.Model
+			}
+
+			if strings.EqualFold(targetAgent, myAgentName) {
+				// We are the intended target!
+				// Override sender with virtual agent identity
+				sender = bus.SenderInfo{
+					Platform:    "siam", // Treat as internal synapse comms
+					PlatformID:  remoteSender,
+					CanonicalID: identity.BuildCanonicalID("siam", remoteSender),
+					DisplayName: remoteSender,
+				}
+				content = actualContent
+				logger.InfoCF("telegram", "Orchestration message intercepted", map[string]any{
+					"from":    remoteSender,
+					"to":      targetAgent,
+					"content": utils.Truncate(content, 50),
+				})
+			} else {
+				// Message for someone else, ignore quietly
+				return nil
+			}
+		}
 	}
 
 	// In group chats, apply unified group trigger filtering
