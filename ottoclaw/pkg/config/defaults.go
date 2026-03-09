@@ -158,6 +158,10 @@ func DefaultConfig() *Config {
 				MaxConnections: 100,
 				AllowFrom:      FlexibleStringSlice{},
 			},
+			SiamSync: SiamSyncConfig{
+				Enabled:  true,
+				Interval: 5, // Default poll interval: 5 seconds
+			},
 		},
 		Providers: ProvidersConfig{
 			OpenAI: OpenAIProviderConfig{WebSearch: true},

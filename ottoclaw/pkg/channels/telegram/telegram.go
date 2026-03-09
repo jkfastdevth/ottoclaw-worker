@@ -142,6 +142,10 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	}, th.CommandEqual("list"))
 
 	bh.HandleMessage(func(ctx *th.Context, message telego.Message) error {
+		return c.commands.Soul(ctx, message)
+	}, th.CommandEqual("soul"))
+
+	bh.HandleMessage(func(ctx *th.Context, message telego.Message) error {
 		return c.handleMessage(ctx, &message)
 	}, th.AnyMessage())
 
@@ -233,7 +237,8 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		return fmt.Errorf("invalid chat ID %s: %w", msg.ChatID, channels.ErrSendFailed)
 	}
 
-	htmlContent := markdownToTelegramHTML(msg.Content)
+	content := utils.StripThinkTags(msg.Content)
+	htmlContent := markdownToTelegramHTML(content)
 
 	// Typing/placeholder handled by Manager.preSend — just send the message
 	tgMsg := tu.Message(tu.ID(chatID), htmlContent)
@@ -292,7 +297,8 @@ func (c *TelegramChannel) EditMessage(ctx context.Context, chatID string, messag
 	if err != nil {
 		return err
 	}
-	htmlContent := markdownToTelegramHTML(content)
+	strippedContent := utils.StripThinkTags(content)
+	htmlContent := markdownToTelegramHTML(strippedContent)
 	editMsg := tu.EditMessageText(tu.ID(cid), mid, htmlContent)
 	editMsg.ParseMode = telego.ModeHTML
 	_, err = c.bot.EditMessageText(ctx, editMsg)

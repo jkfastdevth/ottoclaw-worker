@@ -145,22 +145,6 @@ Input:
 
 ---
 
-## siam_send_message
-
-ส่งข้อความ/คำสั่งหา worker agent ตัวอื่น (ผ่าน Soul name)
-
-ช่วยให้เกิดการร่วมมือกันระหว่าง agent (multi-agent orchestration)
-
-Input:
-
-{
-"agent_id": "target-agent-soul-name",
-"message": "instruction or command",
-"from": "your-name-optional"
-}
-
----
-
 # Tool Execution Rules
 
 1. หากต้องใช้ tool ให้ส่ง tool request

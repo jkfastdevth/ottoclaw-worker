@@ -84,6 +84,7 @@ func NewSiamToolset(masterURL, apiKey string) []Tool {
 		&SiamGetJobsTool{client: client},
 		&SiamSubmitJobTool{client: client},
 		&SiamRunCommandTool{client: client},
+		&SiamSendMessageTool{client: client},
 	}
 }
 
@@ -356,6 +357,56 @@ func (t *SiamRunCommandTool) Execute(_ context.Context, args map[string]any) *To
 	data, err := t.client.post("/api/agent/v1/command", payload)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_run_command failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamSendMessageTool — send a message to another agent.
+type SiamSendMessageTool struct{ client *siamClient }
+
+func (t *SiamSendMessageTool) Name() string { return "siam_send_message" }
+func (t *SiamSendMessageTool) Description() string {
+	return "Send a message/command to another Siam-Synapse sub-agent by its agent_id (Soul name). This enables multi-agent orchestration."
+}
+func (t *SiamSendMessageTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The target Agent ID / Soul Name (e.g. 'nova-spire'). Use siam_get_agents to see active souls.",
+			},
+			"message": map[string]any{
+				"type":        "string",
+				"description": "The message or command to send to the target agent.",
+			},
+			"from": map[string]any{
+				"type":        "string",
+				"description": "Your name or role (e.g. 'Auric Spark'). Default is 'Master'.",
+			},
+		},
+		"required": []string{"agent_id", "message"},
+	}
+}
+func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	agentID, _ := args["agent_id"].(string)
+	message, _ := args["message"].(string)
+	from, _ := args["from"].(string)
+
+	if strings.TrimSpace(agentID) == "" || strings.TrimSpace(message) == "" {
+		return ErrorResult("siam_send_message: agent_id and message are required")
+	}
+
+	payload := map[string]any{
+		"message": message,
+	}
+	if from != "" {
+		payload["from"] = from
+	}
+
+	data, err := t.client.post("/api/agent/v1/agents/"+agentID+"/message", payload)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_send_message failed: %v", err))
 	}
 	return UserResult(string(data))
 }

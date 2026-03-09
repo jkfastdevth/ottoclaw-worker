@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/mymmrac/telego"
@@ -15,6 +16,7 @@ type TelegramCommander interface {
 	Start(ctx context.Context, message telego.Message) error
 	Show(ctx context.Context, message telego.Message) error
 	List(ctx context.Context, message telego.Message) error
+	Soul(ctx context.Context, message telego.Message) error
 }
 
 type cmd struct {
@@ -40,6 +42,8 @@ func commandArgs(text string) string {
 func (c *cmd) Help(ctx context.Context, message telego.Message) error {
 	msg := `/start - Start the bot
 /help - Show this help message
+/soul - View current Soul identity
+/soul [content] - Manually update the Soul identity
 /show [model|channel] - Show current configuration
 /list [models|channels] - List available options
 	`
@@ -151,6 +155,50 @@ func (c *cmd) List(ctx context.Context, message telego.Message) error {
 		ReplyParameters: &telego.ReplyParameters{
 			MessageID: message.MessageID,
 		},
+	})
+	return err
+}
+
+func (c *cmd) Soul(ctx context.Context, message telego.Message) error {
+	workspace := os.Getenv("OTTOCLAW_WORKSPACE")
+	if workspace == "" {
+		workspace = "/app/workspace/v2"
+	}
+	soulPath := workspace + "/SOUL.md"
+
+	args := commandArgs(message.Text)
+	if args == "" {
+		// View mode
+		content, err := os.ReadFile(soulPath)
+		if err != nil {
+			_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID: telego.ChatID{ID: message.Chat.ID},
+				Text:   "⚠️ Failed to read Soul records: " + err.Error(),
+			})
+			return err
+		}
+		_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+			ChatID:    telego.ChatID{ID: message.Chat.ID},
+			Text:      "📜 *Current Soul Identity:*\n\n" + string(content),
+			ParseMode: telego.ModeMarkdown,
+		})
+		return err
+	}
+
+	// Update mode
+	err := os.WriteFile(soulPath, []byte(args), 0644)
+	if err != nil {
+		_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+			ChatID: telego.ChatID{ID: message.Chat.ID},
+			Text:   "❌ Failed to forge new patterns: " + err.Error(),
+		})
+		return err
+	}
+
+	_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: message.Chat.ID},
+		Text:      "✅ *Soul Recalibrated!*\n\nThe new patterns have been etched into the sacred records. Restart the worker or send /start to manifest the change.",
+		ParseMode: telego.ModeMarkdown,
 	})
 	return err
 }
