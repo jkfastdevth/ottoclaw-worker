@@ -36,7 +36,7 @@ var (
 	reListItem      = regexp.MustCompile(`^[-*]\s+`)
 	reCodeBlock     = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
 	reInlineCode    = regexp.MustCompile("`([^`]+)`")
-	reOrchestration = regexp.MustCompile(`^@([^\s]+)\s*(.*)$`)
+	reOrchestration = regexp.MustCompile(`^@?([^\s:,]+)[:,\s]+\s*(.*)$`)
 )
 
 type TelegramChannel struct {

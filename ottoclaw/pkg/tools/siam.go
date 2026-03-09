@@ -409,7 +409,7 @@ func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *T
 	bridgeChatID := os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" && bridgeChatID != "" && botToken != "" {
-		broadcastMsg := fmt.Sprintf("@%s %s", agentID, message)
+		broadcastMsg := fmt.Sprintf("%s %s", agentID, message)
 
 		// Send to Telegram via simple HTTP (avoiding heavy dependencies in tools)
 		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
