@@ -3596,8 +3596,24 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nThis is a heartbeat check. I need to follow the Siam-Synapse Autonomous Health Check logic.\n\nStep 1 - Get Metrics to see CPU, node count, and scaling mode\nStep 2 - Check Agents to see workers\nStep 3 - Decision Logic based on the results\n\nLet me start by getting the metrics.\n\u003c/think\u003e\n\nI'll perform the heartbeat check by first getting the system metrics.\n\u003cminimax:tool_call\u003e\n\u003cinvoke name=\"siam_get_metrics\"\u003e\n\u003c/invoke\u003e\n\u003c/minimax:tool_call\u003e"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-09 04:52:23\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nLet me analyze this heartbeat check request. I need to follow the logic for the Siam-Synapse autonomous health check.\n\nFirst, I need to get the metrics to check the CPU usage and node count. Then I'll check the agents. Based on that information, I'll determine what action to take.\n\nLet me start by calling siam_get_metrics to see the current system status.\n\u003c/think\u003e\n\n\n[TOOL_CALL]\n{tool =\u003e \"siam_get_metrics\", args =\u003e {\n\n}}\n[/TOOL_CALL]"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-09 04:58:23\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThis is a heartbeat check. I need to follow the logic:\n\n1. Get metrics (CPU, node count, scaling mode)\n2. Get agents (check workers)\n3. Decide based on the logic:\n   - High Load (CPU \u003e 80% OR no workers) → spawn worker\n   - Low Load (CPU \u003c 20% AND agents \u003e 3) → terminate some workers\n   - Normal (CPU 20-80%) → HEARTBEAT_OK\n\nLet me start by getting the metrics and agents.\n\u003c/think\u003e\n\nI'll perform the heartbeat check by getting metrics and checking agents first.\n\u003cminimax:tool_call\u003e\n\u003cinvoke name=\"siam_get_metrics\"\u003e\n\u003c/invoke\u003e\n\u003cinvoke name=\"siam_get_agents\"\u003e\n\u003c/invoke\u003e\n\u003c/minimax:tool_call\u003e"
     }
   ],
   "created": "2026-03-05T19:33:28.880853295Z",
-  "updated": "2026-03-09T04:46:26.327681177Z"
+  "updated": "2026-03-09T04:58:27.748740296Z"
 }
