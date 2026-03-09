@@ -126,8 +126,8 @@ run_config_wizard() {
     echo -e "  Ports → HTTP API :8080   gRPC :50051\n"
 
     MASTER_HOST=$(    prompt_val "Master address" "${DEFAULT_HOST}")
-    MASTER_API_KEY=$( prompt_val "Master API Key" "${MASTER_API_KEY:-}" "true")
-    NODE_SECRET=$(    prompt_val "Node Secret"    "${NODE_SECRET:-}"    "true")
+    MASTER_API_KEY=$( prompt_val "Master API Key" "${MASTER_API_KEY:-73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90}" "true")
+    NODE_SECRET=$(    prompt_val "Node Secret"    "${NODE_SECRET:-ea710cf8c0f08298e9aa938dff0e0133}"    "true")
 
     # Derive all URLs from a single master host + protocol
     MASTER_URL="${PROTOCOL}://${MASTER_HOST}:8080"
