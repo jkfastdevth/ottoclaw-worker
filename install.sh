@@ -41,9 +41,8 @@ prompt_val() {
     fi
     
     local result="${value:-$default}"
-    # Strip any accidental newlines or carriage returns from copy-pasting
-    # and output to stdout for capture
-    echo -n "$result" | tr -d '\r\n'
+    # Strip any accidental newlines, spaces, or carriage returns
+    echo -n "$result" | tr -dc '[:print:]' | xargs echo -n
 }
 
 # ── Root Check ────────────────────────────────────────────────────────────────
@@ -103,7 +102,10 @@ run_config_wizard() {
     echo -e "    ${CYAN}2${RESET}) Tailscale VPN — เชื่อมผ่าน Tailscale mesh (e.g. 100.x.x.x)"
     echo -e "    ${CYAN}3${RESET}) VPS / Public  — Master อยู่ cloud หรือ domain สาธารณะ"
     echo ""
+    # Derive network type (trim match)
     NET_TYPE=$(prompt_val "Network type [1/2/3]" "${NET_TYPE:-1}")
+    NET_TYPE=$(echo "$NET_TYPE" | tr -dc '1-3')
+    NET_TYPE="${NET_TYPE:-1}"
 
     PROTOCOL="http"
     case "$NET_TYPE" in
@@ -499,13 +501,17 @@ SERVICE_USER="root"
 mkdir -p "${OTTOCLAW_HOME}" "${OTTOCLAW_WORKSPACE}/v2" /etc/ottoclaw
 
 [[ -d "${SCRIPT_DIR}/workspace" ]] && \
-    cp -rn "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
+    cp -rf "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
 
 if [[ -d "${SCRIPT_DIR}/skills" ]]; then
     mkdir -p "${OTTOCLAW_HOME}/workspace/skills"
-    cp -rn "${SCRIPT_DIR}/skills/." "${OTTOCLAW_HOME}/workspace/skills/" 2>/dev/null || true
-    info "Skills copied"
+    cp -rf "${SCRIPT_DIR}/skills/." "${OTTOCLAW_HOME}/workspace/skills/" 2>/dev/null || true
+    info "Skills updated"
 fi
+
+# Ensure all workspace directories are searchable/readable by service user
+chmod -R 755 "${OTTOCLAW_HOME}"
+chmod +x "${OTTOCLAW_HOME}/workspace/skills/siam/register.sh" 2>/dev/null || true
 
 [[ -n "${RUN_AS_USER:-}" ]] && \
     chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${OTTOCLAW_HOME}" /etc/ottoclaw
