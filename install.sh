@@ -397,6 +397,13 @@ export OTTOCLAW_CONFIG="$CONFIG"
 export OTTOCLAW_AGENTS_DEFAULTS_WORKSPACE="$WORKSPACE"
 mkdir -p "${HOME_DIR}" "${WORKSPACE}"
 
+# ── Sync base workspace (skills, etc.) ────────────────────────
+INSTALL_DIR=$(dirname "$(find /opt/siam-synapse /home -name install.sh -path "*/ottoclaw-worker/*" 2>/dev/null | head -1)")
+if [ -d "${INSTALL_DIR}/workspace" ]; then
+    cp -rn "${INSTALL_DIR}/workspace/"* "${WORKSPACE}/" 2>/dev/null || true
+    chmod +x "${WORKSPACE}/skills/"*/*.sh 2>/dev/null || true
+fi
+
 MODEL_NAME="${OTTOCLAW_MODEL_NAME:-default}"
 MODEL_ID="${OTTOCLAW_MODEL_ID:-default}"
 API_BASE="${OTTOCLAW_API_BASE:-}"
