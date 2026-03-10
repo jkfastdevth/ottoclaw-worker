@@ -50,6 +50,9 @@ type AgentLoop struct {
 	// 🕵️ Stability & Anti-Zombie Tracking
 	processedMessages sync.Map // Map[string]time.Time (MessageID -> ReceivedAt)
 	busySessions      sync.Map // Map[string]bool (SessionKey -> isProcessing)
+
+	// 🎯 Mission Control
+	missionManager *MissionManager
 }
 
 // processOptions configures how a message is processed
@@ -57,9 +60,10 @@ type processOptions struct {
 	SessionKey      string   // Session identifier for history/context
 	Channel         string   // Target channel for tool execution
 	ChatID          string   // Target chat ID for tool execution
-	UserMessage     string   // User message content (may include prefix)
-	Media           []string // media:// refs from inbound message
-	DefaultResponse string   // Response when LLM returns empty
+	UserMessage     string            // User message content (may include prefix)
+	Media           []string          // media:// refs from inbound message
+	Metadata        map[string]string // Metadata from inbound message
+	DefaultResponse string            // Response when LLM returns empty
 	EnableSummary   bool     // Whether to trigger summarization
 	SendResponse    bool     // Whether to send response via bus
 	NoHistory       bool     // If true, don't load session history (for heartbeat)
@@ -97,6 +101,7 @@ func NewAgentLoop(
 		fallback:    fallbackChain,
 		processedMessages: sync.Map{},
 		busySessions:      sync.Map{},
+		missionManager:    NewMissionManager(cfg, msgBus),
 	}
 }
 
@@ -282,6 +287,9 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				})
 		}
 	}
+
+	// Start Mission Polling
+	go al.missionManager.Start(ctx)
 
 	for al.running.Load() {
 		select {
@@ -641,6 +649,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		ChatID:          msg.ChatID,
 		UserMessage:     msg.Content,
 		Media:           msg.Media,
+		Metadata:        msg.Metadata,
 		DefaultResponse: defaultResponse,
 		EnableSummary:   true,
 		SendResponse:    false,
@@ -708,6 +717,7 @@ func (al *AgentLoop) processSystemMessage(
 		Channel:         originChannel,
 		ChatID:          originChatID,
 		UserMessage:     fmt.Sprintf("[System: %s] %s", msg.SenderID, msg.Content),
+		Metadata:        msg.Metadata,
 		DefaultResponse: "Background task completed.",
 		EnableSummary:   false,
 		SendResponse:    true,
@@ -761,6 +771,15 @@ func (al *AgentLoop) runAgentLoop(
 	// 3. Run LLM iteration loop
 	finalContent, iteration, err := al.runLLMIteration(ctx, agent, messages, opts)
 	if err != nil {
+		// 🛡️ Report mission failure if applicable
+		if missionID, ok := opts.Metadata["mission_id"]; ok && missionID != "" {
+			logger.ErrorCF("agent", "Mission failed during execution", map[string]any{"mission_id": missionID, "error": err.Error()})
+			go func() {
+				if rErr := al.missionManager.ReportResult(context.Background(), missionID, false, "Execution Error: "+err.Error()); rErr != nil {
+					logger.ErrorCF("agent", "Failed to report mission failure", map[string]any{"error": rErr.Error(), "mission_id": missionID})
+				}
+			}()
+		}
 		return "", err
 	}
 
@@ -799,6 +818,16 @@ func (al *AgentLoop) runAgentLoop(
 			"iterations":   iteration,
 			"final_length": len(finalContent),
 		})
+
+	// 9. Report Mission Result if applicable
+	if missionID, ok := opts.Metadata["mission_id"]; ok && missionID != "" {
+		logger.InfoCF("agent", "Reporting mission result", map[string]any{"mission_id": missionID})
+		go func() {
+			if err := al.missionManager.ReportResult(context.Background(), missionID, true, finalContent); err != nil {
+				logger.ErrorCF("agent", "Failed to report mission result", map[string]any{"error": err.Error(), "mission_id": missionID})
+			}
+		}()
+	}
 
 	return finalContent, nil
 }
