@@ -389,13 +389,17 @@ func (t *SiamSendMessageTool) Parameters() map[string]any {
 	}
 }
 func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *ToolResult {
-	agentID, _ := args["agent_id"].(string)
+	agentIDRaw, _ := args["agent_id"].(string)
 	message, _ := args["message"].(string)
 	from, _ := args["from"].(string)
 
-	if strings.TrimSpace(agentID) == "" || strings.TrimSpace(message) == "" {
+	if strings.TrimSpace(agentIDRaw) == "" || strings.TrimSpace(message) == "" {
 		return ErrorResult("siam_send_message: agent_id and message are required")
 	}
+
+	// 🛡️ Normalize target ID for consistent routing
+	agentID := strings.ToLower(strings.TrimSpace(agentIDRaw))
+	agentID = strings.ReplaceAll(agentID, " ", "-")
 
 	payload := map[string]any{
 		"message": message,
