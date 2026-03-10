@@ -3084,3 +3084,13 @@
 [2026-03-10 05:40:54] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
   Status: 500
   Body:   {"error":"all LLM attempts failed: ollama error 404: {\"error\":\"model 'MiniMax-M2.5-highspeed' not found\"}"}
+[2026-03-10 05:46:48] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 05:46:59] [INFO] Heartbeat OK - silent
+[2026-03-10 05:52:48] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 05:53:00] [INFO] Heartbeat OK - silent
+[2026-03-10 05:58:48] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 05:59:08] [INFO] Heartbeat OK - silent
+[2026-03-10 06:04:48] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 06:05:06] [INFO] Heartbeat OK - silent
+[2026-03-10 06:08:05] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 06:08:31] [INFO] Heartbeat OK - silent
