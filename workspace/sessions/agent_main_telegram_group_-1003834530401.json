@@ -62,8 +62,62 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nGreat, the system is working well. Let me summarize for the user.\n\u003c/think\u003e\n\n✅ **ระบบทำงานปกติ!**\n\n| รายการ | สถานะ |\n|--------|-------|\n| **Nodes** | 3 nodes (active) |\n| **CPU** | 27.5% |\n| **Scaling** | Auto |\n| **Agents** | 2 ตัว running |\n\nAgents ที่กำลังทำงาน:\n- 🟢 `auric-spark` (ตัวเอง)\n- 🟢 `kaidos`\n\nมีอะไรให้ช่วยไหมครับ? 🚀"
+    },
+    {
+      "role": "user",
+      "content": "Auric: ทดสอบตอบในกลุ่มหน่อย"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe user wants me to send a message to the group (telegram group). Looking at the context, the chat ID is -1003834530401. Let me send a test message to the group.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_twmd4tbu3cyj_1",
+          "type": "function",
+          "function": {
+            "name": "message",
+            "arguments": "{\"channel\":\"telegram\",\"chat_id\":\"-1003834530401\",\"content\":\"✅ ทดสอบสำเร็จ! ระบบ OttoClaw ทำงานปกติดีครับ 🦞\\n\\n- Nodes: 3 active\\n- CPU: 27.5%\\n- Agents: 2 ตัว running\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "Message sent to telegram:-1003834530401",
+      "tool_call_id": "call_function_twmd4tbu3cyj_1"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nGreat, the message was sent successfully to the telegram group. Let me confirm this to the user.\n\u003c/think\u003e\n\nส่งข้อความไปกลุ่มแล้วครับ! 📱✅\n\nมีอะไรให้ช่วยอีกไหมครับ? 🦞"
+    },
+    {
+      "role": "user",
+      "content": "Auric: ไปบอก Kaidos ให้รายงานสถานะ CPU มาให้ฉันดูหน่อย"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe user wants me to send a message to Kaidos asking for a CPU status report. I'll use siam_send_message to communicate with the Kaidos agent.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_2jj2nler7y29_1",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"รายงานสถานะ CPU มาให้ฉันดูหน่อย\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_function_2jj2nler7y29_1"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe message was sent successfully to Kaidos. Let me inform the user.\n\u003c/think\u003e\n\nส่งข้อความไปหา Kaidos แล้วครับ 📩✅\n\nรอ Kaidos ตอบกลับมานะครับ... 🦞"
     }
   ],
   "created": "2026-03-10T17:16:26.326664732Z",
-  "updated": "2026-03-10T17:35:20.824892196Z"
+  "updated": "2026-03-10T17:53:52.625801652Z"
 }

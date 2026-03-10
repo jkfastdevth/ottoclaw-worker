@@ -533,7 +533,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 
 	// ── Telegram Orchestration (Simulated DM / Bridge) ─────────────
 	tCfg := c.config.Channels.Telegram
-	if tCfg.OrchestrationEnabled && chatIDStr == tCfg.BridgeChatID {
+	if tCfg.OrchestrationEnabled {
 		matches := reOrchestration.FindStringSubmatch(content)
 		if len(matches) == 3 {
 			remoteSender := user.FirstName
@@ -545,21 +545,20 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 
 			myAgentName := os.Getenv("AGENT_NAME")
 			if myAgentName == "" {
-				// Fallback to model name if AGENT_NAME is not set
 				myAgentName = c.config.Agents.Defaults.Model
 			}
 
-			// 🛡️ Robust Orchestration Matching: Normalize both sides (handle dashes, spaces, case)
-			// Supports exact match or shorthands (e.g., "Auric" matches "Auric Spark")
+			// 🛡️ Robust Orchestration Matching: Normalize both sides
 			targetNorm := utils.NormalizeID(targetAgent)
 			myNorm := utils.NormalizeID(myAgentName)
-			if targetNorm == myNorm || 
-			   strings.HasPrefix(myNorm, targetNorm+"-") || 
-			   strings.HasPrefix(targetNorm, myNorm+"-") {
-				// We are the intended target!
-				// Override sender with virtual agent identity
+			isMatch := (targetNorm == myNorm || 
+				   strings.HasPrefix(myNorm, targetNorm+"-") || 
+				   strings.HasPrefix(targetNorm, myNorm+"-"))
+
+			if isMatch && (chatIDStr == tCfg.BridgeChatID || message.Chat.Type == "private") {
+				// We are the intended target in a Bridge/DM!
 				sender = bus.SenderInfo{
-					Platform:    "siam", // Treat as internal synapse comms
+					Platform:    "siam",
 					PlatformID:  remoteSender,
 					CanonicalID: identity.BuildCanonicalID("siam", remoteSender),
 					DisplayName: remoteSender,
@@ -570,9 +569,14 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 					"to":      targetAgent,
 					"content": utils.Truncate(content, 50),
 				})
+			} else if isMatch {
+				// Targeted by name in a normal group: proceed with normal group identification
+				content = actualContent
 			} else {
-				// Message for someone else, ignore quietly
-				return nil
+				// Addressed to another agent (or invalid match): remain silent in groups/bridge
+				if message.Chat.Type != "private" || chatIDStr == tCfg.BridgeChatID {
+					return nil
+				}
 			}
 		}
 	}
