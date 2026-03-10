@@ -550,7 +550,12 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			}
 
 			// 🛡️ Robust Orchestration Matching: Normalize both sides (handle dashes, spaces, case)
-			if utils.NormalizeID(targetAgent) == utils.NormalizeID(myAgentName) {
+			// Supports exact match or shorthands (e.g., "Auric" matches "Auric Spark")
+			targetNorm := utils.NormalizeID(targetAgent)
+			myNorm := utils.NormalizeID(myAgentName)
+			if targetNorm == myNorm || 
+			   strings.HasPrefix(myNorm, targetNorm+"-") || 
+			   strings.HasPrefix(targetNorm, myNorm+"-") {
 				// We are the intended target!
 				// Override sender with virtual agent identity
 				sender = bus.SenderInfo{
