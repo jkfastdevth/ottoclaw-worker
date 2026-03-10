@@ -17,6 +17,11 @@ import (
 	"github.com/sipeed/ottoclaw/pkg/skills"
 )
 
+// GlobalMemoryProvider defines an interface for searching external/shared knowledge bases.
+type GlobalMemoryProvider interface {
+	Search(ctx context.Context, query string, limit int) (string, error)
+}
+
 type ContextBuilder struct {
 	workspace    string
 	skillsLoader *skills.SkillsLoader
@@ -39,6 +44,9 @@ type ContextBuilder struct {
 	// build time. This catches nested file creations/deletions/mtime changes
 	// that may not update the top-level skill root directory mtime.
 	skillFilesAtCache map[string]time.Time
+
+	// Global Memory (Akashic Library) support
+	globalMemory GlobalMemoryProvider
 }
 
 func getGlobalConfigDir() string {
@@ -64,6 +72,10 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 		skillsLoader: skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir),
 		memory:       NewMemoryStore(workspace),
 	}
+}
+
+func (cb *ContextBuilder) SetGlobalMemoryProvider(provider GlobalMemoryProvider) {
+	cb.globalMemory = provider
 }
 
 func (cb *ContextBuilder) getIdentity() string {
@@ -416,14 +428,7 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 }
 
 // buildDynamicContext returns a short dynamic context string with per-request info.
-// This changes every request (time, session) so it is NOT part of the cached prompt.
-// LLM-side KV cache reuse is achieved by each provider adapter's native mechanism:
-//   - Anthropic: per-block cache_control (ephemeral) on the static SystemParts block
-//   - OpenAI / Codex: prompt_cache_key for prefix-based caching
-//
-// See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
-// See: https://platform.openai.com/docs/guides/prompt-caching
-func (cb *ContextBuilder) buildDynamicContext(channel, chatID string) string {
+func (cb *ContextBuilder) buildDynamicContext(channel, chatID string, metadata map[string]string) string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	rt := fmt.Sprintf("%s %s, Go %s", runtime.GOOS, runtime.GOARCH, runtime.Version())
 
@@ -432,6 +437,13 @@ func (cb *ContextBuilder) buildDynamicContext(channel, chatID string) string {
 
 	if channel != "" && chatID != "" {
 		fmt.Fprintf(&sb, "\n\n## Current Session\nChannel: %s\nChat ID: %s", channel, chatID)
+	}
+
+	if missionID := metadata["mission_id"]; missionID != "" {
+		fmt.Fprintf(&sb, "\n\n## Current Mission context\nMission ID: %s", missionID)
+		if parentID := metadata["parent_id"]; parentID != "" {
+			fmt.Fprintf(&sb, "\nParent Mission: %s", parentID)
+		}
 	}
 
 	return sb.String()
@@ -443,37 +455,49 @@ func (cb *ContextBuilder) BuildMessages(
 	currentMessage string,
 	media []string,
 	channel, chatID string,
+	metadata map[string]string,
 ) []providers.Message {
 	messages := []providers.Message{}
 
-	// The static part (identity, bootstrap, skills, memory) is cached locally to
+	// static part (identity, bootstrap, skills, memory) is cached locally to
 	// avoid repeated file I/O and string building on every call (fixes issue #607).
 	// Dynamic parts (time, session, summary) are appended per request.
-	// Everything is sent as a single system message for provider compatibility:
-	// - Anthropic adapter extracts messages[0] (Role=="system") and maps its content
-	//   to the top-level "system" parameter in the Messages API request. A single
-	//   contiguous system block makes this extraction straightforward.
-	// - Codex maps only the first system message to its instructions field.
-	// - OpenAI-compat passes messages through as-is.
+	// Everything is sent as a single system message for provider compatibility.
 	staticPrompt := cb.BuildSystemPromptWithCache()
 
-	// Build short dynamic context (time, runtime, session) — changes per request
-	dynamicCtx := cb.buildDynamicContext(channel, chatID)
+	// Proactive Akashic Library retrieval
+	globalKnowledge := ""
+	if cb.globalMemory != nil && strings.TrimSpace(currentMessage) != "" {
+		// Use a background-like context with timeout for injection
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
 
-	// Compose a single system message: static (cached) + dynamic + optional summary.
-	// Keeping all system content in one message ensures every provider adapter can
-	// extract it correctly (Anthropic adapter -> top-level system param,
-	// Codex -> instructions field).
-	//
-	// SystemParts carries the same content as structured blocks so that
-	// cache-aware adapters (Anthropic) can set per-block cache_control.
-	// The static block is marked "ephemeral" — its prefix hash is stable
-	// across requests, enabling LLM-side KV cache reuse.
+		// Use the first 50 chars of user message as a search hint
+		query := currentMessage
+		if len(query) > 50 {
+			query = query[:50]
+		}
+
+		if results, err := cb.globalMemory.Search(ctx, query, 3); err == nil && results != "" {
+			globalKnowledge = fmt.Sprintf("# Global Knowledge (Akashic Library)\n\nThe following relevant facts were retrieved from the shared network memory:\n\n%s", results)
+		}
+	}
+
+	// Build short dynamic context (time, runtime, session, mission) — changes per request
+	dynamicCtx := cb.buildDynamicContext(channel, chatID, metadata)
+
+	// Single system message containing all context — compatible with all providers.
 	stringParts := []string{staticPrompt, dynamicCtx}
+	if globalKnowledge != "" {
+		stringParts = append(stringParts, globalKnowledge)
+	}
 
 	contentBlocks := []providers.ContentBlock{
 		{Type: "text", Text: staticPrompt, CacheControl: &providers.CacheControl{Type: "ephemeral"}},
 		{Type: "text", Text: dynamicCtx},
+	}
+	if globalKnowledge != "" {
+		contentBlocks = append(contentBlocks, providers.ContentBlock{Type: "text", Text: globalKnowledge})
 	}
 
 	if summary != "" {

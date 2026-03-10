@@ -18,6 +18,7 @@ type Mission struct {
 	ID          string    `json:"id"`
 	AgentID     string    `json:"agent_id"`
 	Description string    `json:"description"`
+	ParentID    string    `json:"parent_id"`
 	Status      string    `json:"status"`
 	Result      string    `json:"result"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -142,6 +143,7 @@ func (m *MissionManager) injectMission(ctx context.Context, mission Mission) {
 		SessionKey: "mission-" + mission.ID,
 		Metadata: map[string]string{
 			"mission_id": mission.ID,
+			"parent_id":  mission.ParentID,
 			"type":       "mission",
 		},
 	}

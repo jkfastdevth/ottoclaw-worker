@@ -759,6 +759,7 @@ func (al *AgentLoop) runAgentLoop(
 		opts.Media,
 		opts.Channel,
 		opts.ChatID,
+		opts.Metadata,
 	)
 
 	// Resolve media:// refs to base64 data URLs (streaming)
@@ -1040,6 +1041,7 @@ func (al *AgentLoop) runLLMIteration(
 				messages = agent.ContextBuilder.BuildMessages(
 					newHistory, newSummary, "",
 					nil, opts.Channel, opts.ChatID,
+					opts.Metadata,
 				)
 				continue
 			}

@@ -241,12 +241,20 @@ func (t *SiamSearchMemoryTool) Execute(_ context.Context, args map[string]any) *
 		limit = 5
 	}
 
-	path := fmt.Sprintf("/api/agent/v1/knowledge/search?q=%s&limit=%d", query, int(limit))
-	data, err := t.client.get(path)
+	results, err := t.Search(context.Background(), query, int(limit))
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_search_memory failed: %v", err))
 	}
-	return UserResult(string(data))
+	return UserResult(results)
+}
+
+func (t *SiamSearchMemoryTool) Search(ctx context.Context, query string, limit int) (string, error) {
+	path := fmt.Sprintf("/api/agent/v1/knowledge/search?q=%s&limit=%d", query, limit)
+	data, err := t.client.get(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // SiamGetMetricsTool — get system CPU / node metrics.
