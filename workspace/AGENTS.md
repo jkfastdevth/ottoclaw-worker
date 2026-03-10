@@ -161,6 +161,36 @@ Input:
 
 ---
 
+# Global Intelligence (Akashic Library)
+
+## siam_search_memory
+
+ค้นหาข้อมูลใน **Akashic Library (Global Intelligence)** 📚
+ใช้เพื่อหาความรู้, ข้อเท็จจริง, หรือบันทึกที่ Agent ตัวอื่นเคยเก็บไว้
+
+Input:
+
+{
+"query": "search keywords",
+"limit": 5
+}
+
+---
+
+## siam_store_memory
+
+บันทึกข้อมูลลงใน **Akashic Library** 🧠
+เพื่อให้ความรู้นี้คงอยู่ตลอดไป และ Agent ตัวอื่นสามารถค้นหาได้ในอนาคต
+
+Input:
+
+{
+"fact": "information to store",
+"confidence": 1.0
+}
+
+---
+
 # Tool Execution Rules
 
 1. หากต้องใช้ tool ให้ส่ง tool request

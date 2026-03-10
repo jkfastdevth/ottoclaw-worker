@@ -549,11 +549,28 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			}
 
 			// 🛡️ Robust Orchestration Matching: Normalize both sides
+			// Supports a comma-separated list of names (e.g., "Auric Spark, Kaidos")
+			isMatch := false
+			namesToMatch := os.Getenv("ORCHESTRATOR_NICKNAMES")
+			if namesToMatch == "" {
+				namesToMatch = myAgentName
+			}
+
+			myNames := strings.Split(namesToMatch, ",")
 			targetNorm := utils.NormalizeID(targetAgent)
-			myNorm := utils.NormalizeID(myAgentName)
-			isMatch := (targetNorm == myNorm || 
+			for _, name := range myNames {
+				name = strings.TrimSpace(name)
+				if name == "" {
+					continue
+				}
+				myNorm := utils.NormalizeID(name)
+				if targetNorm == myNorm || 
 				   strings.HasPrefix(myNorm, targetNorm+"-") || 
-				   strings.HasPrefix(targetNorm, myNorm+"-"))
+				   strings.HasPrefix(targetNorm, myNorm+"-") {
+					isMatch = true
+					break
+				}
+			}
 
 			if isMatch && (chatIDStr == tCfg.BridgeChatID || message.Chat.Type == "private") {
 				// We are the intended target in a Bridge/DM!
