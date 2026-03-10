@@ -1180,6 +1180,7 @@ func (al *AgentLoop) runLLMIteration(
 					tc.Arguments,
 					opts.Channel,
 					opts.ChatID,
+					agent.ID,
 					asyncCallback,
 				)
 				agentResults[idx].result = toolResult

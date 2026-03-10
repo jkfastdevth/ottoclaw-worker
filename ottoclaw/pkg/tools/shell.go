@@ -131,11 +131,28 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		denyPatterns = append(denyPatterns, defaultDenyPatterns...)
 	}
 
+	allowList := os.Getenv("OTTOCLAW_SHELL_ALLOWLIST")
+	var allowPatterns []*regexp.Regexp
+	if allowList != "" {
+		patterns := strings.Split(allowList, ",")
+		for _, p := range patterns {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			re, err := regexp.Compile(p)
+			if err != nil {
+				return nil, fmt.Errorf("invalid allowlist pattern %q: %w", p, err)
+			}
+			allowPatterns = append(allowPatterns, re)
+		}
+	}
+
 	return &ExecTool{
 		workingDir:          workingDir,
 		timeout:             60 * time.Second,
 		denyPatterns:        denyPatterns,
-		allowPatterns:       nil,
+		allowPatterns:       allowPatterns,
 		customAllowPatterns: customAllowPatterns,
 		restrictToWorkspace: restrict,
 	}, nil
@@ -167,6 +184,8 @@ func (t *ExecTool) Parameters() map[string]any {
 }
 
 func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
+	audit := GetAuditClient()
+
 	command, ok := args["command"].(string)
 	if !ok {
 		return ErrorResult("command is required")
@@ -193,6 +212,7 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult
 	}
 
 	if guardError := t.guardCommand(command, cwd); guardError != "" {
+		audit.Log(ctx, "exec", command, guardError, "intercepted")
 		return ErrorResult(guardError)
 	}
 
@@ -272,18 +292,16 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult
 		output = output[:maxLen] + fmt.Sprintf("\n... (truncated, %d more chars)", len(output)-maxLen)
 	}
 
+	status := "success"
 	if err != nil {
-		return &ToolResult{
-			ForLLM:  output,
-			ForUser: output,
-			IsError: true,
-		}
+		status = "failed"
 	}
+	audit.Log(ctx, "exec", command, output, status)
 
 	return &ToolResult{
 		ForLLM:  output,
 		ForUser: output,
-		IsError: false,
+		IsError: err != nil,
 	}
 }
 

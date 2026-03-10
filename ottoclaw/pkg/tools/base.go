@@ -23,12 +23,14 @@ type toolCtxKey struct{ name string }
 var (
 	ctxKeyChannel = &toolCtxKey{"channel"}
 	ctxKeyChatID  = &toolCtxKey{"chatID"}
+	ctxKeyAgentID = &toolCtxKey{"agentID"}
 )
 
 // WithToolContext returns a child context carrying channel and chatID.
-func WithToolContext(ctx context.Context, channel, chatID string) context.Context {
+func WithToolContext(ctx context.Context, channel, chatID, agentID string) context.Context {
 	ctx = context.WithValue(ctx, ctxKeyChannel, channel)
 	ctx = context.WithValue(ctx, ctxKeyChatID, chatID)
+	ctx = context.WithValue(ctx, ctxKeyAgentID, agentID)
 	return ctx
 }
 
@@ -42,6 +44,18 @@ func ToolChannel(ctx context.Context) string {
 func ToolChatID(ctx context.Context) string {
 	v, _ := ctx.Value(ctxKeyChatID).(string)
 	return v
+}
+
+// ToolAgentID extracts the agentID from ctx, or os.Getenv("AGENT_NAME") if unset.
+func ToolAgentID(ctx context.Context) string {
+	if v, ok := ctx.Value(ctxKeyAgentID).(string); ok && v != "" {
+		return v
+	}
+	agentName := os.Getenv("AGENT_NAME")
+	if agentName == "" {
+		agentName = os.Getenv("AGENT_ID")
+	}
+	return agentName
 }
 
 // AsyncCallback is a function type that async tools use to notify completion.
