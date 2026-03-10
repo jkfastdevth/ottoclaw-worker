@@ -15744,8 +15744,94 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nThe agent was terminated successfully. Now I should report the action taken.\n\u003c/think\u003e\n\n✅ **Heartbeat Action Completed**\n\n- Terminated idle agent: `kaid-n` (status: limbo, offline)\n- Resources optimized\n\n**HEARTBEAT_OK**"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 04:25:59\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThis is a heartbeat check for the Siam-Synapse system. I need to:\n\n1. First get the metrics to see CPU usage, node count, and scaling mode\n2. Then check the agents to see what workers are running\n3. Based on the metrics and agent count, decide what action to take\n\nLet me start by getting the metrics.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_8a70d67uenzn_1",
+          "type": "function",
+          "function": {
+            "name": "siam_get_metrics",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"active_nodes\":3,\"scaling_mode\":\"auto\",\"total_cpu\":10.245874404907227}",
+      "tool_call_id": "call_function_8a70d67uenzn_1"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nGot the metrics:\n- Active nodes: 3\n- Scaling mode: auto\n- Total CPU: ~10.25%\n\nSo CPU is around 10.25%, which is less than 20%. Now let me check the agents.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_2f4i2ta0jbhs_1",
+          "type": "function",
+          "function": {
+            "name": "siam_get_agents",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"agents\":[{\"id\":\"kaid-son\",\"name\":\"Kaidōson\",\"mission\":\"Universal Intelligence\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"running\",\"container_id\":\"jkfastdev-sorin\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a balance of analytical and creative thinking.\"},\"spawned_at\":\"2026-03-10T04:00:12.261675Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T04:26:04.416446761Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"kaid-n-nexus\",\"name\":\"Kaidën Nexus\",\"mission\":\"Generalist Knowledge Synthesis\",\"node_ip\":\"ottoclaw-orchestrator\",\"status\":\"running\",\"container_id\":\"ottoclaw-orchestrator\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a balance of creative and analytical thinking.\"},\"spawned_at\":\"2026-03-10T04:00:07.053432Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T04:26:00.534966596Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"172.25.0.6\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"kaid-n\",\"name\":\"Kaidōn\",\"mission\":\"Universal Intelligence\",\"node_ip\":\"worker-node-1773115918\",\"status\":\"terminated\",\"container_id\":\"worker-node-1773115918\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a calm and holistic approach to problem-solving\"},\"spawned_at\":\"2026-03-10T04:12:27.011908Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T04:15:16.178609138Z\",\"offline_since\":\"2026-03-10T04:16:58.709551286Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"}],\"count\":3}",
+      "tool_call_id": "call_function_2f4i2ta0jbhs_1"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nLet me analyze the situation:\n\n**Metrics:**\n- CPU: ~10.25% (\u003c 20%)\n- Active nodes: 3\n- Scaling mode: auto\n\n**Agents:**\n1. `kaid-son` - running\n2. `kaid-n-nexus` - running (that's me!)\n3. `kaid-n` - terminated\n\nCurrently running agents: 2\n\n**Decision Logic Check:**\n\n- Case 1 (High Load): CPU \u003e 80% OR no worker agents → Not applicable (CPU is 10.25%, we have 2 running agents)\n- Case 2 (Low Load): CPU \u003c 20% AND agents \u003e 3 → CPU is \u003c 20%, but we only have 2 agents (not \u003e 3)\n- Case 3 (Normal): CPU between 20-80% → CPU is 10.25%, not in this range either\n\nWait, let me re-read the logic:\n- Case 2: CPU \u003c 20% AND agents \u003e 3 → terminate workers\n\nWe have 2 running agents, which is NOT \u003e 3, so we don't need to terminate any.\n\nActually, since:\n- CPU is 10.25% (\u003c 20%)\n- Agents running is 2 (which is NOT \u003e 3)\n\nThe condition for Case 2 is not met. And Case 1 is not met either. Case 3 says \"CPU between 20-80%\" but CPU is 10.25%.\n\nHmm, this is a bit of an edge case. The logic seems to expect either high load, low load with \u003e3 agents, or normal. Since we have low CPU but not \u003e 3 agents, we don't really fit any action case.\n\nFollowing the safety rules:\n- \"If there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\"\n\nSo I should respond with HEARTBEAT_OK.\n\u003c/think\u003e\n\nHEARTBEAT_OK"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 04:28:49\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThis is a heartbeat check. I need to follow the logic to check the system health.\n\nLet me start by getting the metrics and checking the agents.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_atras4z4rb7m_1",
+          "type": "function",
+          "function": {
+            "name": "siam_get_metrics",
+            "arguments": "{}"
+          }
+        },
+        {
+          "id": "call_function_atras4z4rb7m_2",
+          "type": "function",
+          "function": {
+            "name": "siam_get_agents",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"active_nodes\":3,\"scaling_mode\":\"auto\",\"total_cpu\":42.24901461601257}",
+      "tool_call_id": "call_function_atras4z4rb7m_1"
+    },
+    {
+      "role": "tool",
+      "content": "{\"agents\":[{\"id\":\"kaid-n-nexus\",\"name\":\"Kaidën Nexus\",\"mission\":\"Generalist Knowledge Synthesis\",\"node_ip\":\"ottoclaw-orchestrator\",\"status\":\"running\",\"container_id\":\"ottoclaw-orchestrator\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a balance of creative and analytical thinking.\"},\"spawned_at\":\"2026-03-10T04:00:07.053432Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T04:28:48.094194777Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"172.25.0.6\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"kaid-son\",\"name\":\"Kaidōson\",\"mission\":\"Universal Intelligence\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"running\",\"container_id\":\"jkfastdev-sorin\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a balance of analytical and creative thinking.\"},\"spawned_at\":\"2026-03-10T04:00:12.261675Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T04:28:48.672365572Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"\",\"interface\":\"\"}],\"count\":2}",
+      "tool_call_id": "call_function_atras4z4rb7m_2"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nLet me analyze the metrics:\n\n- **CPU**: 42.25% - This is between 20-80%, so it's normal\n- **Active nodes**: 3\n- **Agents**: 2 running agents (Kaidën Nexus and Kaidōson)\n- **Scaling mode**: auto\n\nAccording to the decision logic:\n- Case 1 (High Load): CPU \u003e 80% OR no worker agents → Not applicable (CPU is 42%, agents exist)\n- Case 2 (Low Load): CPU \u003c 20% AND agents \u003e 3 → Not applicable (CPU is 42%, only 2 agents)\n- Case 3 (Normal): CPU between 20-80% → This is the case!\n\nThe system is in a normal state. I should respond with HEARTBEAT_OK.\n\u003c/think\u003e\n\nHEARTBEAT_OK"
     }
   ],
   "created": "2026-03-05T19:33:28.880853295Z",
-  "updated": "2026-03-10T04:20:23.06486222Z"
+  "updated": "2026-03-10T04:28:55.609655237Z"
 }

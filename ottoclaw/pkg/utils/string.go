@@ -6,6 +6,20 @@ import (
 	"unicode"
 )
 
+func NormalizeID(id string) string {
+	trimmed := strings.TrimSpace(id)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	// Replace non-alphanumeric with dashes
+	reg := regexp.MustCompile(`[^a-z0-9_-]+`)
+	result := reg.ReplaceAllString(lower, "-")
+	// Trim leading/trailing dashes
+	result = strings.Trim(result, "-")
+	return result
+}
+
 var reThink = regexp.MustCompile("(?s)<think>.*?</think>")
 
 // StripThinkTags removes the <think>...</think> sections from a string, 
