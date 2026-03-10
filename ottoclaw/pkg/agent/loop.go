@@ -507,7 +507,8 @@ func (al *AgentLoop) ProcessHeartbeat(
 	if agent == nil {
 		return "", fmt.Errorf("no default agent for heartbeat")
 	}
-	return al.runAgentLoop(ctx, agent, processOptions{
+
+	opts := processOptions{
 		SessionKey:      "heartbeat",
 		Channel:         channel,
 		ChatID:          chatID,
@@ -516,7 +517,24 @@ func (al *AgentLoop) ProcessHeartbeat(
 		EnableSummary:   false,
 		SendResponse:    false,
 		NoHistory:       true, // Don't load session history for heartbeat
-	})
+	}
+
+	// 🕵️ Check if we have a dedicated "heartbeat" model in config
+	// This allows routing heartbeat calls to a cheaper/local model (like Ollama)
+	if hbCfg, err := al.cfg.GetModelConfig("heartbeat"); err == nil {
+		hbProvider, hbModelID, hbErr := providers.CreateProviderFromConfig(hbCfg)
+		if hbErr == nil {
+			logger.InfoCF("agent", "Using dedicated heartbeat model", map[string]any{"model": hbModelID})
+			// Create a transient agent clone for this heartbeat call
+			hbAgent := *agent
+			hbAgent.Provider = hbProvider
+			hbAgent.Model = hbModelID
+			return al.runAgentLoop(ctx, &hbAgent, opts)
+		}
+		logger.WarnCF("agent", "Found heartbeat model but failed to create provider", map[string]any{"error": hbErr.Error()})
+	}
+
+	return al.runAgentLoop(ctx, agent, opts)
 }
 
 func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {

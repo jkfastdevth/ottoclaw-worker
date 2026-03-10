@@ -60,6 +60,16 @@ if [ "${OTTOCLAW_MODE:-}" = "orchestrator" ]; then
   echo "❤️  Heartbeat: enabled (every ${HEARTBEAT_INTERVAL} min)"
 fi
 
+# ── Heartbeat Ollama model fragment (saves cloud quota for heartbeat) ─────────
+HEARTBEAT_OLLAMA_HOST="${OLLAMA_HOST:-http://host.docker.internal:11434}"
+HEARTBEAT_MODEL_NAME="${OTTOCLAW_HEARTBEAT_MODEL:-llama3.2:3b}"
+HEARTBEAT_MODEL_FRAG="{
+      \"model_name\": \"heartbeat\",
+      \"model\": \"${HEARTBEAT_MODEL_NAME}\",
+      \"api_base\": \"${HEARTBEAT_OLLAMA_HOST}/v1\",
+      \"api_key\": \"ollama\"
+    }"
+
 # ── Generate config.json if not already present ────────────────────────────
 if [ ! -f "$CONFIG_PATH" ]; then
   if [ -n "$API_BASE_OVERRIDE" ] && [ -n "$API_KEY_OVERRIDE" ] && [ -n "$MODEL_ID" ]; then
@@ -80,7 +90,8 @@ if [ ! -f "$CONFIG_PATH" ]; then
       "model": "${MODEL_ID}",
       "api_base": "${API_BASE_OVERRIDE}",
       "api_key": "${API_KEY_OVERRIDE}"
-    }
+    },
+    ${HEARTBEAT_MODEL_FRAG}
   ]${CHANNELS_JSON}${HEARTBEAT_JSON}
 }
 EOF

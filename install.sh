@@ -90,7 +90,7 @@ run_config_wizard() {
         MASTER_HOST="${MASTER_HOST:-192.168.1.1}"
         MASTER_API_KEY="${MASTER_API_KEY:-}"
         NODE_SECRET="${NODE_SECRET:-}"
-        TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+        WORKER_TELEGRAM_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
         TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
     fi
 
@@ -165,11 +165,11 @@ run_config_wizard() {
 
     # ── [2/3] Telegram (Optional) ─────────────────────────────────────────────
     echo -e "${BOLD}[2/3] Telegram Channel (Optional — press Enter to skip)${RESET}"
-    TELEGRAM_BOT_TOKEN=$( prompt_val "Telegram Bot Token"                    "${TELEGRAM_BOT_TOKEN:-}" "true")
+    WORKER_TELEGRAM_TOKEN=$( prompt_val "Telegram Bot Token"                    "${WORKER_TELEGRAM_TOKEN:-}" "true")
     TELEGRAM_ALLOW_FROM=""
     TELEGRAM_BRIDGE_CHAT_ID=""
     TELEGRAM_ORCHESTRATION_ENABLED="false"
-    if [[ -n "$TELEGRAM_BOT_TOKEN" ]]; then
+    if [[ -n "$WORKER_TELEGRAM_TOKEN" ]]; then
         TELEGRAM_ALLOW_FROM=$(prompt_val "Allowed User IDs (comma-separated)" "${TELEGRAM_ALLOW_FROM:-}")
         echo ""
         echo -e "  ${YELLOW}Telegram Bridge Orchestration${RESET}"
@@ -232,7 +232,7 @@ OTTOCLAW_MODEL_ID=${OTTOCLAW_MODEL_ID}
 OTTOCLAW_MODEL_NAME=${OTTOCLAW_MODEL_NAME}
 
 # ── Telegram Channel ──────────────────────────────────────────
-TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+WORKER_TELEGRAM_TOKEN=${WORKER_TELEGRAM_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED}
@@ -463,7 +463,7 @@ API_KEY="${OTTOCLAW_API_KEY:-}"
 
 # ── Channels JSON fragment (SiamSync + Optional Telegram) ──────
 SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${MASTER_URL}\", \"api_key\": \"${MASTER_API_KEY}\" }"
-TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+TG_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_FRAG=""
 if [ -n "$TG_TOKEN" ] && [ "${OTTOCLAW_MODE:-}" = "orchestrator" ]; then

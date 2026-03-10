@@ -161,9 +161,16 @@ func (hs *HeartbeatService) executeHeartbeat() {
 
 	logger.DebugC("heartbeat", "Executing heartbeat")
 
-	prompt := hs.buildPrompt()
+	prompt, hasTasks := hs.buildPrompt()
 	if prompt == "" {
 		logger.InfoC("heartbeat", "No heartbeat prompt (HEARTBEAT.md empty or missing)")
+		return
+	}
+
+	if !hasTasks {
+		logger.DebugC("heartbeat", "Fast Heartbeat OK (No pending tasks in HEARTBEAT.md)")
+		hs.logInfof("Fast Heartbeat OK (No pending tasks in HEARTBEAT.md)")
+		// Optional: Still send a signal to bus if needed, but for now just log
 		return
 	}
 
@@ -218,26 +225,44 @@ func (hs *HeartbeatService) executeHeartbeat() {
 }
 
 // buildPrompt builds the heartbeat prompt from HEARTBEAT.md
-func (hs *HeartbeatService) buildPrompt() string {
+// Returns the prompt string and a boolean indicating if it contains actual tasks.
+func (hs *HeartbeatService) buildPrompt() (string, bool) {
 	heartbeatPath := filepath.Join(hs.workspace, "HEARTBEAT.md")
 
 	data, err := os.ReadFile(heartbeatPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			hs.createDefaultHeartbeatTemplate()
-			return ""
+			return "", false
 		}
 		hs.logErrorf("Error reading HEARTBEAT.md: %v", err)
-		return ""
+		return "", false
 	}
 
 	content := string(data)
 	if len(content) == 0 {
-		return ""
+		return "", false
+	}
+
+	// 🕵️ Check if there are actual tasks beyond the template
+	// We look for lines starting with "- [ ]" or "- " after the "below this line:" marker
+	hasTasks := false
+	lines := strings.Split(content, "\n")
+	foundMarker := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, "Add your heartbeat tasks below this line:") {
+			foundMarker = true
+			continue
+		}
+		if foundMarker && trimmed != "" && (strings.HasPrefix(trimmed, "- [ ]") || strings.HasPrefix(trimmed, "- ")) {
+			hasTasks = true
+			break
+		}
 	}
 
 	now := time.Now().Format("2006-01-02 15:04:05")
-	return fmt.Sprintf(`# Heartbeat Check
+	prompt := fmt.Sprintf(`# Heartbeat Check
 
 Current time: %s
 
@@ -247,6 +272,8 @@ If there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK
 
 %s
 `, now, content)
+
+	return prompt, hasTasks
 }
 
 // createDefaultHeartbeatTemplate creates the default HEARTBEAT.md file

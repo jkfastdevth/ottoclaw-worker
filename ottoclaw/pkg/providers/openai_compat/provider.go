@@ -288,23 +288,46 @@ func parseResponse(body []byte) (*LLMResponse, error) {
 }
 
 // openaiMessage is the wire-format message for OpenAI-compatible APIs.
-// It mirrors protocoltypes.Message but omits SystemParts, which is an
-// internal field that would be unknown to third-party endpoints.
 type openaiMessage struct {
 	Role             string     `json:"role"`
-	Content          string     `json:"content"`
+	Content          any        `json:"content"` // Can be string or []any
 	ReasoningContent string     `json:"reasoning_content,omitempty"`
 	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
 }
 
 // serializeMessages converts internal Message structs to the OpenAI wire format.
-// - Strips SystemParts (unknown to third-party endpoints)
+// - Preserves SystemParts for CacheControl if present
 // - Converts messages with Media to multipart content format (text + image_url parts)
 // - Preserves ToolCallID, ToolCalls, and ReasoningContent for all messages
 func serializeMessages(messages []Message) []any {
 	out := make([]any, 0, len(messages))
 	for _, m := range messages {
+		// 🛠️ Special handling for SystemParts with CacheControl
+		if m.Role == "system" && len(m.SystemParts) > 0 {
+			parts := make([]map[string]any, 0, len(m.SystemParts))
+			for _, p := range m.SystemParts {
+				block := map[string]any{
+					"type": p.Type,
+					"text": p.Text,
+				}
+				if p.CacheControl != nil {
+					block["cache_control"] = map[string]any{
+						"type": p.CacheControl.Type,
+					}
+				}
+				parts = append(parts, block)
+			}
+			out = append(out, openaiMessage{
+				Role:             m.Role,
+				Content:          parts, // Send as array of blocks
+				ReasoningContent: m.ReasoningContent,
+				ToolCalls:        m.ToolCalls,
+				ToolCallID:       m.ToolCallID,
+			})
+			continue
+		}
+
 		if len(m.Media) == 0 {
 			out = append(out, openaiMessage{
 				Role:             m.Role,
