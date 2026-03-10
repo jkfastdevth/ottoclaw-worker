@@ -1,6 +1,9 @@
 package tools
 
-import "context"
+import (
+	"context"
+	"os"
+)
 
 // Tool is the interface that all tools must implement.
 type Tool interface {
