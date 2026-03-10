@@ -5,8 +5,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mymmrac/telego"
+
+	"net/http"
+	"bytes"
+	"encoding/json"
+	"io"
 
 	"github.com/sipeed/ottoclaw/pkg/config"
 )
@@ -185,7 +191,105 @@ func (c *cmd) Soul(ctx context.Context, message telego.Message) error {
 		return err
 	}
 
-	// Update mode
+	if strings.HasPrefix(args, "reincarnate") {
+		newName := strings.TrimSpace(strings.TrimPrefix(args, "reincarnate"))
+		
+		masterURL := c.config.Channels.SiamSync.MasterURL
+		if masterURL == "" {
+			masterURL = os.Getenv("MASTER_API_URL")
+		}
+		apiKey := c.config.Channels.SiamSync.APIKey
+		if apiKey == "" {
+			apiKey = os.Getenv("MASTER_API_KEY")
+		}
+
+		if masterURL == "" {
+			_, err := c.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID: telego.ChatID{ID: message.Chat.ID},
+				Text:   "❌ Error: MASTER_API_URL is not configured on this worker.",
+			})
+			return err
+		}
+
+		// Identify self
+		agentID := os.Getenv("AGENT_NAME")
+		if agentID == "" && len(c.config.Agents.List) > 0 {
+			agentID = c.config.Agents.List[0].ID
+		}
+		// Normalize ID
+		agentID = strings.ToLower(strings.TrimSpace(agentID))
+		agentID = strings.ReplaceAll(agentID, " ", "-")
+
+		if agentID == "" {
+			_, err := c.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID: telego.ChatID{ID: message.Chat.ID},
+				Text:   "❌ Error: Could not determine current Agent ID.",
+			})
+			return err
+		}
+
+		payload := map[string]string{
+			"name": newName,
+		}
+		body, _ := json.Marshal(payload)
+		
+		apiEndpoint := fmt.Sprintf("%s/api/agent/v1/agents/%s/reincarnate", strings.TrimRight(masterURL, "/"), agentID)
+		
+		req, err := http.NewRequest("POST", apiEndpoint, bytes.NewBuffer(body))
+		if err != nil {
+			_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID: telego.ChatID{ID: message.Chat.ID},
+				Text:   "❌ Error creating reincarnation request: " + err.Error(),
+			})
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if apiKey != "" {
+			req.Header.Set("X-API-Key", apiKey)
+		}
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID: telego.ChatID{ID: message.Chat.ID},
+				Text:   "❌ Error sending reincarnation spell to Master: " + err.Error(),
+			})
+			return err
+		}
+		defer resp.Body.Close()
+		
+		respData, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+				ChatID: telego.ChatID{ID: message.Chat.ID},
+				Text:   fmt.Sprintf("❌ Master rejected the reincarnation spell (Status %d): %s", resp.StatusCode, string(respData)),
+			})
+			return err
+		}
+
+		var result struct {
+			Success     bool   `json:"success"`
+			NewIdentity string `json:"new_identity"`
+		}
+		json.Unmarshal(respData, &result)
+
+		msg := fmt.Sprintf("✨ *Reincarnation Ritual Initiated!*\n\nMaster has accepted the request. I will soon transform into *%s*.\n\n_System will restart shortly..._", result.NewIdentity)
+		if result.NewIdentity == "" && newName == "" {
+			msg = "✨ *Reincarnation Ritual Initiated!*\n\nMaster is forging a new random soul for this body.\n\n_System will restart shortly..._"
+		} else if result.NewIdentity != "" {
+			msg = fmt.Sprintf("✨ *Reincarnation Ritual Initiated!*\n\nMaster has accepted the request. I will soon transform into *%s*.", result.NewIdentity)
+		}
+
+		_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+			ChatID:    telego.ChatID{ID: message.Chat.ID},
+			Text:      msg,
+			ParseMode: telego.ModeMarkdown,
+		})
+		return err
+	}
+
+	// Update mode (manual overwrite)
 	err := os.WriteFile(soulPath, []byte(args), 0644)
 	if err != nil {
 		_, err = c.bot.SendMessage(ctx, &telego.SendMessageParams{
