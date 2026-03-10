@@ -85,7 +85,168 @@ func NewSiamToolset(masterURL, apiKey string) []Tool {
 		&SiamSubmitJobTool{client: client},
 		&SiamRunCommandTool{client: client},
 		&SiamSendMessageTool{client: client},
+		&SiamDelegateMissionTool{client: client},
+		&SiamStoreMemoryTool{client: client},
+		&SiamSearchMemoryTool{client: client},
 	}
+}
+
+// SiamDelegateMissionTool — delegate a persistent task to another agent.
+type SiamDelegateMissionTool struct{ client *siamClient }
+
+func (t *SiamDelegateMissionTool) Name() string { return "siam_delegate_mission" }
+func (t *SiamDelegateMissionTool) Description() string {
+	return "Delegate a persistent, long-running mission to another Siam-Synapse sub-agent. This is more reliable than siam_send_message for complex tasks as it persists across restarts."
+}
+func (t *SiamDelegateMissionTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The target Agent ID / Soul Name (e.g. 'kaidos').",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "Detailed mission directive for the agent (e.g. 'Research Bitcoin trends for the next 24h').",
+			},
+			"parent_id": map[string]any{
+				"type":        "string",
+				"description": "Optional: ID of the current mission you are working on, to link this new task as a sub-mission.",
+			},
+		},
+		"required": []string{"agent_id", "description"},
+	}
+}
+func (t *SiamDelegateMissionTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	agentIDRaw, _ := args["agent_id"].(string)
+	description, _ := args["description"].(string)
+	parentID, _ := args["parent_id"].(string)
+
+	if strings.TrimSpace(agentIDRaw) == "" || strings.TrimSpace(description) == "" {
+		return ErrorResult("siam_delegate_mission: agent_id and description are required")
+	}
+
+	// Normalize target ID
+	agentID := strings.ToLower(strings.TrimSpace(agentIDRaw))
+	agentID = strings.ReplaceAll(agentID, " ", "-")
+
+	payload := map[string]any{
+		"agent_id":    agentID,
+		"description": description,
+	}
+	if parentID != "" {
+		payload["parent_id"] = parentID
+	}
+
+	data, err := t.client.post("/api/agent/v1/missions", payload)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_delegate_mission failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamStoreMemoryTool — store fact in Akashic Library.
+type SiamStoreMemoryTool struct{ client *siamClient }
+
+func (t *SiamStoreMemoryTool) Name() string { return "siam_store_memory" }
+func (t *SiamStoreMemoryTool) Description() string {
+	return "Store an important fact or observation in the shared Akashic Library (Global Intelligence). This knowledge becomes accessible to all agents in the network."
+}
+func (t *SiamStoreMemoryTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"fact": map[string]any{
+				"type":        "string",
+				"description": "The specific information or fact to store (e.g. 'Bitcoin reached $100k at 10:45 AM UTC').",
+			},
+			"confidence": map[string]any{
+				"type":        "number",
+				"description": "Confidence level (0.0 to 1.0). Default is 1.0.",
+			},
+			"tags": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "string",
+				},
+				"description": "Keywords for indexing (e.g. ['crypto', 'price', 'alert']).",
+			},
+		},
+		"required": []string{"fact"},
+	}
+}
+func (t *SiamStoreMemoryTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	fact, _ := args["fact"].(string)
+	confidence, _ := args["confidence"].(float64)
+	tagsRaw, _ := args["tags"].([]any)
+
+	if strings.TrimSpace(fact) == "" {
+		return ErrorResult("siam_store_memory: fact is required")
+	}
+
+	tags := make([]string, 0, len(tagsRaw))
+	for _, tr := range tagsRaw {
+		if s, ok := tr.(string); ok {
+			tags = append(tags, s)
+		}
+	}
+
+	payload := map[string]any{
+		"fact":         fact,
+		"confidence":   confidence,
+		"source_agent": os.Getenv("AGENT_NAME"),
+		"tags":         tags,
+	}
+
+	data, err := t.client.post("/api/agent/v1/knowledge", payload)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_store_memory failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamSearchMemoryTool — search the shared library.
+type SiamSearchMemoryTool struct{ client *siamClient }
+
+func (t *SiamSearchMemoryTool) Name() string { return "siam_search_memory" }
+func (t *SiamSearchMemoryTool) Description() string {
+	return "Search the shared Akashic Library for facts, research, or observations gathered by other agents in the network."
+}
+func (t *SiamSearchMemoryTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Search query or keyword (e.g. 'Bitcoin analysis').",
+			},
+			"limit": map[string]any{
+				"type":        "integer",
+				"description": "Max results to return. Default is 5.",
+			},
+		},
+		"required": []string{"query"},
+	}
+}
+func (t *SiamSearchMemoryTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	query, _ := args["query"].(string)
+	limit, _ := args["limit"].(float64)
+
+	if strings.TrimSpace(query) == "" {
+		return ErrorResult("siam_search_memory: query is required")
+	}
+
+	if limit == 0 {
+		limit = 5
+	}
+
+	path := fmt.Sprintf("/api/agent/v1/knowledge/search?q=%s&limit=%d", query, int(limit))
+	data, err := t.client.get(path)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_search_memory failed: %v", err))
+	}
+	return UserResult(string(data))
 }
 
 // SiamGetMetricsTool — get system CPU / node metrics.
