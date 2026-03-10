@@ -101,9 +101,36 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nStill empty. Let me try \"price\" as a more general query.\n\u003c/think\u003e\n\nยังค้นหาไม่เจอเลยครับ `null` ตลอด\n\nลองช่วยบอก keyword ที่แม่นยำกว่านี้ได้ไหม? หรือจะให้ผมดึงข้อมูล Bitcoin จากเว็บมาใหม่เลย? 🦞"
+    },
+    {
+      "role": "user",
+      "content": "/status"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe user is asking for the status of something. Let me check if they want system metrics or something else. Let me call siam_get_metrics to check the system status.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_ub5gl83h8woh_1",
+          "type": "function",
+          "function": {
+            "name": "siam_get_metrics",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"active_nodes\":3,\"scaling_mode\":\"auto\",\"total_cpu\":24.422096014022827}",
+      "tool_call_id": "call_function_ub5gl83h8woh_1"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThis is the system status of Siam-Synapse network. Let me summarize this for the user.\n\u003c/think\u003e\n\n**System Status:**\n\n| Metric | Value |\n|--------|-------|\n| Active Nodes | 3 |\n| Total CPU | 24.4% |\n| Scaling Mode | auto ✅ |\n\nทุกอย่างปกติครับ 🦞"
     }
   ],
   "summary": "\u003cthink\u003e\nThe user wants to know about the \"heartbeat\" system in this environment. They mentioned they want to check what model is being used, but they're asking specifically about a \"heartbeat\" system.\n\nLet me think about what a \"heartbeat\" could mean in this context. In AI agent systems, a heartbeat typically refers to a mechanism where the agent periodically sends signals to indicate it's still alive/active. However, I don't see any specific \"heartbeat\" functionality in the tools I have available.\n\nLet me check if there's any configuration or documentation about the environment that might contain information about heartbeat systems. I'll look for any text files or configuration that might contain this information.\n\u003c/think\u003e\n\n\n\u003cminimax:tool_call\u003e\n\u003cinvoke name=\"filesystem_search_files\"\u003e\n\u003cparameter name=\"path\"\u003e/\u003c/parameter\u003e\n\u003cparameter name=\"pattern\"\u003e*\u003c/parameter\u003e\n\u003c/invoke\u003e\n\u003c/minimax:tool_call\u003e",
   "created": "2026-03-05T19:40:10.040706682Z",
-  "updated": "2026-03-10T13:42:19.176683968Z"
+  "updated": "2026-03-10T15:41:23.839354825Z"
 }

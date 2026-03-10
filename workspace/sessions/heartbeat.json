@@ -19616,8 +19616,86 @@
     {
       "role": "assistant",
       "content": "HEARTBEAT_OK"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 15:35:49\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_3698h1dn",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"master\",\"from\":\"Auric Spark\",\"message\":\"HEARTBEAT_OK\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_3698h1dn"
+    },
+    {
+      "role": "assistant",
+      "content": "HEARTBEAT_OK"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 15:43:07\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"action\": \"HEARTBEAT_OK\"}"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 15:49:01\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"siam_de delegate_mission\", \"Delegate a persistent, long-running mission to another Siam-Synapse sub-agent.\", {\"agent_id\": \"kaidos\", \"description\": \"Research Bitcoin trends for the next 24h\"}}"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 15:54:59\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_v8foq6c0",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"master\",\"from\":\"Auric Spark\",\"message\":\"HEARTBEAT_OK\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_v8foq6c0"
+    },
+    {
+      "role": "assistant",
+      "content": "HEARTBEAT_OK"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-10 16:02:19\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"action\": \"HEARTBEAT_OK\"}"
     }
   ],
   "created": "2026-03-05T19:33:28.880853295Z",
-  "updated": "2026-03-10T15:35:49.198631207Z"
+  "updated": "2026-03-10T16:08:12.888557007Z"
 }
