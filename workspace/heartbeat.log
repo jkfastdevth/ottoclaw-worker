@@ -3315,3 +3315,11 @@
 [2026-03-10 18:39:46] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: failed to send request: Post "http://host.docker.internal:11434/v1/chat/completions": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
 [2026-03-10 18:39:46] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
 [2026-03-10 18:43:01] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 18:49:00] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 18:58:13] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 19:04:12] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 19:11:59] [INFO] Heartbeat OK - silent
+[2026-03-10 19:12:37] [INFO] Heartbeat OK - silent
+[2026-03-10 19:12:37] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 19:18:38] [INFO] Heartbeat OK - silent
+[2026-03-10 19:18:38] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)

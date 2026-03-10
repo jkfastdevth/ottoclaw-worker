@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -45,9 +46,10 @@ type TelegramChannel struct {
 	bh       *th.BotHandler
 	commands TelegramCommander
 	config   *config.Config
-	chatIDs  map[string]int64
-	ctx      context.Context
-	cancel   context.CancelFunc
+	chatIDs      map[string]int64
+	dynamicNames []string
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 func NewTelegramChannel(cfg *config.Config, bus *bus.MessageBus) (*TelegramChannel, error) {
@@ -163,7 +165,60 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 		}
 	}()
 
+	// 🌐 Start Dynamic Nickname Polling
+	go c.pollDynamicNames()
+
 	return nil
+}
+
+func (c *TelegramChannel) pollDynamicNames() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	// Initial poll
+	c.updateNames()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			c.updateNames()
+		}
+	}
+}
+
+func (c *TelegramChannel) updateNames() {
+	apiBase := os.Getenv("MASTER_API_URL")
+	if apiBase == "" {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/agent/v1/network/souls", apiBase)
+	req, _ := http.NewRequestWithContext(c.ctx, "GET", url, nil)
+	
+	apiKey := os.Getenv("MASTER_API_KEY")
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.WarnCF("telegram", "Failed to poll dynamic names", map[string]any{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		var result struct {
+			Success bool     `json:"success"`
+			Souls   []string `json:"souls"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.Success {
+			c.dynamicNames = result.Souls
+			logger.InfoC("telegram", fmt.Sprintf("Updated dynamic nicknames: %v", c.dynamicNames))
+		}
+	}
 }
 
 func (c *TelegramChannel) Stop(ctx context.Context) error {
@@ -549,16 +604,19 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			}
 
 			// 🛡️ Robust Orchestration Matching: Normalize both sides
-			// Supports a comma-separated list of names (e.g., "Auric Spark, Kaidos")
+			// Supports dynamic names from Master + local fallback
 			isMatch := false
-			namesToMatch := os.Getenv("ORCHESTRATOR_NICKNAMES")
-			if namesToMatch == "" {
-				namesToMatch = myAgentName
+			
+			// Join dynamic names with local ORCHESTRATOR_NICKNAMES and AGENT_NAME
+			allPossibleNames := c.dynamicNames
+			localNicknames := os.Getenv("ORCHESTRATOR_NICKNAMES")
+			if localNicknames != "" {
+				allPossibleNames = append(allPossibleNames, strings.Split(localNicknames, ",")...)
 			}
+			allPossibleNames = append(allPossibleNames, myAgentName)
 
-			myNames := strings.Split(namesToMatch, ",")
 			targetNorm := utils.NormalizeID(targetAgent)
-			for _, name := range myNames {
+			for _, name := range allPossibleNames {
 				name = strings.TrimSpace(name)
 				if name == "" {
 					continue
