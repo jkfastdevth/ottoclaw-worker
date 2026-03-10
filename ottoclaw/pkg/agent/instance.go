@@ -88,18 +88,19 @@ func NewAgentInstance(
 	// Siam-Synapse orchestrator tools — enabled when SIAM_MASTER_URL / MASTER_API_URL is set
 	for _, t := range tools.NewSiamToolsetFromEnv() {
 		toolsRegistry.Register(t)
-		// Enable proactive Akashic Library injection if the tool is present
-		if t.Name() == "siam_search_memory" {
-			if searchTool, ok := t.(GlobalMemoryProvider); ok {
-				contextBuilder.SetGlobalMemoryProvider(searchTool)
-			}
-		}
 	}
 
 	sessionsDir := filepath.Join(workspace, "sessions")
 	sessionsManager := session.NewSessionManager(sessionsDir)
 
 	contextBuilder := NewContextBuilder(workspace)
+
+	// Enable proactive Akashic Library injection if the search tool is present
+	if t, ok := toolsRegistry.Get("siam_search_memory"); ok {
+		if searchTool, ok := t.(GlobalMemoryProvider); ok {
+			contextBuilder.SetGlobalMemoryProvider(searchTool)
+		}
+	}
 
 	agentID := routing.DefaultAgentID
 	agentName := ""
