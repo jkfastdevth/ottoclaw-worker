@@ -46,6 +46,10 @@ type AgentLoop struct {
 	channelManager *channels.Manager
 	mediaStore     media.MediaStore
 	transcriber    voice.Transcriber
+
+	// 🕵️ Stability & Anti-Zombie Tracking
+	processedMessages sync.Map // Map[string]time.Time (MessageID -> ReceivedAt)
+	busySessions      sync.Map // Map[string]bool (SessionKey -> isProcessing)
 }
 
 // processOptions configures how a message is processed
@@ -91,6 +95,8 @@ func NewAgentLoop(
 		state:       stateManager,
 		summarizing: sync.Map{},
 		fallback:    fallbackChain,
+		processedMessages: sync.Map{},
+		busySessions:      sync.Map{},
 	}
 }
 
@@ -538,6 +544,21 @@ func (al *AgentLoop) ProcessHeartbeat(
 }
 
 func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+	// 1. 🕵️ Deduplication: Check if we already processed this MessageID
+	if msg.MessageID != "" {
+		if _, seen := al.processedMessages.Load(msg.MessageID); seen {
+			logger.DebugCF("agent", "Duplicate message skipped", map[string]any{"message_id": msg.MessageID})
+			return "DUPLICATE_SKIPPED", nil
+		}
+		// Remember it (with expiration handled elsewhere or just keep as simple cache)
+		al.processedMessages.Store(msg.MessageID, time.Now())
+
+		// Cleanup old entries (simple rate-limited cleanup)
+		if time.Now().Unix()%100 == 0 {
+			go al.cleanupProcessedMessages()
+		}
+	}
+
 	// Add message preview to log (show full content for error messages)
 	var logContent string
 	if strings.Contains(msg.Content, "Error:") || strings.Contains(msg.Content, "error") {
@@ -553,6 +574,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			"chat_id":     msg.ChatID,
 			"sender_id":   msg.SenderID,
 			"session_key": msg.SessionKey,
+			"message_id":  msg.MessageID,
 		},
 	)
 
@@ -599,6 +621,13 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		sessionKey = msg.SessionKey
 	}
 
+	// 2. 🛡️ Session Locking: Prevent concurrent AI threads on the same session
+	if _, busy := al.busySessions.LoadOrStore(sessionKey, true); busy {
+		logger.WarnCF("agent", "Concurrent request blocked for session", map[string]any{"session_key": sessionKey})
+		return "DUPLICATE_CONCURRENT_REQUEST_BLOCKED", nil
+	}
+	defer al.busySessions.Delete(sessionKey)
+
 	logger.InfoCF("agent", "Routed message",
 		map[string]any{
 			"agent_id":    agent.ID,
@@ -606,7 +635,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			"matched_by":  route.MatchedBy,
 		})
 
-	return al.runAgentLoop(ctx, agent, processOptions{
+	opts := processOptions{
 		SessionKey:      sessionKey,
 		Channel:         msg.Channel,
 		ChatID:          msg.ChatID,
@@ -615,7 +644,9 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		DefaultResponse: defaultResponse,
 		EnableSummary:   true,
 		SendResponse:    false,
-	})
+	}
+
+	return al.runAgentLoop(ctx, agent, opts)
 }
 
 func (al *AgentLoop) processSystemMessage(
@@ -1588,4 +1619,16 @@ func extractParentPeer(msg bus.InboundMessage) *routing.RoutePeer {
 		return nil
 	}
 	return &routing.RoutePeer{Kind: parentKind, ID: parentID}
+}
+
+// cleanupProcessedMessages removes message IDs older than 24 hours to keep the map size in check.
+func (al *AgentLoop) cleanupProcessedMessages() {
+	now := time.Now()
+	al.processedMessages.Range(func(key, value any) bool {
+		receivedAt, ok := value.(time.Time)
+		if ok && now.Sub(receivedAt) > 24*time.Hour {
+			al.processedMessages.Delete(key)
+		}
+		return true
+	})
 }

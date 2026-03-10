@@ -95,3 +95,8 @@ HEARTBEAT_OK
 HEARTBEAT_OK
 
 เท่านั้น
+
+---
+
+Add your heartbeat tasks below this line:
+- [ ] HEARTBEAT_OK
