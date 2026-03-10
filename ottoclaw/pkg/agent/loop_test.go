@@ -166,7 +166,7 @@ func TestToolRegistry_ToolRegistration(t *testing.T) {
 
 // TestToolContext_Updates verifies tool context helpers work correctly
 func TestToolContext_Updates(t *testing.T) {
-	ctx := tools.WithToolContext(context.Background(), "telegram", "chat-42")
+	ctx := tools.WithToolContext(context.Background(), "telegram", "chat-42", "")
 
 	if got := tools.ToolChannel(ctx); got != "telegram" {
 		t.Errorf("expected channel 'telegram', got %q", got)

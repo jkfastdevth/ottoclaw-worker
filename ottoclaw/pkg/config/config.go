@@ -237,13 +237,13 @@ type GroupTriggerConfig struct {
 
 // TypingConfig controls typing indicator behavior (Phase 10).
 type TypingConfig struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty" env:"OTTOCLAW_CHANNELS_TELEGRAM_TYPING_ENABLED"`
 }
 
 // PlaceholderConfig controls placeholder message behavior (Phase 10).
 type PlaceholderConfig struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Text    string `json:"text,omitempty"`
+	Enabled bool   `json:"enabled,omitempty" env:"OTTOCLAW_CHANNELS_TELEGRAM_PLACEHOLDER_ENABLED"`
+	Text    string `json:"text,omitempty"    env:"OTTOCLAW_CHANNELS_TELEGRAM_PLACEHOLDER_TEXT"`
 }
 
 type WhatsAppConfig struct {
