@@ -3104,3 +3104,21 @@
 [2026-03-10 06:32:23] [INFO] Heartbeat OK - silent
 [2026-03-10 06:38:04] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
 [2026-03-10 06:38:28] [INFO] Heartbeat OK - silent
+[2026-03-10 06:44:04] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 06:44:17] [INFO] Heartbeat OK - silent
+[2026-03-10 06:50:04] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 06:50:25] [INFO] Heartbeat OK - silent
+[2026-03-10 06:56:04] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 06:56:14] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"all LLM attempts failed: hourly limit reached for minimax:MiniMax-M2.5-highspeed (60/60)"}
+[2026-03-10 06:56:55] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 06:57:01] [ERROR] Heartbeat error: Heartbeat error: LLM call failed after retries: API request failed:
+  Status: 500
+  Body:   {"error":"all LLM attempts failed: hourly limit reached for minimax:MiniMax-M2.5-highspeed (60/60)"}
+[2026-03-10 07:02:54] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 07:03:03] [INFO] Heartbeat OK - silent
+[2026-03-10 07:04:15] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 07:04:26] [INFO] Heartbeat OK - silent
+[2026-03-10 07:10:14] [INFO] Resolved channel: telegram, chatID: 1891109998 (from lastChannel: telegram:1891109998)
+[2026-03-10 07:10:35] [INFO] Heartbeat OK - silent
