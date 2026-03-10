@@ -35,7 +35,7 @@ mkdir -p "$OTTOCLAW_HOME_DIR" "$WORKSPACE_DIR"
 
 # ── Channels JSON fragment (SiamSync + Optional Telegram) ──────────────────
 SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${MASTER_URL}\", \"api_key\": \"${MASTER_API_KEY}\" }"
-TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+TG_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_FRAG=""
 if [ -n "$TG_TOKEN" ]; then
