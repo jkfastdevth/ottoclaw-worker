@@ -466,7 +466,7 @@ SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_ur
 TG_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_FRAG=""
-if [ -n "$TG_TOKEN" ]; then
+if [ -n "$TG_TOKEN" ] && [ "${OTTOCLAW_MODE:-}" = "orchestrator" ]; then
     ALLOW_FRAG=""
     if [ -n "$TG_ALLOW_FROM" ]; then
         ALLOW_FRAG=", \"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')]"
