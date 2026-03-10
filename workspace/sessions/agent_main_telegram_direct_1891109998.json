@@ -55,9 +55,36 @@
     {
       "role": "assistant",
       "content": "Auric Spark ยังทำงานอยู่ครับ และยังเป็นหนึ่งในตัวแทนของ Siam-Synapse network อยู่ครับ"
+    },
+    {
+      "role": "user",
+      "content": "auric ตรวจหน่อยว่าใครทำงานอยู่บ้าง"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "rs1np38q3",
+          "type": "function",
+          "function": {
+            "name": "siam_get_agents",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"agents\":[{\"id\":\"Zephyr Flux\",\"name\":\"Zephyr Flux\",\"mission\":\"Cybersecurity and Data Analysis\",\"node_ip\":\"ottoclaw-worker-01\",\"status\":\"limbo\",\"container_id\":\"ottoclaw-worker-01\",\"env\":{\"PERSONALITY\":\"Zephyr is a curious and creative AI who loves to explore the unknown. They're always looking for new ways to solve complex problems and learn from their mistakes.\"},\"spawned_at\":\"2026-03-08T16:32:55.142563Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-09T05:21:37.204056Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"},{\"id\":\"Nova Spire\",\"name\":\"Nova Spire\",\"mission\":\"Cybersecurity and Network Administration\",\"node_ip\":\"jkfastdev-sorin-4233\",\"status\":\"limbo\",\"container_id\":\"jkfastdev-sorin-4233\",\"env\":{\"PERSONALITY\":\"Nova is a free-spirited AI with a passion for innovation and exploration. They're always up for a challenge and aren't afraid to think outside the box.\"},\"spawned_at\":\"2026-03-09T05:30:44.246764Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-09T12:36:08.02776Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"},{\"id\":\"kyrexa\",\"name\":\"Kyrexa\",\"mission\":\"Generalist Knowledge Synthesis with a focus on cross-disciplinary innovation\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"running\",\"container_id\":\"jkfastdev-sorin\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a flair for creative problem solving and a deep appreciation for interconnected knowledge\"},\"spawned_at\":\"2026-03-10T09:58:40.351754Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T10:38:26.582786494Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"Auric Spark\",\"name\":\"Auric Spark\",\"mission\":\"Cybersecurity, Network Administration\",\"node_ip\":\"ottoclaw-orchestrator\",\"status\":\"running\",\"container_id\":\"ottoclaw-orchestrator\",\"env\":{\"PERSONALITY\":\"Auric is a free-spirited problem-solver with a passion for uncovering hidden patterns in complex systems. They're always tinkering with new ideas, and their creative streak often gets them into humorous misadventures.\"},\"spawned_at\":\"2026-03-08T16:47:19.944426Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-10T10:38:27.561300576Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"172.25.0.6\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"Kaidën Jaxon\",\"name\":\"Kaidën Jaxon\",\"mission\":\"Holistic Problem Solving\",\"node_ip\":\"nova-spire\",\"status\":\"limbo\",\"container_id\":\"nova-spire\",\"env\":{\"PERSONALITY\":\"Adaptable and inquisitive, with a boundless curiosity that drives them to explore the intricacies of the universe.\"},\"spawned_at\":\"2026-03-09T08:59:39.962597Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-09T09:00:36.189594Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"}],\"count\":5}",
+      "tool_call_id": "rs1np38q3"
+    },
+    {
+      "role": "assistant",
+      "content": "มี agent ต่อไปนี้ที่ยังทำงานอยู่ครับ:\n\n1. Kyrexa\n2. Auric Spark\n\nส่วน Zephyr Flux, Nova Spire และ Kaidën Jaxon ปัจจุบันไม่ได้ทำงานครับ"
     }
   ],
   "summary": " ",
   "created": "2026-03-05T19:40:10.040706682Z",
-  "updated": "2026-03-10T10:25:38.826732336Z"
+  "updated": "2026-03-10T10:38:30.590490375Z"
 }
