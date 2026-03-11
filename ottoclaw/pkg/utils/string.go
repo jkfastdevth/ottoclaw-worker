@@ -21,8 +21,9 @@ func NormalizeID(id string) string {
 }
 
 var (
-	reThink    = regexp.MustCompile("(?s)<think>.*?</think>")
-	reFunction = regexp.MustCompile("(?s)<function>.*?</function>")
+	reThink           = regexp.MustCompile("(?s)<think>.*?</think>")
+	reFunction        = regexp.MustCompile("(?s)<function>.*?</function>")
+	reFunctionCallEnd = regexp.MustCompile("(?s)<function>.*?</FunctionCallEnd>")
 )
 
 // StripThinkTags removes the <think>...</think> sections from a string.
@@ -31,8 +32,12 @@ func StripThinkTags(input string) string {
 }
 
 // StripInternalTags removes both <think> and <function> technical tags.
+// Handles both <function>...</function> and <function>...</FunctionCallEnd> formats.
 func StripInternalTags(input string) string {
 	out := reThink.ReplaceAllString(input, "")
+	// Strip Ollama-style plaintext tool calls: <function>name{...}</FunctionCallEnd>
+	out = reFunctionCallEnd.ReplaceAllString(out, "")
+	// Strip standard function tags: <function>...</function>
 	out = reFunction.ReplaceAllString(out, "")
 	return strings.TrimSpace(out)
 }

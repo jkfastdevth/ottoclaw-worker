@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -276,8 +277,20 @@ func parseResponse(body []byte) (*LLMResponse, error) {
 		toolCalls = append(toolCalls, toolCall)
 	}
 
+	// If no structured tool calls were found, try parsing plaintext tool call format
+	// (used by some Ollama models like llama3.2:3b)
+	content := choice.Message.Content
+	if len(toolCalls) == 0 && strings.Contains(content, "<function>") {
+		parsedCalls, cleanedContent := parsePlaintextToolCalls(content)
+		if len(parsedCalls) > 0 {
+			toolCalls = parsedCalls
+			content = cleanedContent
+			log.Printf("openai_compat: parsed %d plaintext tool call(s) from content", len(parsedCalls))
+		}
+	}
+
 	return &LLMResponse{
-		Content:          choice.Message.Content,
+		Content:          content,
 		ReasoningContent: choice.Message.ReasoningContent,
 		Reasoning:        choice.Message.Reasoning,
 		ReasoningDetails: choice.Message.ReasoningDetails,
@@ -285,6 +298,57 @@ func parseResponse(body []byte) (*LLMResponse, error) {
 		FinishReason:     choice.FinishReason,
 		Usage:            apiResponse.Usage,
 	}, nil
+}
+
+// rePlaintextToolCall matches Ollama-style plaintext tool calls:
+// <function>toolname{"arg": "value"}</FunctionCallEnd>
+var rePlaintextToolCall = regexp.MustCompile(`(?s)<function>(\w+)(\{.*?\})</FunctionCallEnd>`)
+
+// parsePlaintextToolCalls detects and parses Ollama-style plaintext tool calls
+// that some models (e.g. llama3.2:3b) emit instead of structured JSON tool_calls.
+// Returns the extracted ToolCalls and the content with tool call blocks removed.
+func parsePlaintextToolCalls(content string) ([]ToolCall, string) {
+	matches := rePlaintextToolCall.FindAllStringSubmatchIndex(content, -1)
+	if len(matches) == 0 {
+		return nil, content
+	}
+
+	var toolCalls []ToolCall
+	idCounter := 0
+
+	for _, match := range matches {
+		// match[2:4] = toolname capture group
+		// match[4:6] = JSON args capture group
+		if len(match) < 6 {
+			continue
+		}
+		toolName := content[match[2]:match[3]]
+		argsStr := content[match[4]:match[5]]
+
+		var args map[string]any
+		if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
+			log.Printf("openai_compat: failed to parse plaintext tool call args for %q: %v (raw: %s)", toolName, err, argsStr)
+			args = map[string]any{"raw": argsStr}
+		}
+
+		idCounter++
+		toolCalls = append(toolCalls, ToolCall{
+			ID:        fmt.Sprintf("call_plaintext_%d", idCounter),
+			Type:      "function",
+			Name:      toolName,
+			Arguments: args,
+			Function: &FunctionCall{
+				Name:      toolName,
+				Arguments: argsStr,
+			},
+		})
+	}
+
+	// Strip all plaintext tool call blocks from content
+	cleanedContent := rePlaintextToolCall.ReplaceAllString(content, "")
+	cleanedContent = strings.TrimSpace(cleanedContent)
+
+	return toolCalls, cleanedContent
 }
 
 // openaiMessage is the wire-format message for OpenAI-compatible APIs.

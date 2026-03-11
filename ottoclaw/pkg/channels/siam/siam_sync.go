@@ -118,7 +118,10 @@ type siamMessage struct {
 }
 
 func (s *SiamSyncChannel) fetchMessages(ctx context.Context, masterURL, apiKey, agentName string) {
-	url := fmt.Sprintf("%s/api/agent/v1/agents/%s/messages", masterURL, agentName)
+	// Normalize agent name to match master's routing key format (e.g. "Auric Spark" → "auric-spark")
+	agentKey := strings.ToLower(strings.TrimSpace(agentName))
+	agentKey = strings.NewReplacer(" ", "-", "_", "-").Replace(agentKey)
+	url := fmt.Sprintf("%s/api/agent/v1/agents/%s/messages", masterURL, agentKey)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

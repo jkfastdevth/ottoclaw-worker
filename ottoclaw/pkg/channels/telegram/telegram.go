@@ -591,6 +591,14 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	forceRespond := false
 
 	if tCfg.OrchestrationEnabled {
+		// 🛡️ Guard: skip bracket-notation broadcast messages in bridge chat.
+		// siam_send_message posts "[Sender ↳ Target]\nmessage" format to the group for transparency.
+		// The regex would extract "[Auric" → normalize to "auric" → accidentally match our own name.
+		// These messages are purely informational and must never trigger agent responses.
+		if strings.HasPrefix(content, "[") && chatIDStr == tCfg.BridgeChatID {
+			return nil
+		}
+
 		matches := reOrchestration.FindStringSubmatch(content)
 		if len(matches) == 3 {
 			remoteSender := user.FirstName

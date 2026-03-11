@@ -578,10 +578,20 @@ func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *T
 	}
 
 	// ── Telegram Bridge Orchestration ───────────────────────────────
-	// If orchestration is enabled, we broadcast to the shared group
+	// If orchestration is enabled, we broadcast to the shared group.
+	// Supports both TELEGRAM_BOT_TOKEN (legacy) and OTTOCLAW_CHANNELS_TELEGRAM_TOKEN (ottoclaw native).
 	bridgeChatID := os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
+	if bridgeChatID == "" {
+		bridgeChatID = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID")
+	}
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" && bridgeChatID != "" && botToken != "" {
+	if botToken == "" {
+		botToken = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_TOKEN")
+	}
+	orchestrationEnabled := os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" ||
+		os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED") == "true"
+
+	if orchestrationEnabled && bridgeChatID != "" && botToken != "" {
 		senderName := from
 		if senderName == "" {
 			senderName = os.Getenv("AGENT_NAME")
