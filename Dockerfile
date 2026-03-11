@@ -21,6 +21,8 @@ WORKDIR /app/worker
 # worker/ has its own go.mod; keep relative replace ../proto working
 COPY worker/go.mod worker/go.sum ./
 COPY proto/ ../proto/
+RUN rm -f ../proto/control*
+
 COPY worker/main.go ./
 RUN go mod download && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/siam-worker .
