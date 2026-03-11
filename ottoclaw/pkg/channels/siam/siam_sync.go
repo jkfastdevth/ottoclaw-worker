@@ -1,6 +1,7 @@
 package siam
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -97,6 +98,10 @@ func (s *SiamSyncChannel) pollLoop(ctx context.Context) {
 		"master_url": masterURL,
 		"interval":   interval.String(),
 	})
+
+	// 🚀 Clock-in: Send onboarding message to Telegram Bridge
+	s.sendOnboardingMessage(agentName)
+
 
 	for {
 		select {
@@ -198,5 +203,37 @@ func (s *SiamSyncChannel) fetchMessages(ctx context.Context, masterURL, apiKey, 
 			nil,
 			nil,
 		)
+	}
+}
+
+func (s *SiamSyncChannel) sendOnboardingMessage(agentName string) {
+	bridgeChatID := os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
+	if bridgeChatID == "" {
+		bridgeChatID = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID")
+	}
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		botToken = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_TOKEN")
+	}
+	orchestrationEnabled := os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" ||
+		os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED") == "true"
+
+	if orchestrationEnabled && bridgeChatID != "" && botToken != "" {
+		onboardingMsg := fmt.Sprintf("[%s]: รายงานตัวเข้างานครับ! พร้อมรับคำสั่งแล้ว 💼", agentName)
+
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+		tgPayload := map[string]any{
+			"chat_id": bridgeChatID,
+			"text":    onboardingMsg,
+		}
+		body, _ := json.Marshal(tgPayload)
+		
+		go func() {
+			resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
+			if err == nil && resp != nil {
+				resp.Body.Close()
+				logger.InfoCF("siam_sync", "Clock-in message sent", map[string]any{"agent": agentName})
+			}
+		}()
 	}
 }
