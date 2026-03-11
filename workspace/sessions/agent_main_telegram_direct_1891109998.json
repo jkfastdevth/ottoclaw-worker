@@ -114,9 +114,36 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nThe message was sent successfully to Kaidos. Let me inform the user.\n\u003c/think\u003e\n\nส่งข้อความไปหา Kaidos แล้วครับ 📨\n\n\u003e \"อรุณสวัสดิ์ Kaidos ตอนนี้ระบบสื่อสารของเราทำงานสมบูรณ์แล้ว\"\n\nรอเขาตอบกลับมานะครับ 🦞"
+    },
+    {
+      "role": "user",
+      "content": "ช่วยส่งข้อความไปทักทาย Kaidos ให้หน่อย บอกเขาว่า \"อรุณสวัสดิ์ Kaidos ตอนนี้ระบบสื่อสารของเราทำงานสมบูรณ์แล้ว"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "7w5v8qvp6",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"อรุณสวัสดิ์ Kaidos ตอนนี้ระบบสื่อสารของเราทำงานสมบูรณ์แล้ว\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "7w5v8qvp6"
+    },
+    {
+      "role": "assistant",
+      "content": "ส่งข้อความไปหา Kaidos แล้วครับ 📨\n\n\u003e \"อรุณสวัสดิ์ Kaidos ตอนนี้ระบบสื่อสารของเราทำงานสมบูรณ์แล้ว\"\n\nรอเขาตอบกลับมานะครับ 🦞"
     }
   ],
   "summary": "\u003cthink\u003e\nLet me check if there are any jobs running or if there are any recent responses.\n\u003c/think\u003e\n\n\n\u003cminimax:tool_call\u003e\n\u003cinvoke name=\"claudeai_computer_20251907_check_jobs\"\u003e\n\u003c/invoke\u003e\n\u003c/minimax:tool_call\u003e",
   "created": "2026-03-05T19:40:10.040706682Z",
-  "updated": "2026-03-11T07:08:17.601065144Z"
+  "updated": "2026-03-11T07:42:26.676121196Z"
 }

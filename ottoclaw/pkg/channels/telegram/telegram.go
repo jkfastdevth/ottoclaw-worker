@@ -699,6 +699,12 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				// e.g. "What are you doing" -> "What" is not an agent name.
 				// We let this fall through to normal group trigger logic (e.g. mentions).
 			}
+		} else {
+			// No direct "Name: content" match. In a bridge chat, we MUST be mentioned or replied to
+			// to avoid both agents jumping on a random sentence.
+			if chatIDStr == tCfg.BridgeChatID && !c.isBotMentioned(message) {
+				return nil
+			}
 		}
 	}
 
