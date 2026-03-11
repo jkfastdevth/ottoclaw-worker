@@ -359,11 +359,49 @@ SOULEOF
     echo "  Remove manually: sudo rm -rf /var/lib/ottoclaw"
     ;;
 
+  update)
+    # ── Pull latest code and rebuild binaries ─────────────────
+    if [[ "$EUID" -ne 0 ]]; then
+        exec sudo bash "$0" update
+    fi
+    INSTALL_SH="$(find /opt/siam-synapse /home -name install.sh -path '*/ottoclaw-worker/*' 2>/dev/null | head -1)"
+    if [[ -z "$INSTALL_SH" ]]; then
+        echo "❌ Cannot locate install.sh"; exit 1
+    fi
+    REPO_DIR="$(dirname "$(dirname "$INSTALL_SH")")"
+    echo ""
+    echo "🔄 OttoClaw Update"
+    echo "   Repo: $REPO_DIR"
+    echo ""
+    echo "⏳ Pulling latest code..."
+    git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
+    echo "🛑 Stopping services..."
+    systemctl stop ottoclaw-worker siam-worker 2>/dev/null || true
+    echo "🔨 Rebuilding ottoclaw-brain..."
+    pushd "$(dirname "$INSTALL_SH")/ottoclaw" >/dev/null
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    popd >/dev/null
+    echo "   ✓ ottoclaw-brain rebuilt"
+    echo "🔨 Rebuilding siam-worker..."
+    pushd "$REPO_DIR/worker" >/dev/null
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    popd >/dev/null
+    echo "   ✓ siam-worker rebuilt"
+    echo "🚀 Restarting services..."
+    systemctl restart siam-worker
+    sleep 2
+    systemctl restart ottoclaw-worker
+    echo ""
+    echo "✅ Update complete! Services are running with the latest code."
+    echo "   journalctl -u ottoclaw-worker -f   → view logs"
+    ;;
+
   help|--help|-h)
     echo ""
     echo "  OttoClaw Worker — Management CLI"
     echo ""
     echo "  ottoclaw config      Reconfigure Master URL, API key, Telegram, etc."
+    echo "  ottoclaw update      Pull latest code & rebuild binaries (requires sudo)"
     echo "  ottoclaw uninstall   Remove services and binaries"
     echo "  ottoclaw [args...]   Start the AI brain (forwards to ottoclaw-brain)"
     echo ""
