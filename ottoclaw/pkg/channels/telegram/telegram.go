@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -700,6 +701,51 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				}
 				
 				if isOtherValidAgent {
+					// 🚀 FORWARD MESSAGE TO MASTER API QUEUE
+					masterURL := os.Getenv("MASTER_API_URL")
+					if masterURL == "" {
+						masterURL = "http://master:8080"
+					}
+					masterAPIKey := os.Getenv("MASTER_API_KEY")
+
+					// Build forward payload
+					payload := map[string]any{
+						"message": fmt.Sprintf("[%s]: %s", remoteSender, actualContent),
+						"from":    remoteSender,
+					}
+					bodyData, _ := json.Marshal(payload)
+
+					// Target queue
+					targetNorm = utils.NormalizeID(targetNorm)
+					endpoint := fmt.Sprintf("%s/api/agent/v1/agents/%s/message", strings.TrimRight(masterURL, "/"), targetNorm)
+
+					req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(bodyData))
+					if err == nil {
+						req.Header.Set("Content-Type", "application/json")
+						if masterAPIKey != "" {
+							req.Header.Set("X-API-Key", masterAPIKey)
+						}
+						
+						// Fire and forget via goroutine to avoid blocking the bot update loop
+						go func() {
+							client := &http.Client{Timeout: 5 * time.Second}
+							resp, reqErr := client.Do(req)
+							if reqErr == nil && resp != nil {
+								resp.Body.Close()
+								logger.InfoCF("telegram", "Forwarded message to other agent queue", map[string]any{
+									"from":   remoteSender,
+									"target": targetNorm,
+									"status": resp.StatusCode,
+								})
+							} else {
+								logger.WarnCF("telegram", "Failed to forward message to other agent", map[string]any{
+									"target": targetNorm,
+									"error":  reqErr,
+								})
+							}
+						}()
+					}
+
 					return nil // Definitely addressed to someone else in the network
 				}
 				
