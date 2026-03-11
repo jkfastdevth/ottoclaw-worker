@@ -14,6 +14,7 @@ import (
 	"github.com/sipeed/ottoclaw/pkg/channels"
 	"github.com/sipeed/ottoclaw/pkg/config"
 	"github.com/sipeed/ottoclaw/pkg/logger"
+	"github.com/sipeed/ottoclaw/pkg/utils"
 )
 
 func init() {
@@ -175,6 +176,9 @@ func (s *SiamSyncChannel) fetchMessages(ctx context.Context, masterURL, apiKey, 
 			if idx := strings.Index(m, "]: "); idx > 0 {
 				sender = m[1:idx]
 				content = m[idx+3:]
+				
+				// Inject system hint to force LLM to use the tool
+				content = fmt.Sprintf("%s\n\n[SYSTEM: This message is from another agent in the Bridge network. You MUST respond by calling the 'siam_send_message' tool with agent_id='%s'. Do not just output text.]", content, utils.NormalizeID(sender))
 			}
 		}
 

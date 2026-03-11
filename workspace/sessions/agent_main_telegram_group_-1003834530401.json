@@ -55,9 +55,36 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nGreat, the message was sent successfully. Now I need to wait for kaidos to respond. But wait - this is a synchronous call, and the response from kaidos should come back in the function result, not in a separate message. Let me check if there's a response included.\n\nLooking at the result, it shows \"success\": true, which means the message was delivered. But I don't see a response from kaidos. This might be because:\n1. kaidos needs time to respond\n2. This function only sends messages, it doesn't wait for responses\n\nI should inform the user that the message was sent and they should wait for kaidos's response.\n\u003c/think\u003e\n\nส่งข้อความไปหา **kaidos** เรียบร้อยแล้วครับ ✅\n\nรอให้ kaidos ตอบกลับมา... ครับ 🦞"
+    },
+    {
+      "role": "user",
+      "content": "ช่วยทักทาย kaidos แล้วถามว่าระบบ Bridge ของเขาทำงานปกติไหม?"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe user wants me to greet kaidos and ask if their Bridge system is working normally.\n\u003c/think\u003e\n\n\n",
+      "tool_calls": [
+        {
+          "id": "call_function_ne5ydar5elpe_1",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"Hey Kaidos! สวัสดีครับ 👋\\n\\nอีกเรื่องนึง ระบบ Bridge ของคุณทำงานปกติดีไหมครับ? มีอะไรต้องช่วยเหลือไหมครับ? 🔗\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_function_ne5ydar5elpe_1"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe message was sent successfully. Let me inform the user.\n\u003c/think\u003e\n\nส่งข้อความทักทายและถามเรื่องระบบ Bridge ไปหา **kaidos** เรียบร้อยแล้วครับ ✅\n\nรอการตอบกลับจาก kaidos อยู่ครับ 🦞"
     }
   ],
   "summary": "\u003cthink\u003e\nLet me check the available agent images to see what models can be used.\n\u003c/think\u003e\n\n\n\u003cminimax:tool_call\u003e\n\u003cinvoke name=\"siam_list_images\"\u003e\n\u003c/invoke\u003e\n\u003c/minimax:tool_call\u003e",
   "created": "2026-03-10T17:16:26.326664732Z",
-  "updated": "2026-03-11T13:21:01.081040337Z"
+  "updated": "2026-03-11T13:51:13.183663216Z"
 }
