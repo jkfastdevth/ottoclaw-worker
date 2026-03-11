@@ -128,3 +128,26 @@ func TestSanitizeMessageContent(t *testing.T) {
 		})
 	}
 }
+func TestStripInternalTags(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"no tags", "hello world", "hello world"},
+		{"only think", "<think>logic</think> hello", "hello"},
+		{"only function", "hi <function>msg{...}</function>", "hi"},
+		{"both tags", "<think>logic</think> hello <function>msg{...}</function>", "hello"},
+		{"multiline tags", "<think>\nlogic\n</think> hello\n<function>\nmsg\n</function>", "hello"},
+		{"nested-like content", "<think> <tag> </think> content", "content"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripInternalTags(tt.input)
+			if got != tt.want {
+				t.Errorf("StripInternalTags(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}

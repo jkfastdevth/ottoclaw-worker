@@ -293,7 +293,7 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		return fmt.Errorf("invalid chat ID %s: %w", msg.ChatID, channels.ErrSendFailed)
 	}
 
-	content := utils.StripThinkTags(msg.Content)
+	content := utils.StripInternalTags(msg.Content)
 	htmlContent := markdownToTelegramHTML(content)
 
 	// Typing/placeholder handled by Manager.preSend — just send the message
