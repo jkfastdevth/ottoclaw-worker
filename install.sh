@@ -91,6 +91,7 @@ run_config_wizard() {
         MASTER_API_KEY="${MASTER_API_KEY:-}"
         NODE_SECRET="${NODE_SECRET:-}"
         WORKER_TELEGRAM_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
+        ORCHESTRATOR_NICKNAMES="${ORCHESTRATOR_NICKNAMES:-}"
         TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
     fi
 
@@ -103,6 +104,7 @@ run_config_wizard() {
     # ── [1/3] Master Server ───────────────────────────────────────────────────
     echo -e "${BOLD}[1/3] System Configuration${RESET}"
     AGENT_NAME=$(prompt_val "Agent Name (e.g. Kaidos)" "${AGENT_NAME:-Kaidos}")
+    ORCHESTRATOR_NICKNAMES=$(prompt_val "Agent Aliases (Orchestrator Nicknames, comma-sep)" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
     echo ""
     echo -e "  เลือกประเภทการเชื่อมต่อ:"
     echo -e "    ${CYAN}1${RESET}) Local LAN     — เครื่องอยู่วง network เดียวกัน (e.g. 192.168.x.x)"
@@ -214,6 +216,7 @@ write_env_file() {
 # ── Agent Identity (auto from hostname / config) ───────────
 NODE_ID=${NODE_ID}
 AGENT_NAME=${AGENT_NAME}
+ORCHESTRATOR_NICKNAMES=${ORCHESTRATOR_NICKNAMES}
 OTTOCLAW_MODE=${OTTOCLAW_MODE}
 
 # ── Master Connection ─────────────────────────────────────────
@@ -233,6 +236,7 @@ OTTOCLAW_MODEL_NAME=${OTTOCLAW_MODEL_NAME}
 
 # ── Telegram Channel ──────────────────────────────────────────
 WORKER_TELEGRAM_TOKEN=${WORKER_TELEGRAM_TOKEN}
+TELEGRAM_BOT_TOKEN=${WORKER_TELEGRAM_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED}
