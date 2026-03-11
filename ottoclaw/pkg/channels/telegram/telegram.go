@@ -588,6 +588,8 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 
 	// ── Telegram Orchestration (Simulated DM / Bridge) ─────────────
 	tCfg := c.config.Channels.Telegram
+	forceRespond := false
+
 	if tCfg.OrchestrationEnabled {
 		matches := reOrchestration.FindStringSubmatch(content)
 		if len(matches) == 3 {
@@ -604,19 +606,18 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			}
 
 			// 🛡️ Robust Orchestration Matching: Normalize both sides
-			// Supports dynamic names from Master + local fallback
 			isMatch := false
 			
-			// Join dynamic names with local ORCHESTRATOR_NICKNAMES and AGENT_NAME
-			allPossibleNames := c.dynamicNames
+			// Match ONLY against our own configured names
+			var myNames []string
 			localNicknames := os.Getenv("ORCHESTRATOR_NICKNAMES")
 			if localNicknames != "" {
-				allPossibleNames = append(allPossibleNames, strings.Split(localNicknames, ",")...)
+				myNames = append(myNames, strings.Split(localNicknames, ",")...)
 			}
-			allPossibleNames = append(allPossibleNames, myAgentName)
+			myNames = append(myNames, myAgentName)
 
 			targetNorm := utils.NormalizeID(targetAgent)
-			for _, name := range allPossibleNames {
+			for _, name := range myNames {
 				name = strings.TrimSpace(name)
 				if name == "" {
 					continue
@@ -639,6 +640,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 					DisplayName: remoteSender,
 				}
 				content = actualContent
+				forceRespond = true
 				logger.InfoCF("telegram", "Orchestration message intercepted", map[string]any{
 					"from":    remoteSender,
 					"to":      targetAgent,
@@ -646,9 +648,11 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			} else if isMatch {
 				// Targeted by name in a normal group: proceed with normal group identification
 				content = actualContent
+				forceRespond = true
 			} else {
 				// Addressed to another agent (or invalid match): remain silent ONLY in bridge chats
 				if chatIDStr == tCfg.BridgeChatID {
+					// It's not addressed to us, and it's a bridge chat. It's meant for someone else.
 					return nil
 				}
 				
@@ -698,11 +702,14 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	// In group chats, apply unified group trigger filtering
 	if message.Chat.Type != "private" {
 		isMentioned := c.isBotMentioned(message)
+		if forceRespond {
+			isMentioned = true // Force passage through group filters
+		}
 		if isMentioned {
 			content = c.stripBotMention(content)
 		}
 		respond, cleaned := c.ShouldRespondInGroup(isMentioned, content)
-		if !respond {
+		if !respond && !forceRespond {
 			return nil
 		}
 		content = cleaned
