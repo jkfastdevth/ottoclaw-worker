@@ -682,7 +682,10 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				}
 
 				for _, netName := range knownSouls {
-					if utils.NormalizeID(netName) == targetNorm {
+					netNorm := utils.NormalizeID(netName)
+					if targetNorm == netNorm || 
+					   strings.HasPrefix(netNorm, targetNorm+"-") || 
+					   strings.HasPrefix(targetNorm, netNorm+"-") {
 						isOtherValidAgent = true
 						break
 					}
