@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -220,6 +221,22 @@ func registerSharedTools(
 
 func (al *AgentLoop) Run(ctx context.Context) error {
 	al.running.Store(true)
+
+	// 🔍 [Phase 2] Export tool list for skill reporting via gRPC heartbeat
+	// Write all registered tool names to TOOLS file so the Worker daemon can read and report them.
+	if defaultAgent := al.registry.GetDefaultAgent(); defaultAgent != nil {
+		toolNames := defaultAgent.Tools.List()
+		toolsContent := strings.Join(toolNames, "\n")
+		toolsPath := filepath.Join(defaultAgent.Workspace, "TOOLS")
+		if err := os.WriteFile(toolsPath, []byte(toolsContent), 0644); err != nil {
+			logger.WarnCF("agent", "Failed to export tool list", map[string]any{"error": err.Error()})
+		} else {
+			logger.InfoCF("agent", "Exported tool list for skill reporting", map[string]any{
+				"count": len(toolNames),
+				"path":  toolsPath,
+			})
+		}
+	}
 
 	// Initialize MCP servers for all agents
 	if al.cfg.Tools.IsToolEnabled("mcp") {

@@ -80,6 +80,7 @@ func NewSiamToolset(masterURL, apiKey string) []Tool {
 		&SiamSpawnAgentTool{client: client},
 		&SiamTerminateAgentTool{client: client},
 		&SiamGetSkillsTool{client: client},
+		&SiamFindAgentsTool{client: client},
 		&SiamScaleTool{client: client},
 		&SiamGetJobsTool{client: client},
 		&SiamSubmitJobTool{client: client},
@@ -638,4 +639,35 @@ func NewSiamToolsetFromEnv() []Tool {
 		masterURL = strings.TrimRight(masterURL, "/")
 	}
 	return NewSiamToolset(masterURL, apiKey)
+}
+
+// SiamFindAgentsTool — find running agents that have a specific skill/tool.
+type SiamFindAgentsTool struct{ client *siamClient }
+
+func (t *SiamFindAgentsTool) Name() string { return "siam_find_agents" }
+func (t *SiamFindAgentsTool) Description() string {
+	return "Find running Siam-Synapse agents that have a specific skill or tool capability. Use this before siam_delegate_mission to identify who can handle the task."
+}
+func (t *SiamFindAgentsTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"skill": map[string]any{
+				"type":        "string",
+				"description": "The tool or skill name to search for (e.g. 'web', 'exec', 'siam_send_message'). Must match the exact tool name.",
+			},
+		},
+		"required": []string{"skill"},
+	}
+}
+func (t *SiamFindAgentsTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	skill, _ := args["skill"].(string)
+	if strings.TrimSpace(skill) == "" {
+		return ErrorResult("siam_find_agents: skill is required")
+	}
+	data, err := t.client.get("/api/agent/v1/agents/search?skill=" + strings.TrimSpace(skill))
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_find_agents failed: %v", err))
+	}
+	return UserResult(string(data))
 }
