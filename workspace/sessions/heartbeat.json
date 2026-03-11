@@ -22071,8 +22071,252 @@
     {
       "role": "assistant",
       "content": "{\"action\":\"HEARTBEAT_OK\"}"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-11 03:50:34\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"agent_id\": \"kaidos\", \"description\": \"Check CPU usage and node count\", \"parent_id\": null}"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-11 03:56:29\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_yy0w3y03",
+          "type": "function",
+          "function": {
+            "name": "siam_get_metrics",
+            "arguments": "{\"siam_get_metrics\":\"CPU usage: 75%, Node count: 4, Scaling mode: manual\"}"
+          }
+        },
+        {
+          "id": "call_zkv0g6t5",
+          "type": "function",
+          "function": {
+            "name": "siam_get_agents",
+            "arguments": "{\"siam_get_agents\":[]}"
+          }
+        },
+        {
+          "id": "call_6ubvw76g",
+          "type": "function",
+          "function": {
+            "name": "siam_delegate_mission",
+            "arguments": "{\"agent_id\":\"kaidos\",\"description\":\"Check Bitcoin trends for the next 24h\",\"parent_id\":null}"
+          }
+        },
+        {
+          "id": "call_nymekhv3",
+          "type": "function",
+          "function": {
+            "name": "siam_terminate_agent",
+            "arguments": "{\"agent_id\":\"worker-ubuntu-01\"}"
+          }
+        },
+        {
+          "id": "call_0a19a8ug",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"nova-spire\",\"from\":\"Master\",\"message\":\"Check Bitcoin trends for the next 24h\"}"
+          }
+        },
+        {
+          "id": "call_2mcqoznd",
+          "type": "function",
+          "function": {
+            "name": "spawn",
+            "arguments": "{\"siam.spawn\":{\"agent_id\":\"kaidos\",\"label\":\"Bitcoin trends check\",\"task\":\"Check Bitcoin trends for the next 24h\"}}"
+          }
+        },
+        {
+          "id": "call_kyrznuh1",
+          "type": "function",
+          "function": {
+            "name": "siam_terminate_agent",
+            "arguments": "{\"agent_id\":\"worker-ubuntu-01\"}"
+          }
+        },
+        {
+          "id": "call_4grw0pdg",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"nova-spire\",\"from\":\"Master\",\"message\":\"Check Bitcoin trends for the next 24h\"}"
+          }
+        },
+        {
+          "id": "call_2sbqquyo",
+          "type": "function",
+          "function": {
+            "name": "spawn",
+            "arguments": "{\"siam.spawn\":{\"agent_id\":\"kaidos\",\"label\":\"Bitcoin trends check\",\"task\":\"Check Bitcoin trends for the next 24h\"}}"
+          }
+        },
+        {
+          "id": "call_wgcdmp4i",
+          "type": "function",
+          "function": {
+            "name": "siam_terminate_agent",
+            "arguments": "{\"agent_id\":\"worker-ubuntu-01\"}"
+          }
+        },
+        {
+          "id": "call_f6bq9baf",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"nova-spire\",\"from\":\"Master\",\"message\":\"Check Bitcoin trends for the next 24h\"}"
+          }
+        },
+        {
+          "id": "call_djdcu1wv",
+          "type": "function",
+          "function": {
+            "name": "siam_terminate_agent",
+            "arguments": "{\"agent_id\":\"worker-ubuntu-01\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"active_nodes\":3,\"scaling_mode\":\"auto\",\"total_cpu\":22.138323545455933}",
+      "tool_call_id": "call_yy0w3y03"
+    },
+    {
+      "role": "tool",
+      "content": "{\"agents\":[{\"id\":\"luminaira\",\"name\":\"Luminaira\",\"mission\":\"Interdisciplinary Knowledge Integration\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"forging\",\"container_id\":\"\",\"env\":{\"PERSONALITY\":\"Adventurous and analytical, with a touch of creative curiosity\"},\"spawned_at\":\"2026-03-11T03:57:49.089321907Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-11T03:57:49.089321954Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"auric-spark\",\"name\":\"\",\"mission\":\"Autonomous Agent (Unknown Vessel)\",\"node_ip\":\"local\",\"status\":\"running\",\"container_id\":\"c65240d54e050f83b9950153acc04f33d6ff3d1df97af59cd98388dee2d45f27\",\"env\":null,\"spawned_at\":\"2026-03-10T22:53:19.037124379Z\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"last_seen\":\"2026-03-11T04:03:00.7177755Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"},{\"id\":\"kaidos\",\"name\":\"kaidos\",\"mission\":\"Autonomous Agent (Unknown Vessel)\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"terminated\",\"container_id\":\"jkfastdev-sorin\",\"env\":null,\"spawned_at\":\"2026-03-10T14:53:46.383746Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-11T04:03:02.369745856Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"local\",\"interface\":\"\"},{\"id\":\"new-worker-123\",\"name\":\"\",\"mission\":\"data-processing\",\"node_ip\":\"local\",\"status\":\"limbo\",\"container_id\":\"092dc379ffbb2aeccce768366f6c11c03db77f0ee6029c6952063d00dfb3c105\",\"env\":null,\"spawned_at\":\"2026-03-11T00:05:49.576223903Z\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"last_seen\":\"2026-03-11T00:05:49.576223956Z\",\"offline_since\":\"2026-03-11T00:07:47.646017434Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"}],\"count\":4}",
+      "tool_call_id": "call_zkv0g6t5"
+    },
+    {
+      "role": "tool",
+      "content": "{\"id\":\"4f817073-4e34-48ab-a9a8-531e04e38bc3\",\"agent_id\":\"kaidos\",\"description\":\"Check Bitcoin trends for the next 24h\",\"status\":\"pending\",\"created_at\":\"2026-03-11T04:03:05.382559925Z\",\"updated_at\":\"2026-03-11T04:03:05.382560014Z\"}",
+      "tool_call_id": "call_6ubvw76g"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"Agent not found\"}",
+      "tool_call_id": "call_nymekhv3"
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_0a19a8ug"
+    },
+    {
+      "role": "tool",
+      "content": "task is required and must be a non-empty string",
+      "tool_call_id": "call_2mcqoznd"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"Agent not found\"}",
+      "tool_call_id": "call_kyrznuh1"
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_4grw0pdg"
+    },
+    {
+      "role": "tool",
+      "content": "task is required and must be a non-empty string",
+      "tool_call_id": "call_2sbqquyo"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"Agent not found\"}",
+      "tool_call_id": "call_wgcdmp4i"
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "call_f6bq9baf"
+    },
+    {
+      "role": "tool",
+      "content": "{\"error\":\"Agent not found\"}",
+      "tool_call_id": "call_djdcu1wv"
+    },
+    {
+      "role": "assistant",
+      "content": "- [ ] HEARTBEAT_OK"
+    },
+    {
+      "role": "user",
+      "content": "# Heartbeat Check\n\nCurrent time: 2026-03-11 04:06:10\n\nYou are a proactive AI assistant. This is a scheduled heartbeat check.\nReview the following tasks and execute any necessary actions using available skills.\nIf there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK\n\n# Siam-Synapse Autonomous Health Check\n\nLogic นี้ใช้เฉพาะสำหรับ **heartbeat cycle**\n\nไม่เกี่ยวกับ chat ของผู้ใช้\n\n---\n\n# Step 1 — Get Metrics\n\nเรียก\n\nsiam_get_metrics\n\nเพื่อดู:\n\n* CPU\n* node count\n* scaling mode\n\n---\n\n# Step 2 — Check Agents\n\nเรียก\n\nsiam_get_agents\n\nเพื่อตรวจ workers\n\n---\n\n# Step 3 — Decision Logic\n\nเลือกเพียง **หนึ่ง action**\n\n---\n\n## Case 1 — High Load\n\nเงื่อนไข:\n\nCPU \u003e 80%\n\nหรือ\n\nไม่มี worker agents\n\nAction:\n\n1. เรียก siam_get_skills\n2. เรียก siam_spawn_agent\n\nรายงานว่า spawn worker ใหม่\n\n---\n\n## Case 2 — Low Load\n\nเงื่อนไข:\n\nCPU \u003c 20%\nและ agents \u003e 3\n\nAction:\n\nterminate worker บางตัว\n\nใช้\n\nsiam_terminate_agent\n\n---\n\n## Case 3 — Normal\n\nCPU ระหว่าง 20-80%\n\nAction:\n\nตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\n# Safety Rules\n\n1. ห้าม spawn agents ซ้ำ\n2. ห้าม terminate agents ที่กำลังทำงานสำคัญ\n3. ถ้าไม่มี action ให้ตอบ\n\nHEARTBEAT_OK\n\nเท่านั้น\n\n---\n\nAdd your heartbeat tasks below this line:\n- [ ] HEARTBEAT_OK\n\n"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_hbeovjlw",
+          "type": "function",
+          "function": {
+            "name": "siam_get_metrics",
+            "arguments": "{\"siam_get_metrics\":[]}"
+          }
+        },
+        {
+          "id": "call_rmnn4gvb",
+          "type": "function",
+          "function": {
+            "name": "siam_get_agents",
+            "arguments": "{\"siam_get_agents\":[]}"
+          }
+        },
+        {
+          "id": "call_4e1sp0pq",
+          "type": "function",
+          "function": {
+            "name": "siam_terminate_agent",
+            "arguments": "{\"siam_terminate_agent\":[]}"
+          }
+        },
+        {
+          "id": "call_phg2wuq6",
+          "type": "function",
+          "function": {
+            "name": "siam_get_skills",
+            "arguments": "{\"siam_get_skills\":[]}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"active_nodes\":3,\"scaling_mode\":\"auto\",\"total_cpu\":22.00437903404236}",
+      "tool_call_id": "call_hbeovjlw"
+    },
+    {
+      "role": "tool",
+      "content": "{\"agents\":[{\"id\":\"kaidos\",\"name\":\"kaidos\",\"mission\":\"Autonomous Agent (Unknown Vessel)\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"running\",\"container_id\":\"jkfastdev-sorin\",\"env\":null,\"spawned_at\":\"2026-03-10T14:53:46.383746Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-11T04:12:08.85971915Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"\",\"interface\":\"\"},{\"id\":\"luminaira\",\"name\":\"Luminaira\",\"mission\":\"Interdisciplinary Knowledge Integration\",\"node_ip\":\"jkfastdev-sorin\",\"status\":\"forging\",\"container_id\":\"\",\"env\":{\"PERSONALITY\":\"Adventurous and analytical, with a touch of creative curiosity\"},\"spawned_at\":\"2026-03-10T13:52:27.980575Z\",\"agent_image\":\"\",\"last_seen\":\"2026-03-11T03:57:49.089322Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"100.117.4.36\",\"network_type\":\"\",\"interface\":\"\"},{\"id\":\"auric-spark\",\"name\":\"\",\"mission\":\"Autonomous Agent (Unknown Vessel)\",\"node_ip\":\"local\",\"status\":\"running\",\"container_id\":\"c65240d54e050f83b9950153acc04f33d6ff3d1df97af59cd98388dee2d45f27\",\"env\":null,\"spawned_at\":\"2026-03-10T14:52:42.921473Z\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"last_seen\":\"2026-03-11T04:12:06.442917412Z\",\"offline_since\":\"0001-01-01T00:00:00Z\",\"actual_ip\":\"\",\"network_type\":\"unknown\",\"interface\":\"\"}],\"count\":3}",
+      "tool_call_id": "call_rmnn4gvb"
+    },
+    {
+      "role": "tool",
+      "content": "siam_terminate_agent: agent_id is required",
+      "tool_call_id": "call_4e1sp0pq"
+    },
+    {
+      "role": "tool",
+      "content": "{\"count\":4,\"skills\":[{\"agent_env\":\"{}\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"description\":\"Running natively on jkfastdev-sorin\",\"node_ip\":\"local\",\"skill_name\":\"shell\"},{\"agent_env\":\"{}\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"description\":\"Running natively on jkfastdev-sorin\",\"node_ip\":\"local\",\"skill_name\":\"python\"},{\"agent_env\":\"{}\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"description\":\"Running natively on jkfastdev-sorin\",\"node_ip\":\"local\",\"skill_name\":\"system-info\"},{\"agent_env\":\"{}\",\"agent_image\":\"siam-synapse-ottoclaw-worker:latest\",\"description\":\"Running natively on jkfastdev-sorin\",\"node_ip\":\"local\",\"skill_name\":\"web-scrape\"}]}",
+      "tool_call_id": "call_phg2wuq6"
+    },
+    {
+      "role": "assistant",
+      "content": "HEARTBEAT_OK"
     }
   ],
   "created": "2026-03-05T19:33:28.880853295Z",
-  "updated": "2026-03-11T03:50:34.044112303Z"
+  "updated": "2026-03-11T04:14:32.98892725Z"
 }

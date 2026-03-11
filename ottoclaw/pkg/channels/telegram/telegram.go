@@ -654,12 +654,36 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				
 				// In normal groups, we check if targetNorm is actually a VALID other agent.
 				isOtherValidAgent := false
-				for _, netName := range c.dynamicNames {
+				knownSouls := c.dynamicNames
+				
+				// Fallback if API polling failed: auric, kaidos (known active souls) or specific files
+				if len(knownSouls) == 0 {
+					knownSouls = []string{"auric", "kaidos", "auric-spark", "kaidos-spark", "god", "godbot", "jarvis"}
+					
+					// Also optionally scan local workspace if available (best effort)
+					if files, err := os.ReadDir("../../workspace_nova/agents"); err == nil {
+						for _, f := range files {
+							if !f.IsDir() && strings.HasSuffix(f.Name(), ".md") {
+								knownSouls = append(knownSouls, strings.TrimSuffix(f.Name(), ".md"))
+							}
+						}
+					}
+					if files, err := os.ReadDir("/app/workspace_nova/agents"); err == nil {
+						for _, f := range files {
+							if !f.IsDir() && strings.HasSuffix(f.Name(), ".md") {
+								knownSouls = append(knownSouls, strings.TrimSuffix(f.Name(), ".md"))
+							}
+						}
+					}
+				}
+
+				for _, netName := range knownSouls {
 					if utils.NormalizeID(netName) == targetNorm {
 						isOtherValidAgent = true
 						break
 					}
 				}
+				
 				if isOtherValidAgent {
 					return nil // Definitely addressed to someone else in the network
 				}

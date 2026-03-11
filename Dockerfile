@@ -16,7 +16,7 @@ RUN go mod download && \
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Build siam-worker (Arm)
 # ─────────────────────────────────────────────────────────────────────────────
-FROM golang:1.25-alpine AS siam-builder
+FROM golang:1.24-alpine AS siam-builder
 WORKDIR /app/worker
 # worker/ has its own go.mod; keep relative replace ../proto working
 COPY worker/go.mod worker/go.sum ./
