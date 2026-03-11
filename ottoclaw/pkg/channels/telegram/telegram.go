@@ -642,16 +642,31 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				logger.InfoCF("telegram", "Orchestration message intercepted", map[string]any{
 					"from":    remoteSender,
 					"to":      targetAgent,
-					"content": utils.Truncate(content, 50),
 				})
 			} else if isMatch {
 				// Targeted by name in a normal group: proceed with normal group identification
 				content = actualContent
 			} else {
-				// Addressed to another agent (or invalid match): remain silent in groups/bridge
-				if message.Chat.Type != "private" || chatIDStr == tCfg.BridgeChatID {
+				// Addressed to another agent (or invalid match): remain silent ONLY in bridge chats
+				if chatIDStr == tCfg.BridgeChatID {
 					return nil
 				}
+				
+				// In normal groups, we check if targetNorm is actually a VALID other agent.
+				isOtherValidAgent := false
+				for _, netName := range c.dynamicNames {
+					if utils.NormalizeID(netName) == targetNorm {
+						isOtherValidAgent = true
+						break
+					}
+				}
+				if isOtherValidAgent {
+					return nil // Definitely addressed to someone else in the network
+				}
+				
+				// "invalid match" usually just means someone said a sentence starting with a word.
+				// e.g. "What are you doing" -> "What" is not an agent name.
+				// We let this fall through to normal group trigger logic (e.g. mentions).
 			}
 		}
 	}
