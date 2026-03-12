@@ -226,6 +226,18 @@ func NewAgentInstance(
 	// Register tokenomics tools
 	instance.Tools.Register(&tools.SiamTokenStatusTool{Provider: instance})
 
+	// 🕵️ Identity Injection — ensure the agent knows its own name and nicknames
+	// for Cognitive Judgment and addressability.
+	nicknames := []string{}
+	if localNicknames := os.Getenv("ORCHESTRATOR_NICKNAMES"); localNicknames != "" {
+		for _, n := range strings.Split(localNicknames, ",") {
+			if trimmed := strings.TrimSpace(n); trimmed != "" {
+				nicknames = append(nicknames, trimmed)
+			}
+		}
+	}
+	instance.ContextBuilder.SetIdentity(instance.ID, instance.Name, nicknames)
+
 	return instance
 }
 

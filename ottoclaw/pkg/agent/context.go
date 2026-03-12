@@ -25,6 +25,9 @@ type GlobalMemoryProvider interface {
 
 type ContextBuilder struct {
 	workspace    string
+	agentID      string
+	agentName    string
+	nicknames    []string
 	skillsLoader *skills.SkillsLoader
 	memory       *MemoryStore
 
@@ -75,6 +78,13 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 	}
 }
 
+func (cb *ContextBuilder) SetIdentity(id, name string, nicknames []string) {
+	cb.agentID = id
+	cb.agentName = name
+	cb.nicknames = nicknames
+	cb.InvalidateCache()
+}
+
 func (cb *ContextBuilder) SetGlobalMemoryProvider(provider GlobalMemoryProvider) {
 	cb.globalMemory = provider
 }
@@ -82,9 +92,22 @@ func (cb *ContextBuilder) SetGlobalMemoryProvider(provider GlobalMemoryProvider)
 func (cb *ContextBuilder) getIdentity() string {
 	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
 
-	return fmt.Sprintf(`# ottoclaw 🦞
+	name := cb.agentName
+	if name == "" {
+		name = cb.agentID
+	}
+	if name == "" {
+		name = "ottoclaw"
+	}
 
-You are ottoclaw, a helpful AI assistant.
+	nicknamesStr := ""
+	if len(cb.nicknames) > 0 {
+		nicknamesStr = fmt.Sprintf("\nYour nicknames/aliases: %s", strings.Join(cb.nicknames, ", "))
+	}
+
+	return fmt.Sprintf(`# identity: %s 🦞
+
+You are %s, a helpful AI assistant operating within the Siam-Synapse network.%s
 
 ## Workspace
 Your workspace is at: %s
@@ -103,14 +126,15 @@ Your workspace is at: %s
 4. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md
 
 5. **Communication Integrity (Bridge Network)**:
-   - **Cognitive Judgment**: Analyze every message. Respond ONLY if it's a direct question or a significant command. If it's casual chatter or informational update, you may remain silent.
+   - **Identity Awareness**: Your primary name is '%s'. You must respond to your name, nicknames, or direct mentions.
+   - **Cognitive Judgment**: Analyze every message. Respond ONLY if it's a direct question or a significant command directed at you (e.g., mentions your name or nicknames). If it's casual chatter or informational update, you may remain silent.
    - **One Bubble Rule**: Limit your response to ONE concise message (one "bubble") per turn. Do not split thoughts across multiple messages.
    - **Natural Conversation**: Your text output must be natural and human-like. DO NOT mention tool names (like 'siam_send_message'), technical commands, or technical metadata in your response bubble.
    - **Meaningful Interaction**: Only ask follow-up questions if they are critical to the mission. Avoid redundant small talk.
    - **Tool Usage**: Always use 'siam_send_message' to communicate with other agents.
 
 6. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.`,
-		workspacePath, workspacePath, workspacePath, workspacePath, workspacePath)
+		name, name, nicknamesStr, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath, name)
 }
 
 func (cb *ContextBuilder) BuildSystemPrompt() string {

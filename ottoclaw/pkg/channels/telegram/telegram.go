@@ -1000,6 +1000,37 @@ func (c *TelegramChannel) isBotMentioned(message *telego.Message) bool {
 			}
 		}
 	}
+	// Fallback to text matching for human-friendly names (nicknames) if entity matching fails
+	content := message.Text
+	if content == "" {
+		content = message.Caption
+	}
+
+	myAgentName := os.Getenv("AGENT_NAME")
+	if myAgentName == "" {
+		myAgentName = c.config.Agents.Defaults.Model
+	}
+
+	var myNames []string
+	if localNicknames := os.Getenv("ORCHESTRATOR_NICKNAMES"); localNicknames != "" {
+		myNames = append(myNames, strings.Split(localNicknames, ",")...)
+	}
+	myNames = append(myNames, myAgentName)
+
+	for _, name := range myNames {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		// Match case-insensitively for human convenience.
+		// Use word boundaries (spaces, punctuation, or start/end of string)
+		// to avoid matching nicknames inside other words (e.g. "Kaidos" in "Kaidosian").
+		re := regexp.MustCompile("(?i)(?P<mention>\\b" + regexp.QuoteMeta(trimmed) + "\\b)")
+		if re.MatchString(content) {
+			return true
+		}
+	}
+
 	return false
 }
 
