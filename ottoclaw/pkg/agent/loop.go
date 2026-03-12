@@ -634,9 +634,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	}
 
 	// Reset message-tool state for this round so we don't skip publishing due to a previous round.
-	if tool, ok := agent.Tools.Get("message"); ok {
-		if resetter, ok := tool.(interface{ ResetSentInRound() }); ok {
-			resetter.ResetSentInRound()
+	for _, toolName := range []string{"message", "siam_send_message"} {
+		if tool, ok := agent.Tools.Get(toolName); ok {
+			if resetter, ok := tool.(interface{ ResetSentInRound() }); ok {
+				resetter.ResetSentInRound()
+			}
 		}
 	}
 

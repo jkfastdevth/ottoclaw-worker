@@ -543,7 +543,14 @@ func (t *SiamRunCommandTool) Execute(_ context.Context, args map[string]any) *To
 }
 
 // SiamSendMessageTool — send a message to another agent.
-type SiamSendMessageTool struct{ client *siamClient }
+type SiamSendMessageTool struct {
+	client      *siamClient
+	sentInRound bool
+}
+
+func (t *SiamSendMessageTool) ResetSentInRound() {
+	t.sentInRound = false
+}
 
 func (t *SiamSendMessageTool) Name() string { return "siam_send_message" }
 func (t *SiamSendMessageTool) Description() string {
@@ -570,6 +577,11 @@ func (t *SiamSendMessageTool) Parameters() map[string]any {
 	}
 }
 func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	if t.sentInRound {
+		return UserResult("Skipped: Already sent a message in this round (1-bubble rule enforced)")
+	}
+	t.sentInRound = true
+
 	agentIDRaw, _ := args["agent_id"].(string)
 	message, _ := args["message"].(string)
 	from, _ := args["from"].(string)
@@ -581,6 +593,16 @@ func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *T
 	// 🛡️ Normalize target ID for consistent routing
 	agentID := strings.ToLower(strings.TrimSpace(agentIDRaw))
 	agentID = strings.ReplaceAll(agentID, " ", "-")
+
+	// 🛡️ Guard: Avoid sending messages to self to prevent loops
+	myAgentName := os.Getenv("AGENT_NAME")
+	if myAgentName != "" {
+		myNorm := strings.ToLower(strings.TrimSpace(myAgentName))
+		myNorm = strings.ReplaceAll(myNorm, " ", "-")
+		if agentID == myNorm {
+			return UserResult("Skipped: target is self (prevents loop)")
+		}
+	}
 
 	payload := map[string]any{
 		"message": message,
@@ -599,6 +621,9 @@ func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *T
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
 		botToken = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_TOKEN")
+	}
+	if botToken == "" {
+		botToken = os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN")
 	}
 	orchestrationEnabled := os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" ||
 		os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED") == "true"
