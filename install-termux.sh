@@ -74,7 +74,7 @@ ask_yn() {
     [[ "${val,,}" == "y" || "${val,,}" == "yes" ]]
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd 2>/dev/null || echo ".")"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 1: Install Termux Packages

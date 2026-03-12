@@ -73,8 +73,8 @@ REPO="jkfastdevth/ottoclaw-worker"
 BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/ottoclaw-worker-${SUFFIX}.tar.gz"
 
 # ── Locate Source ─────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd 2>/dev/null || echo ".")"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo ".")"
 
 # ── Auto-load Credentials from .env ───────────────────────────────
 if [[ -f "${REPO_ROOT}/.env" ]]; then
