@@ -11,9 +11,10 @@
 5. [วิธีที่ 3: Linux Server (Headless/CLI)](#วิธีที่-3-linux-server-headlesscli)
 6. [วิธีที่ 4: Android (Termux)](#วิธีที่-4-android-termux)
 7. [การตั้งค่าหลังติดตั้ง](#การตั้งค่าหลังติดตั้ง)
-8. [คำสั่งการจัดการ](#คำสั่งการจัดการ)
-9. [การอัปเดต](#การอัปเดต)
-10. [การแก้ปัญหา](#การแก้ปัญหา)
+8. [การตั้งค่า Google Skill (Gmail/Drive)](#การตั้งค่า-google-skill-gmaildrive)
+9. [คำสั่งการจัดการ](#คำสั่งการจัดการ)
+10. [การอัปเดต](#การอัปเดต)
+11. [การแก้ปัญหา](#การแก้ปัญหา)
 
 ---
 
@@ -205,6 +206,39 @@ Installer จะดำเนินการ:
 | Linux (systemd) | `/etc/ottoclaw/env` |
 | macOS / Windows | `~/.ottoclaw/env` |
 | Android (Termux) | `~/.ottoclaw/env` |
+
+---
+
+## 📧 การตั้งค่า Google Skill (Gmail/Drive)
+
+Siam-Synapse รองรับการทำงานร่วมกับ Google Services (Gmail, Calendar, Drive) แบบเครื่องเดียวหรือแยกบัญชีรายบุคคล
+
+### 1. การเตรียมข้อมูลจาก Google
+*   **Gmail / Calendar**: เปิดใช้งาน [2-Step Verification](https://myaccount.google.com/signinoptions/two-step-verification) และสร้าง **[App Password](https://myaccount.google.com/apppasswords)** (16 หลัก) เพื่อใช้แทนรหัสผ่านปกติ
+*   **Google Drive**: แนะนำให้ใช้ **Service Account** (ชุดกุญแจ JSON) เพื่อความเป็นส่วนตัวและความปลอดภัยสูง
+
+### 2. การตั้งค่า Credentials
+คุณสามารถใส่ข้อมูลได้ 2 ระดับ:
+
+*   **Global Level (พนักงานทุกคนใช้บัญชีเดียวกัน)**:
+    ใส่ในไฟล์ `/etc/ottoclaw/env` (หรือ `~/.ottoclaw/env`):
+    ```env
+    GOOGLE_EMAIL=admin@your-company.com
+    GOOGLE_APP_PASSWORD=abcd-efgh-ijkl-mnop
+    ```
+*   **Agent Level (พนักงานแต่ละคนมีบัญชีแยกกัน)**:
+    สร้างไฟล์ชื่อ `env` ในโฟลเดอร์ Workspace ของ Agent นั้นๆ:
+    ```bash
+    # ตัวอย่าง: /var/lib/ottoclaw/workspace/workspace-hr/env
+    GOOGLE_EMAIL=hr.agent@your-company.com
+    GOOGLE_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+    ```
+
+### 3. ชุดเครื่องมือที่มีให้ใช้งาน
+เมื่อตั้งค่าถูกต้อง Agent จะสามารถใช้เครื่องมือเหล่านี้ได้ทันที:
+*   **Gmail**: `siam_send_email`, `siam_read_emails` (ใช้ IMAP ดึงข้อมูล)
+*   **Calendar**: `siam_list_calendar`, `siam_create_calendar_event`
+*   **Drive**: `siam_drive_upload`, `siam_drive_search`, `siam_drive_download`
 
 ---
 
