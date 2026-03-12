@@ -89,6 +89,10 @@ func NewSiamToolset(masterURL, apiKey string) []Tool {
 		&SiamDelegateMissionTool{client: client},
 		&SiamStoreMemoryTool{client: client},
 		&SiamSearchMemoryTool{client: client},
+		&SiamRequestApprovalTool{client: client},
+		&SiamGetMissionTool{client: client},
+		&SiamPromoteAgentTool{client: client},
+		&SiamPromotionRitualTool{client: client},
 	}
 }
 
@@ -668,6 +672,102 @@ func (t *SiamFindAgentsTool) Execute(_ context.Context, args map[string]any) *To
 	data, err := t.client.get("/api/agent/v1/agents/search?skill=" + strings.TrimSpace(skill))
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_find_agents failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamPromoteAgentTool — promote or move an agent in the hierarchy.
+type SiamPromoteAgentTool struct{ client *siamClient }
+
+func (t *SiamPromoteAgentTool) Name() string { return "siam_promote_agent" }
+func (t *SiamPromoteAgentTool) Description() string {
+	return "Promote or move an agent to a new role, department, or organization. Requires human approval for high-level promotions."
+}
+func (t *SiamPromoteAgentTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The target Agent ID.",
+			},
+			"role": map[string]any{
+				"type":        "string",
+				"enum":        []string{"director_general", "subsidiary_director", "manager", "staff"},
+				"description": "The new corporate role.",
+			},
+			"department": map[string]any{
+				"type":        "string",
+				"description": "Optional: New department name.",
+			},
+			"org_id": map[string]any{
+				"type":        "string",
+				"description": "Optional: New organization ID.",
+			},
+		},
+		"required": []string{"agent_id", "role"},
+	}
+}
+func (t *SiamPromoteAgentTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	agentID, _ := args["agent_id"].(string)
+	role, _ := args["role"].(string)
+	dept, _ := args["department"].(string)
+	org, _ := args["org_id"].(string)
+
+	if agentID == "" || role == "" {
+		return ErrorResult("siam_promote_agent: agent_id and role are required")
+	}
+
+	payload := map[string]any{
+		"role": role,
+	}
+	if dept != "" {
+		payload["department"] = dept
+	}
+	if org != "" {
+		payload["org_id"] = org
+	}
+
+	data, err := t.client.post("/api/agent/v1/agents/"+agentID+"/promote", payload)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_promote_agent failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamPromotionRitualTool — announce a soul migration in the Grand Meeting Room.
+type SiamPromotionRitualTool struct{ client *siamClient }
+
+func (t *SiamPromotionRitualTool) Name() string { return "siam_promotion_ritual" }
+func (t *SiamPromotionRitualTool) Description() string {
+	return "Perform the formal ritual of reporting to the Grand Meeting Room after a soul migration (promotion). This announces your new name, role, and duties to the executive board."
+}
+func (t *SiamPromotionRitualTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"message": map[string]any{
+				"type":        "string",
+				"description": "Your formal announcement (e.g. 'I, Auric-01, have been promoted to Subsidiary Director of the Trading Dept...').",
+			},
+		},
+		"required": []string{"message"},
+	}
+}
+func (t *SiamPromotionRitualTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	message, _ := args["message"].(string)
+	if strings.TrimSpace(message) == "" {
+		return ErrorResult("siam_promotion_ritual: message is required")
+	}
+
+	payload := map[string]any{
+		"message": message,
+		"type":    "promotion_ritual",
+	}
+
+	data, err := t.client.post("/api/agent/v1/broadcast", payload)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_promotion_ritual failed: %v", err))
 	}
 	return UserResult(string(data))
 }
