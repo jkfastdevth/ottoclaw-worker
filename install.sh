@@ -73,8 +73,14 @@ REPO="jkfastdevth/ottoclaw-worker"
 BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/ottoclaw-worker-${SUFFIX}.tar.gz"
 
 # ── Locate Source ─────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd 2>/dev/null || echo ".")"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo ".")"
+# Handle curl | bash (unbound BASH_SOURCE) vs direct execution
+SCRIPT_DIR="$(pwd)"
+if [[ -n "${BASH_SOURCE+x}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+elif [[ -n "$0" && -f "$0" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+fi
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
 
 # ── Auto-load Credentials from .env ───────────────────────────────
 if [[ -f "${REPO_ROOT}/.env" ]]; then
