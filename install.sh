@@ -503,13 +503,19 @@ SOULEOF
     if [[ -z "$INSTALL_SH" ]]; then
         echo "❌ Cannot locate install.sh"; exit 1
     fi
-    REPO_DIR="$(dirname "$(dirname "$INSTALL_SH")")"
+    REPO_DIR="$(dirname "$INSTALL_SH")"
     echo ""
     echo "🔄 OttoClaw Update"
     echo "   Repo: $REPO_DIR"
     echo ""
     echo "⏳ Pulling latest code..."
-    git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
+    if [[ -d "${REPO_DIR}/.git" ]]; then
+        git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
+    else
+        warn "Not a git repository. Re-running installer to fetch latest code..."
+        sudo bash "$INSTALL_SH"
+        exit 0
+    fi
     echo "🛑 Stopping services..."
     systemctl stop ottoclaw-worker siam-worker 2>/dev/null || true
     echo "🔨 Rebuilding ottoclaw-brain..."

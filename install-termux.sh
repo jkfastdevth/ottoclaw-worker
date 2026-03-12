@@ -514,23 +514,30 @@ case "${1:-}" in
     if [[ -z "$INSTALL_SH" ]]; then
         echo "❌ Cannot find install-termux.sh"; exit 1
     fi
-    REPO_DIR="$(dirname "$(dirname "$INSTALL_SH")")"
+    REPO_DIR="$(dirname "$INSTALL_SH")"
     echo ""
     echo "🔄 OttoClaw Update"
     echo "   Repo: $REPO_DIR"
     echo ""
     echo "⏳ Pulling latest code..."
-    git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed"; exit 1; }
+    if [[ -d "${REPO_DIR}/.git" ]]; then
+        git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed"; exit 1; }
+    else
+        warn "Not a git repository. Re-running installer to fetch latest code..."
+        bash "$INSTALL_SH"
+        exit 0
+    fi
+
     echo "🛑 Stopping services..."
     "$0" stop 2>/dev/null || true
     sleep 1
     echo "🔨 Rebuilding binaries..."
     BRAIN_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/ottoclaw-brain"
     WORKER_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/siam-worker"
-    pushd "$(dirname "$INSTALL_SH")/ottoclaw" >/dev/null
+    pushd "${REPO_DIR}/ottoclaw" >/dev/null
     CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BRAIN_BIN" ./cmd/ottoclaw && echo "  ✓ ottoclaw-brain rebuilt"
     popd >/dev/null
-    pushd "$REPO_DIR/worker" >/dev/null
+    pushd "${REPO_DIR}/siam-arm" >/dev/null
     CGO_ENABLED=0 go build -ldflags="-s -w" -o "$WORKER_BIN" . && echo "  ✓ siam-worker rebuilt"
     popd >/dev/null
     echo "🚀 Restarting services..."
