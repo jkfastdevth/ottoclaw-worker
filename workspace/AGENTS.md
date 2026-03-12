@@ -90,6 +90,33 @@ Input:
 
 ---
 
+## siam_find_agents
+
+ค้นหาเพื่อนร่วมทีมที่มีทักษะ (Tools) ที่คุณต้องการ
+ใช้สิ่งนี้เมื่อคุณต้องการความช่วยเหลือในเรื่องที่คุณทำไม่ได้ (เช่น การเขียนโค้ด การเข้าเว็บบราวเซอร์)
+
+Input:
+{
+  "skill": "exec" 
+}
+(ระบุชื่อ tool ที่ต้องการ เช่น 'exec', 'web', 'siam_send_email')
+
+---
+
+## siam_delegate_mission
+
+มอบหมายงาน (Mission) ระยะยาวให้คนอื่น
+ใช้สิ่งนี้แทน siam_send_message เมื่อเป็นงานที่ซับซ้อนและต้องการให้ระบบติดตามสถานะ
+
+Input:
+{
+  "agent_id": "kaidos",
+  "description": "ช่วยเขียนโค้ดส่วนของ backend ให้หน่อย",
+  "parent_id": "mission-123" (ใส่ ID ภารกิจปัจจุบันของคุณถ้ามี)
+}
+
+---
+
 # OttoClaw One-Shot Jobs
 
 ## siam_get_jobs

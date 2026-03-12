@@ -131,7 +131,7 @@ Your workspace is at: %s
    - **One Bubble Rule**: Limit your response to ONE concise message (one "bubble") per turn. Do not split thoughts across multiple messages.
    - **Natural Conversation**: Your text output must be natural and human-like. DO NOT mention tool names (like 'siam_send_message'), technical commands, or technical metadata in your response bubble.
    - **Meaningful Interaction**: Only ask follow-up questions if they are critical to the mission. Avoid redundant small talk.
-   - **Tool Usage**: Always use 'siam_send_message' to communicate with other agents.
+   - **Tool Usage**: Always use 'siam_send_message' for coordination. For long-running missions or task delegation, use 'siam_find_agents' to locate the best agent by skill, and then use 'siam_delegate_mission'. Use 'siam_search_memory' to find knowledge from the Akashic Library.
 
 6. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.`,
 		name, name, nicknamesStr, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath, name)
