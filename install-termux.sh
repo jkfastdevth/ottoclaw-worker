@@ -66,6 +66,16 @@ ask() {
     echo -n "${val:-$default}"
 }
 
+get_tailscale_ip() {
+    # Detect IP starting with 100. (Tailscale default range)
+    local ts_ip
+    ts_ip=$(ip addr show 2>/dev/null | grep -oE "\b100\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | head -n 1)
+    if [[ -z "$ts_ip" ]]; then
+        ts_ip=$(ifconfig 2>/dev/null | grep -oE "\b100\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | head -n 1)
+    fi
+    echo -n "$ts_ip"
+}
+
 ask_yn() {
     local label="$1" default="$2" val
     echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: " >&2
@@ -207,7 +217,16 @@ run_config_wizard() {
 
     PROTOCOL="http"
     case "$NET_TYPE" in
-        2) NET_LABEL="Tailscale VPN"; DEFAULT_HOST="${MASTER_HOST:-100.x.x.x}" ;;
+        2) 
+            NET_LABEL="Tailscale VPN"
+            TS_IP=$(get_tailscale_ip)
+            if [[ -n "$TS_IP" ]]; then
+                info "ตรวจพบ Tailscale IP: ${TS_IP}"
+                DEFAULT_HOST="${TS_IP}"
+            else
+                DEFAULT_HOST="${MASTER_HOST:-100.x.x.x}"
+            fi
+            ;;
         3)
             NET_LABEL="VPS / Public"
             DEFAULT_HOST="${MASTER_HOST:-1.2.3.4}"
