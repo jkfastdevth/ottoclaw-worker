@@ -148,8 +148,10 @@ build_binaries() {
         echo "  Building ottoclaw-brain..."
         pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
         # Ensure workspace is available for embedding
-        mkdir -p cmd/ottoclaw/internal/onboard
-        cp -rf ../workspace cmd/ottoclaw/internal/onboard/workspace 2>/dev/null || true
+        local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
+        mkdir -p "${ONBOARD_DIR}"
+        rm -rf "${ONBOARD_DIR}/workspace"
+        cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
         CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
         popd >/dev/null
         info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
