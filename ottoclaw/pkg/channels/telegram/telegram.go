@@ -38,7 +38,7 @@ var (
 	reListItem      = regexp.MustCompile(`^[-*]\s+`)
 	reCodeBlock     = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
 	reInlineCode    = regexp.MustCompile("`([^`]+)`")
-	reOrchestration = regexp.MustCompile(`^@?([^\s:,]+)[:,\s]+\s*(.*)$`)
+	reOrchestration = regexp.MustCompile(`^@?([^\s:,]+)[:,\s]*[:,-]\s*(.*)$`)
 )
 
 type TelegramChannel struct {
@@ -474,6 +474,11 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		return fmt.Errorf("message is nil")
 	}
 
+	logger.DebugCF("telegram", "Processing incoming message", map[string]any{
+		"chat_id": message.Chat.ID,
+		"text":    message.Text,
+	})
+
 	user := message.From
 	if user == nil {
 		return fmt.Errorf("message sender (user) is nil")
@@ -496,7 +501,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 
 	// check allowlist to avoid downloading attachments for rejected users
 	if !c.IsAllowedSender(sender) {
-		logger.DebugCF("telegram", "Message rejected by allowlist", map[string]any{
+		logger.DebugCF("telegram", "Trace: Message rejected by allowlist", map[string]any{
 			"user_id": platformID,
 		})
 		return nil
@@ -597,6 +602,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		// The regex would extract "[Auric" → normalize to "auric" → accidentally match our own name.
 		// These messages are purely informational and must never trigger agent responses.
 		if strings.HasPrefix(content, "[") && chatIDStr == tCfg.BridgeChatID {
+			logger.DebugC("telegram", "Trace: Skipping bridge notification message")
 			return nil
 		}
 
@@ -661,7 +667,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			} else {
 				// Addressed to another agent (or invalid match): remain silent ONLY in bridge chats
 				if chatIDStr == tCfg.BridgeChatID {
-					// It's not addressed to us, and it's a bridge chat. It's meant for someone else.
+					logger.DebugC("telegram", "Trace: Orchestration match failed in bridge chat (not for us)")
 					return nil
 				}
 				
@@ -746,18 +752,29 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 						}()
 					}
 
+					logger.DebugC("telegram", "Trace: Orchestration matched other agent, ignoring")
 					return nil // Definitely addressed to someone else in the network
 				}
-				
-				// "invalid match" usually just means someone said a sentence starting with a word.
-				// e.g. "What are you doing" -> "What" is not an agent name.
-				// We let this fall through to normal group trigger logic (e.g. mentions).
 			}
 		} else {
-			// No direct "Name: content" match. In a bridge chat, we MUST be mentioned or replied to
-			// to avoid both agents jumping on a random sentence.
-			if chatIDStr == tCfg.BridgeChatID && !c.isBotMentioned(message) {
+			// No orchestration match (e.g. "Hello world").
+			// In a bridge chat, we MUST be mentioned or replied to
+			// EXCEPTION: The "Default Listener" (e.g. Auric) can hear everything to perform Cognitive Judgment.
+			isDefaultListener := strings.ToLower(os.Getenv("ORCHESTRATOR_DEFAULT_LISTENER")) == "true"
+			if !isDefaultListener {
+				myAgentName := os.Getenv("AGENT_NAME")
+				if strings.Contains(strings.ToLower(myAgentName), "auric") {
+					isDefaultListener = true
+				}
+			}
+
+			if chatIDStr == tCfg.BridgeChatID && !c.isBotMentioned(message) && !isDefaultListener {
+				logger.DebugC("telegram", "Trace: Unassigned bridge message and NOT default listener")
 				return nil
+			}
+			if isDefaultListener && chatIDStr == tCfg.BridgeChatID && !c.isBotMentioned(message) {
+				logger.DebugC("telegram", "Default listener: handling unassigned bridge message (forcing respond)")
+				forceRespond = true
 			}
 		}
 	}
@@ -773,6 +790,7 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		}
 		respond, cleaned := c.ShouldRespondInGroup(isMentioned, content)
 		if !respond && !forceRespond {
+			logger.DebugC("telegram", "Trace: ShouldRespondInGroup failed and no forceRespond")
 			return nil
 		}
 		content = cleaned
