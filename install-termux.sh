@@ -227,8 +227,8 @@ run_config_wizard() {
 
     # [1/3] System
     echo -e "${BOLD}[1/3] System${RESET}"
-    AGENT_NAME=$(ask "Agent Name (e.g. Kaidos)" "${AGENT_NAME:-Kaidos}")
-    ORCHESTRATOR_NICKNAMES=$(ask "Aliases (comma-sep)" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
+    AGENT_NAME=$(ask "AGENT_NAME" "${AGENT_NAME:-Kaidos}")
+    ORCHESTRATOR_NICKNAMES=$(ask "ORCHESTRATOR_NICKNAMES" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
 
     echo ""
     echo -e "  เลือกประเภท Network:"
@@ -299,6 +299,7 @@ run_config_wizard() {
         if ask_yn "Enable Agent-to-Agent via Telegram? [y/N]" "n"; then
             TELEGRAM_ORCHESTRATION_ENABLED="true"
             TELEGRAM_BRIDGE_CHAT_ID=$(ask "Telegram Bridge Group ID" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
+            ORCHESTRATOR_NICKNAMES=$(ask "Orchestrator Nicknames" "${ORCHESTRATOR_NICKNAMES:-${ORCHESTRATOR_NICKNAMES}}")
         fi
     fi
 
