@@ -104,6 +104,8 @@ run_config_wizard() {
         WORKER_TELEGRAM_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
         ORCHESTRATOR_NICKNAMES="${ORCHESTRATOR_NICKNAMES:-}"
         TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
+        GOOGLE_EMAIL="${GOOGLE_EMAIL:-}"
+        GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD:-}"
     fi
 
     # Extract MASTER_HOST from existing MASTER_URL if reconfiguring
@@ -199,12 +201,20 @@ run_config_wizard() {
             echo -e "  ${CYAN}Hint:${RESET} นำ Bot ไปเข้ากลุ่ม Private แล้วนำ Group ID (e.g. -100123456) มาใส่"
             TELEGRAM_BRIDGE_CHAT_ID=$(prompt_val "Telegram Bridge Group ID" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
         fi
+        fi
     fi
 
     echo ""
 
-    # ── [3/3] Service User (Optional) ─────────────────────────────────────────
-    echo -e "${BOLD}[3/3] Service Options (Optional)${RESET}"
+    # ── [3/4] Google Skill Access (Optional) ──────────────────────────────────
+    echo -e "${BOLD}[3/4] Google Skill Access (Optional — leave blank for General Worker)${RESET}"
+    GOOGLE_EMAIL=$(prompt_val "GOOGLE_EMAIL" "${GOOGLE_EMAIL:-}")
+    GOOGLE_APP_PASSWORD=$(prompt_val "GOOGLE_APP_PASSWORD" "${GOOGLE_APP_PASSWORD:-}" "true")
+
+    echo ""
+
+    # ── [4/4] Service User (Optional) ─────────────────────────────────────────
+    echo -e "${BOLD}[4/4] Service Options (Optional)${RESET}"
     SERVICE_USER_INPUT=$(prompt_val "Run service as user (leave blank = root)" "${RUN_AS_USER:-}")
 
     # Fixed defaults — identical to Docker container behaviour
@@ -257,6 +267,10 @@ TELEGRAM_BOT_TOKEN=${WORKER_TELEGRAM_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED}
+
+# ── Google Skill Access (Optional) ──────────────────────────
+GOOGLE_EMAIL=${GOOGLE_EMAIL}
+GOOGLE_APP_PASSWORD=${GOOGLE_APP_PASSWORD}
 
 # ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME=${OTTOCLAW_HOME}

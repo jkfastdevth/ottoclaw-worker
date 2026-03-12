@@ -25,6 +25,8 @@ type Config struct {
 	AgentName             string `json:"AGENT_NAME"`
 	OrchestratorNicknames string `json:"ORCHESTRATOR_NICKNAMES"`
 	TelegramToken         string `json:"WORKER_TELEGRAM_TOKEN"`
+	GoogleEmail           string `json:"GOOGLE_EMAIL"`
+	GoogleAppPassword     string `json:"GOOGLE_APP_PASSWORD"`
 }
 
 var (
@@ -78,6 +80,10 @@ func getConfig(w http.ResponseWriter, r *http.Request) {
 				config.MasterApiKey = strings.TrimPrefix(line, "MASTER_API_KEY=")
 			} else if strings.HasPrefix(line, "NODE_SECRET=") {
 				config.NodeSecret = strings.TrimPrefix(line, "NODE_SECRET=")
+			} else if strings.HasPrefix(line, "GOOGLE_EMAIL=") {
+				config.GoogleEmail = strings.TrimPrefix(line, "GOOGLE_EMAIL=")
+			} else if strings.HasPrefix(line, "GOOGLE_APP_PASSWORD=") {
+				config.GoogleAppPassword = strings.TrimPrefix(line, "GOOGLE_APP_PASSWORD=")
 			}
 		}
 	}
@@ -123,6 +129,8 @@ func runInstall(config Config) {
 	env = append(env, fmt.Sprintf("AGENT_NAME=%s", config.AgentName))
 	env = append(env, fmt.Sprintf("ORCHESTRATOR_NICKNAMES=%s", config.OrchestratorNicknames))
 	env = append(env, fmt.Sprintf("WORKER_TELEGRAM_TOKEN=%s", config.TelegramToken))
+	env = append(env, fmt.Sprintf("GOOGLE_EMAIL=%s", config.GoogleEmail))
+	env = append(env, fmt.Sprintf("GOOGLE_APP_PASSWORD=%s", config.GoogleAppPassword))
 
 	cwd, _ := os.Getwd()
 	// Check for install.sh in standard locations

@@ -93,6 +93,13 @@ func NewSiamToolset(masterURL, apiKey string) []Tool {
 		&SiamGetMissionTool{client: client},
 		&SiamPromoteAgentTool{client: client},
 		&SiamPromotionRitualTool{client: client},
+		&SiamSendEmailTool{},
+		&SiamListCalendarTool{},
+		&SiamCreateCalendarEventTool{},
+		&SiamDriveUploadTool{},
+		&SiamDriveSearchTool{},
+		&SiamDriveDownloadTool{},
+		&SiamReadEmailsTool{},
 	}
 }
 
