@@ -211,6 +211,9 @@ func (s *SiamSyncChannel) sendOnboardingMessage(agentName string) {
 	if botToken == "" {
 		botToken = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_TOKEN")
 	}
+	if botToken == "" {
+		botToken = os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN")
+	}
 	orchestrationEnabled := os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" ||
 		os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED") == "true"
 

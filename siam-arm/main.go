@@ -210,25 +210,13 @@ func getSafeEnv() []string {
 	isOrchestrator := (os.Getenv("OTTOCLAW_MODE") == "orchestrator")
 	
 	for _, e := range env {
-		// 🛡️ Prevent Telegram Bot Conflict (409)
-		// Only allow the token if we are explicitly the orchestrator
-		if !isOrchestrator {
-			if strings.HasPrefix(e, "WORKER_TELEGRAM_TOKEN=") || 
-			   strings.HasPrefix(e, "TELEGRAM_BOT_TOKEN=") || 
-			   strings.HasPrefix(e, "OTTOCLAW_CHANNELS_TELEGRAM_") ||
-			   strings.HasPrefix(e, "TELEGRAM_ALLOW_FROM=") || 
-			   strings.HasPrefix(e, "TELEGRAM_BRIDGE_CHAT_ID=") {
-				log.Printf("🛡️ [Env] Stripping %s for non-orchestrator node", strings.Split(e, "=")[0])
-				continue
-			}
-		}
 		safeEnv = append(safeEnv, e)
 	}
 
-	// 🛡️ Explicitly disable Telegram for workers to prevent config.json fallback
+	// 🛡️ Disable Telegram Polling for workers to prevent 409 Conflict
+	// However, we KEEP the tokens in safeEnv so tools (like siam_send_message) can still broadcast.
 	if !isOrchestrator {
 		safeEnv = append(safeEnv, "OTTOCLAW_CHANNELS_TELEGRAM_ENABLED=false")
-		safeEnv = append(safeEnv, "OTTOCLAW_CHANNELS_TELEGRAM_TOKEN=")
 	}
 
 	return safeEnv
