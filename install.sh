@@ -51,6 +51,16 @@ prompt_val() {
     echo -n "$result" | tr -dc '[:print:]' | xargs echo -n
 }
 
+get_tailscale_ip() {
+    # Detect IP starting with 100. (Tailscale default range)
+    local ts_ip
+    ts_ip=$(ip addr show 2>/dev/null | grep -oE "\b100\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | head -n 1)
+    if [[ -z "$ts_ip" ]]; then
+        ts_ip=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep "^100\." | head -n 1)
+    fi
+    echo -n "$ts_ip"
+}
+
 # ── Root Check ────────────────────────────────────────────────────────────────
 if [[ "$EUID" -ne 0 ]]; then
     error "Please run as root: sudo bash install.sh"
@@ -145,7 +155,13 @@ run_config_wizard() {
     case "$NET_TYPE" in
       2)
         NET_LABEL="Tailscale VPN"
-        DEFAULT_HOST="${MASTER_HOST:-100.x.x.x}"
+        TS_IP=$(get_tailscale_ip)
+        if [[ -n "$TS_IP" ]]; then
+            info "Detected Tailscale IP: ${TS_IP}"
+            DEFAULT_HOST="${TS_IP}"
+        else
+            DEFAULT_HOST="${MASTER_HOST:-100.x.x.x}"
+        fi
         HOST_HINT="Tailscale IP (100.x.x.x) หรือ machine name (e.g. master.tail1234.ts.net)"
         ;;
       3)

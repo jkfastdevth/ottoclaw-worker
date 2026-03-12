@@ -33,6 +33,12 @@ build_platform() {
     # 1. Build Brain (ottoclaw)
     echo "  [1/2] Building ottoclaw-brain..."
     pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
+    # Prepare workspace for embedding
+    local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
+    mkdir -p "${ONBOARD_DIR}"
+    rm -rf "${ONBOARD_DIR}/workspace"
+    cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
+    
     GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 go build -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
     popd >/dev/null
 
