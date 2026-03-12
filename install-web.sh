@@ -23,6 +23,12 @@ if ! command -v go &>/dev/null; then
     exit 1
 fi
 
+if ! command -v git &>/dev/null; then
+    echo "❌ Git is required for the Bootstrap installation process."
+    echo "Please run: sudo apt-get update && sudo apt-get install -y git"
+    exit 1
+fi
+
 cd "${SCRIPT_DIR}/cmd/setup-web"
 echo "🌐 Web server is launching at: http://localhost:3333"
 echo "📢 Please open this URL in your browser to continue the installation."

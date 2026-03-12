@@ -125,9 +125,41 @@ func runInstall(config Config) {
 	env = append(env, fmt.Sprintf("WORKER_TELEGRAM_TOKEN=%s", config.TelegramToken))
 
 	cwd, _ := os.Getwd()
-	// main.go is in ottoclaw-worker/cmd/setup-web/
-	// install.sh is in ottoclaw-worker/
-	installScript := filepath.Join(cwd, "..", "..", "install.sh")
+	// Check for install.sh in standard locations
+	installScript := ""
+	possiblePaths := []string{
+		filepath.Join(cwd, "..", "..", "install.sh"), // Standard: worker/cmd/setup-web/
+		filepath.Join(cwd, "..", "install.sh"),       // Flat: setup-web/
+		filepath.Join(cwd, "install.sh"),             // Local
+	}
+
+	for _, p := range possiblePaths {
+		if _, err := os.Stat(p); err == nil {
+			installScript = p
+			break
+		}
+	}
+
+	// Bootstrap Mode: If install.sh is missing, try to clone the repo
+	if installScript == "" {
+		addLog("[INFO] Bootstrapping: install.sh not found. Preparing to pull latest source...")
+		repoUrl := "https://github.com/jkfastdevth/Siam-Synapse.git"
+		targetDir := filepath.Join(cwd, "workspace_source")
+		
+		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+			addLog(fmt.Sprintf("[INFO] Cloning repository: %s", repoUrl))
+			cloneCmd := exec.Command("git", "clone", "--depth", "1", repoUrl, targetDir)
+			if err := cloneCmd.Run(); err != nil {
+				addLog(fmt.Sprintf("[ERROR] Failed to clone repository: %v", err))
+				return
+			}
+			addLog("[SUCCESS] Source code cloned successfully.")
+		} else {
+			addLog("[INFO] Source directory already exists. Using existing code.")
+		}
+		
+		installScript = filepath.Join(targetDir, "ottoclaw-worker", "install.sh")
+	}
 
 	// Execute install.sh
 	cmd := exec.Command("bash", installScript)
