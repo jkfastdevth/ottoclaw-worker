@@ -40,10 +40,10 @@ prompt_val() {
     if [[ "$secret" == "true" ]]; then
         # Redirect prompt to stderr so it's not captured by $(prompt_val ...)
         echo -ne "  ${CYAN}?${RESET}  ${label} [${display_default}]: " >&2
-        read -s value; echo "" >&2
+        read -s value < /dev/tty; echo "" >&2
     else
         echo -ne "  ${CYAN}?${RESET}  ${label} [${display_default}]: " >&2
-        read -r value
+        read -r value < /dev/tty
     fi
     
     local result="${value:-$default}"
@@ -59,6 +59,16 @@ get_tailscale_ip() {
         ts_ip=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep "^100\." | head -n 1)
     fi
     echo -n "$ts_ip"
+}
+
+get_local_ip() {
+    # Detect IP in common LAN ranges: 192.168.x.x or 10.x.x.x
+    local local_ip
+    local_ip=$(ip addr show 2>/dev/null | grep -oE "\b(192\.168|10)\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | head -n 1)
+    if [[ -z "$local_ip" ]]; then
+        local_ip=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E "^(192\.168|10)\." | head -n 1)
+    fi
+    echo -n "$local_ip"
 }
 
 # ── Root Check ────────────────────────────────────────────────────────────────
@@ -175,7 +185,13 @@ run_config_wizard() {
         ;;
       *)
         NET_LABEL="Local LAN"
-        DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}"
+        LAN_IP=$(get_local_ip)
+        if [[ -n "$LAN_IP" ]]; then
+            info "Detected Local IP: ${LAN_IP}"
+            DEFAULT_HOST="${LAN_IP}"
+        else
+            DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}"
+        fi
         HOST_HINT="IP ของเครื่อง Master ในวง LAN (e.g. 192.168.1.100)"
         ;;
     esac
@@ -340,6 +356,10 @@ build_binaries() {
             fi
         else
             warn "No pre-compiled binary found for ${SUFFIX} at ${VERSION}."
+            echo -e "     ${YELLOW}💡 Tip:${RESET} To avoid building on low-spec remote machines:"
+            echo -e "        1. Run ${CYAN}./build-releases.sh v1.0.0${RESET} on your local machine."
+            echo -e "        2. ${CYAN}git tag v1.0.0${RESET} and ${CYAN}git push --tags${RESET} to GitHub."
+            echo -e "     The installer will then find the binaries automatically.\n"
         fi
     fi
 

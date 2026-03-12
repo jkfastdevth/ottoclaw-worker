@@ -59,9 +59,9 @@ ask() {
     local disp="$default"
     [[ "$secret" == "true" && -n "$default" ]] && disp=$(echo -n "$default" | sed 's/./*/g')
     if [[ "$secret" == "true" ]]; then
-        echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -s val; echo "" >&2
+        echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -s val < /dev/tty; echo "" >&2
     else
-        echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -r val
+        echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -r val < /dev/tty
     fi
     echo -n "${val:-$default}"
 }
@@ -76,10 +76,20 @@ get_tailscale_ip() {
     echo -n "$ts_ip"
 }
 
+get_local_ip() {
+    # Detect IP in common LAN ranges: 192.168.x.x or 10.x.x.x
+    local local_ip
+    local_ip=$(ip addr show 2>/dev/null | grep -oE "\b(192\.168|10)\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | head -n 1)
+    if [[ -z "$local_ip" ]]; then
+        local_ip=$(ifconfig 2>/dev/null | grep -oE "\b(192\.168|10)\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\b" | head -n 1)
+    fi
+    echo -n "$local_ip"
+}
+
 ask_yn() {
     local label="$1" default="$2" val
     echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: " >&2
-    read -r val
+    read -r val < /dev/tty
     val="${val:-$default}"
     [[ "${val,,}" == "y" || "${val,,}" == "yes" ]]
 }
@@ -135,6 +145,10 @@ build_binaries() {
             fi
         else
             warn "ไม่พบ Binary สำหรับ ${SUFFIX} ที่เวอร์ชัน ${VERSION}."
+            echo -e "     ${YELLOW}💡 ทริค:${RESET} เพื่อหลีกเลี่ยงการคอมไพล์บนเครื่องสเปกต่ำ ให้คุณทำดังนี้ที่เครื่องแม่ (Local Machine):"
+            echo -e "        1. รัน ${CYAN}./build-releases.sh v1.0.0${RESET}"
+            echo -e "        2. ทำการ ${CYAN}git tag v1.0.0${RESET} และ ${CYAN}git push --tags${RESET} ขึ้น GitHub"
+            echo -e "     หลังจากนั้นระบบจะดาวน์โหลดไฟล์ Binary มาใช้ได้อัตโนมัติครับ\n"
         fi
     fi
 
@@ -232,7 +246,17 @@ run_config_wizard() {
             DEFAULT_HOST="${MASTER_HOST:-1.2.3.4}"
             if ask_yn "Use HTTPS?" "n"; then PROTOCOL="https"; fi
             ;;
-        *) NET_LABEL="Local LAN"; DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}" ;;
+            ;;
+        *) 
+            NET_LABEL="Local LAN"
+            LAN_IP=$(get_local_ip)
+            if [[ -n "$LAN_IP" ]]; then
+                info "ตรวจพบ Local IP: ${LAN_IP}"
+                DEFAULT_HOST="${LAN_IP}"
+            else
+                DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}"
+            fi
+            ;;
     esac
 
     echo ""
