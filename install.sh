@@ -186,11 +186,12 @@ run_config_wizard() {
 
     # ── [2/3] Telegram (Optional) ─────────────────────────────────────────────
     echo -e "${BOLD}[2/3] Telegram Channel (Optional — press Enter to skip)${RESET}"
-    WORKER_TELEGRAM_TOKEN=$( prompt_val "Telegram Bot Token"                    "${WORKER_TELEGRAM_TOKEN:-}" "true")
+    ORCHESTRATOR_TELEGRAM_TOKEN=$( prompt_val "Telegram Bot Token"                    "${ORCHESTRATOR_TELEGRAM_TOKEN:-}" "true")
     TELEGRAM_ALLOW_FROM=""
     TELEGRAM_BRIDGE_CHAT_ID=""
     TELEGRAM_ORCHESTRATION_ENABLED="false"
-    if [[ -n "$WORKER_TELEGRAM_TOKEN" ]]; then
+    ORCHESTRATOR_NICKNAMES=""
+    if [[ -n "$ORCHESTRATOR_TELEGRAM_TOKEN" ]]; then
         TELEGRAM_ALLOW_FROM=$(prompt_val "Allowed User IDs (comma-separated)" "${TELEGRAM_ALLOW_FROM:-}")
         echo ""
         echo -e "  ${YELLOW}Telegram Bridge Orchestration${RESET}"
@@ -200,6 +201,8 @@ run_config_wizard() {
             TELEGRAM_ORCHESTRATION_ENABLED="true"
             echo -e "  ${CYAN}Hint:${RESET} นำ Bot ไปเข้ากลุ่ม Private แล้วนำ Group ID (e.g. -100123456) มาใส่"
             TELEGRAM_BRIDGE_CHAT_ID=$(prompt_val "Telegram Bridge Group ID" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
+            echo -e "  ${CYAN}Nicknames:${RESET} ชื่อที่ใช้เรียก Agent ใน Telegram (คั่นด้วยคอมมา)"
+            ORCHESTRATOR_NICKNAMES=$(prompt_val "Orchestrator Nicknames" "${ORCHESTRATOR_NICKNAMES:-}")
         fi
     fi
 
@@ -261,11 +264,12 @@ OTTOCLAW_MODEL_ID=${OTTOCLAW_MODEL_ID}
 OTTOCLAW_MODEL_NAME=${OTTOCLAW_MODEL_NAME}
 
 # ── Telegram Channel ──────────────────────────────────────────
-WORKER_TELEGRAM_TOKEN=${WORKER_TELEGRAM_TOKEN}
-TELEGRAM_BOT_TOKEN=${WORKER_TELEGRAM_TOKEN}
+ORCHESTRATOR_TELEGRAM_TOKEN=${ORCHESTRATOR_TELEGRAM_TOKEN}
+TELEGRAM_BOT_TOKEN=${ORCHESTRATOR_TELEGRAM_TOKEN}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
 TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED}
+ORCHESTRATOR_NICKNAMES=${ORCHESTRATOR_NICKNAMES}
 
 # ── Google Skill Access (Optional) ──────────────────────────
 GOOGLE_EMAIL=${GOOGLE_EMAIL}
@@ -535,7 +539,7 @@ API_KEY="${OTTOCLAW_API_KEY:-}"
 
 # ── Channels JSON fragment (SiamSync + Optional Telegram) ──────
 SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${MASTER_URL}\", \"api_key\": \"${MASTER_API_KEY}\" }"
-TG_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
+TG_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_FRAG=""
 if [ -n "$TG_TOKEN" ]; then

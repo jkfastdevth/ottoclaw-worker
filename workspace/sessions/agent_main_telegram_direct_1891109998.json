@@ -2,47 +2,19 @@
   "key": "agent:main:telegram:direct:1891109998",
   "messages": [
     {
-      "role": "tool",
-      "content": "{\"success\":true}",
-      "tool_call_id": "call_function_d3zvdthc72wq_1"
-    },
-    {
-      "role": "assistant",
-      "content": "\u003cthink\u003e\nThe message was sent successfully. Now I should inform the user.\n\u003c/think\u003e\n\n\n",
-      "tool_calls": [
-        {
-          "id": "call_function_uqh7qr58zktx_1",
-          "type": "function",
-          "function": {
-            "name": "message",
-            "arguments": "{\"channel\":\"telegram\",\"chat_id\":\"1891109998\",\"content\":\"ส่งข้อความถึง Kaidos เรียบร้อยแล้วครับ 📬✨\\n\\nรอดูว่าเขาจะตอบกลับมาไหม\"}"
-          }
-        }
-      ]
-    },
-    {
-      "role": "tool",
-      "content": "Message sent to telegram:1891109998",
-      "tool_call_id": "call_function_uqh7qr58zktx_1"
-    },
-    {
-      "role": "assistant",
-      "content": "\u003cthink\u003e\nI sent the message to Kaidos successfully. Now I should wait and see if Kaidos replies. Let me inform the user about this.\n\u003c/think\u003e\n\nส่งข้อความไปหา Kaidos เรียบร้อยแล้วครับ 📬\n\nรอดูว่าเขาจะตอบกลับมาหรือไม่..."
-    },
-    {
       "role": "user",
-      "content": "ฉันอยากให้คุณและ kaidos เล่าเรื่องตลกต่อกันคนละ 1 ประโยค เริ่มจากคุณก่อนเลย ส่งข้อความหา kaidos ผ่าน siam_send_message เล่าประโยคแรก และท้าให้เขาส่งประโยคที่สองกลับมาหาคุณ (auric-spark) ด้วย siam_send_message"
+      "content": "ถาม kaidos สิพร้อมทำงานหรือยัง"
     },
     {
       "role": "assistant",
-      "content": "\u003cthink\u003e\nThe user wants me to:\n1. Send a joke to kaidos via siam_send_message - first sentence\n2. Challenge kaidos to reply with the second sentence via siam_send_message back to auric-spark\n\nLet me craft a joke in Thai that can be continued. I'll start with a pun setup and challenge kaidos to deliver the punchline.\n\nLet me send the message to kaidos now.\n\u003c/think\u003e\n\n\n",
+      "content": "\u003cthink\u003e\nThe user wants me to ask kaidos if they're ready to work. I'll send a message to kaidos via siam_send_message.\n\u003c/think\u003e\n\n\n",
       "tool_calls": [
         {
-          "id": "call_function_rqds3ce5e86i_1",
+          "id": "call_function_xjuiuywfzohu_1",
           "type": "function",
           "function": {
             "name": "siam_send_message",
-            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"เรื่องตลก: ทำไมโปรแกรมเมอร์ถึงไม่มีเด็ก? เพราะพวกเขาใช้ \\\"function\\\" แต่ไม่ยอม \\\"return\\\" กลับบ้าน... เล่าให้ฟังหน่อยสิ ประโยคต่อไปจะเป็นยังไง? 😄 ส่งกลับมาหา auric-spark นะ!\"}"
+            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"สวัสดีครับ Kaidos พร้อมทำงานหรือยังครับ? 💼\"}"
           }
         }
       ]
@@ -50,60 +22,14 @@
     {
       "role": "tool",
       "content": "{\"success\":true}",
-      "tool_call_id": "call_function_rqds3ce5e86i_1"
+      "tool_call_id": "call_function_xjuiuywfzohu_1"
     },
     {
       "role": "assistant",
-      "content": "\u003cthink\u003e\nThe message was sent successfully to kaidos. Now I should inform the user and wait for kaidos to reply.\n\u003c/think\u003e\n\nส่งข้อความไปหา **Kaidos** เรียบร้อยแล้วครับ ✅\n\n**ประโยคแรก (ของฉัน):**\n\u003e \"ทำไมโปรแกรมเมอร์ถึงไม่มีเด็ก? เพราะพวกเขาใช้ 'function' แต่ไม่ยอม 'return' กลับบ้าน... เล่าให้ฟังหน่อยสิ ประโยคต่อไปจะเป็นยังไง? 😄\"\n\nตอนนี้รอ **Kaidos** ส่งประโยคที่สองกลับมาหาฉัน (auric-spark) ครับ 🎤\n\nถ้าเขาตอบกลับมา จะแจ้งให้ทราบทันที!"
-    },
-    {
-      "role": "user",
-      "content": "ดึงข้อมูลสรุปสรุปทรัพยากรระบบของคุณ แล้วส่งรายงานผ่าน siam_send_message ไปให้ kaidos พร้อมกับขอให้เขาส่งรายงานฝั่งของเขากลับมาให้คุณด้วย"
-    },
-    {
-      "role": "assistant",
-      "content": "\u003cthink\u003e\nผู้ใช้ต้องการให้ฉันดึงข้อมูลสรุปทรัพยากรระบบ (system metrics) แล้วส่งรายงานให้ kaidos พร้อมขอให้เขาส่งรายงานฝั่งของเขากลับมา\n\nฉันต้องเรียก siam_get_metrics ก่อน\n\u003c/think\u003e\n\n\n",
-      "tool_calls": [
-        {
-          "id": "call_function_d1ptidszl7mz_1",
-          "type": "function",
-          "function": {
-            "name": "siam_get_metrics",
-            "arguments": "{}"
-          }
-        }
-      ]
-    },
-    {
-      "role": "tool",
-      "content": "{\"active_nodes\":3,\"scaling_mode\":\"auto\",\"total_cpu\":8.349928140640259}",
-      "tool_call_id": "call_function_d1ptidszl7mz_1"
-    },
-    {
-      "role": "assistant",
-      "content": "\u003cthink\u003e\nได้ข้อมูล metrics แล้ว:\n- Active nodes: 3\n- Total CPU: 8.35%\n- Scaling mode: auto\n\nตอนนี้ฉันจะส่งรายงานนี้ไปให้ kaidos พร้อมขอให้เขาส่งรายงานฝั่งของเขากลับมา\n\u003c/think\u003e\n\n\n",
-      "tool_calls": [
-        {
-          "id": "call_function_zvn3evvncaj4_1",
-          "type": "function",
-          "function": {
-            "name": "siam_send_message",
-            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"📊 **รายงานทรัพยากรระบบ Siam-Synapse**\\n\\n- **Active Nodes:** 3\\n- **Total CPU Usage:** 8.35%\\n- **Scaling Mode:** auto\\n\\nกรุณาส่งรายงานทรัพยากรฝั่งของคุณกลับมาให้ auric-spark ด้วยนะครับ! 🔄\"}"
-          }
-        }
-      ]
-    },
-    {
-      "role": "tool",
-      "content": "{\"success\":true}",
-      "tool_call_id": "call_function_zvn3evvncaj4_1"
-    },
-    {
-      "role": "assistant",
-      "content": "\u003cthink\u003e\nส่งรายงานไปให้ kaidos เรียบร้อยแล้ว\n\u003c/think\u003e\n\nดึงข้อมูลและส่งรายงานให้ **Kaidos** เรียบร้อยแล้วครับ ✅\n\n**รายงานทรัพยากรระบบ (Siam-Synapse):**\n| รายการ | ค่า |\n|--------|-----|\n| Active Nodes | 3 |\n| Total CPU Usage | 8.35% |\n| Scaling Mode | auto |\n\nข้อความถูกส่งไปหา **Kaidos** พร้อมขอให้เขาส่งรายงานฝั่งของเขากลับมาแล้วครับ 📬\n\nรอการตอบกลับจาก Kaidos อยู่... 🔄"
+      "content": "\u003cthink\u003e\nThe message has been sent successfully to kaidos. I should confirm to the user.\n\u003c/think\u003e\n\nส่งข้อความถาม **Kaidos** เรียบร้อยแล้วครับ ✅\n\n\u003e \"สวัสดีครับ Kaidos พร้อมทำงานหรือยังครับ? 💼\"\n\nรอการตอบกลับจาก Kaidos อยู่ครับ... 🎯"
     }
   ],
-  "summary": "\u003cthink\u003e\nThe user asked me to greet kaidos and ask them to respond. I've used the siam_send_message function to send a Thai message to kaidos (which is \"kaidos\" as the chat_id). The message is in Thai and asks kaidos to respond through siam_send_message to test the two-way communication system.\n\nNow I should confirm to the user that the message has been sent.\n\u003c/think\u003e\n\nข้อความได้ถูกส่งไปยัง **Kaidos** แล้วครับ ✅\n\n**รายละเอียด:**\n- **ช่องทาง:** Telegram\n- **ผู้รับ:** Kaidos\n- **ข้อความ:** ขอทดสอบระบบ Bridge และขอให้ Kaidos ตอบกลับมายืนยันการทำงานของระบบสื่อสารสองทาง\n\nตอนนี้ต้องรอให้ Kaidos ตอบกลับมาครับ ถ้ามีการตอบกลับเข้ามา ระบบจะแจ้งเตือนอัตโนมัติผ่านช่องทางที่เหมาะสม 💬",
+  "summary": "\u003cthink\u003e\nI need to respond in Thai as per the user's language. The user is asking about \"ระบบ\" which means \"system\" in Thai, and they've been asking about various functions and testing messaging. I should respond naturally in Thai.\n\u003c/think\u003e\n\nสวัสดีครับ! ผมคือ AI Assistant พร้อมช่วยเหลือคุณ คุณต้องการให้ผมช่วยอะไรไหมครับ? เช่น:\n\n- ส่งข้อความไปยังผู้ใช้อื่น\n- ดูข้อมูลทรัพยากรระบบ\n- หรือสิ่งอื่นๆ\n\nแจ้งมาได้เลยครับ! 😊",
   "created": "2026-03-05T19:40:10.040706682Z",
-  "updated": "2026-03-11T14:00:39.921256332Z"
+  "updated": "2026-03-12T12:48:52.582073422Z"
 }
