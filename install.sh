@@ -58,13 +58,19 @@ fi
 
 # ── Detect Architecture ───────────────────────────────────────────────────────
 ARCH=$(uname -m)
+SUFFIX=""
 case "$ARCH" in
-    x86_64)  GO_ARCH="amd64" ;;
-    aarch64) GO_ARCH="arm64" ;;
+    x86_64)  GO_ARCH="amd64"; SUFFIX="linux-amd64" ;;
+    aarch64) GO_ARCH="arm64"; SUFFIX="linux-arm64" ;;
     armv7l)  GO_ARCH="arm"   ;;
     *)       error "Unsupported architecture: $ARCH" ;;
 esac
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+# ── Release Configuration ─────────────────────────────────────────────────────
+VERSION="v1.0.0" # Default version
+REPO="jkfastdevth/ottoclaw-worker"
+BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/ottoclaw-worker-${SUFFIX}.tar.gz"
 
 # ── Locate Source ─────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -291,31 +297,54 @@ EOF
 # BUILD
 # ══════════════════════════════════════════════════════════════════════════════
 build_binaries() {
-    banner "Building OttoClaw Binaries"
-
-    if ! command -v go &>/dev/null; then
-        warn "Go not found. Installing Go 1.21..."
-        TMP_GO=$(mktemp -d)
-        GO_VERSION="1.21.8"
-        curl -fsSL "https://go.dev/dl/go${GO_VERSION}.${OS}-${GO_ARCH}.tar.gz" -o "${TMP_GO}/go.tar.gz"
-        tar -C /usr/local -xzf "${TMP_GO}/go.tar.gz"
-        export PATH="/usr/local/go/bin:$PATH"
-        info "Go ${GO_VERSION} installed."
+    banner "Installing OttoClaw Binaries"
+    
+    local use_binary=false
+    if [[ -n "${SUFFIX:-}" ]]; then
+        echo -e "  Attempting to download pre-compiled binary for ${SUFFIX}..."
+        if curl -fsSL --head "${BINARY_URL}" >/dev/null 2>&1; then
+            local tmp_bin=$(mktemp -d)
+            if curl -fsSL "${BINARY_URL}" -o "${tmp_bin}/release.tar.gz"; then
+                echo -e "  Extracting binaries..."
+                tar -xzf "${tmp_bin}/release.tar.gz" -C "${tmp_bin}"
+                [[ -f "${tmp_bin}/ottoclaw-brain" ]] && cp "${tmp_bin}/ottoclaw-brain" /usr/local/bin/ottoclaw-brain
+                [[ -f "${tmp_bin}/siam-worker" ]] && cp "${tmp_bin}/siam-worker" /usr/local/bin/siam-worker
+                chmod +x /usr/local/bin/ottoclaw-brain /usr/local/bin/siam-worker
+                rm -rf "${tmp_bin}"
+                use_binary=true
+                info "Installed pre-compiled binaries."
+            fi
+        else
+            warn "No pre-compiled binary found for ${SUFFIX} at ${VERSION}. Falling back to source build."
+        fi
     fi
 
-    echo -e "  Building ${BOLD}ottoclaw${RESET} (Brain)..."
-    pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-    mkdir -p cmd/ottoclaw/internal/onboard
-    cp -r "${SCRIPT_DIR}/workspace" cmd/ottoclaw/internal/onboard/workspace 2>/dev/null || true
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
-    popd >/dev/null
-    info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
+    if [[ "$use_binary" == "false" ]]; then
+        # Check for Go
+        if ! command -v go >/dev/null 2>&1; then
+            warn "Go not found. Installing Go 1.21..."
+            local TMP_GO=$(mktemp -d)
+            local GO_VERSION="1.21.8"
+            curl -fsSL "https://go.dev/dl/go${GO_VERSION}.${OS}-${GO_ARCH}.tar.gz" -o "${TMP_GO}/go.tar.gz"
+            tar -C /usr/local -xzf "${TMP_GO}/go.tar.gz"
+            export PATH="/usr/local/go/bin:$PATH"
+            info "Go ${GO_VERSION} installed."
+        fi
 
-    echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
-    pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
-    popd >/dev/null
-    info "siam-worker → /usr/local/bin/siam-worker"
+        echo -e "  Building ${BOLD}ottoclaw${RESET} (Brain)..."
+        pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
+        mkdir -p cmd/ottoclaw/internal/onboard
+        cp -r "${SCRIPT_DIR}/workspace" cmd/ottoclaw/internal/onboard/workspace 2>/dev/null || true
+        CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+        popd >/dev/null
+        info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
+
+        echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
+        pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
+        CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+        popd >/dev/null
+        info "siam-worker → /usr/local/bin/siam-worker"
+    fi
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
