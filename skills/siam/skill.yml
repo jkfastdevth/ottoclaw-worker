@@ -1,0 +1,16 @@
+name: siam-worker
+version: "1.0"
+description: "Siam-Synapse gRPC worker arm — executes shell commands dispatched by Master"
+author: "Siam-Synapse"
+
+capabilities:
+  - shell
+  - python
+  - system-info
+  - web-scrape
+
+environment:
+  MASTER_GRPC_URL: required
+  NODE_ID: required
+
+heartbeat: 10s
