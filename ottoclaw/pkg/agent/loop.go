@@ -102,7 +102,7 @@ func NewAgentLoop(
 		fallback:    fallbackChain,
 		processedMessages: sync.Map{},
 		busySessions:      sync.Map{},
-		missionManager:    NewMissionManager(cfg, msgBus),
+		missionManager:    NewMissionManager(cfg, msgBus, registry),
 	}
 }
 

@@ -28,11 +28,12 @@ type Mission struct {
 type MissionManager struct {
 	cfg      *config.Config
 	bus      *bus.MessageBus
+	registry *AgentRegistry
 	agentID  string
 	interval time.Duration
 }
 
-func NewMissionManager(cfg *config.Config, b *bus.MessageBus) *MissionManager {
+func NewMissionManager(cfg *config.Config, b *bus.MessageBus, r *AgentRegistry) *MissionManager {
 	agentID := os.Getenv("AGENT_NAME")
 	if agentID == "" {
 		agentID = "unknown"
@@ -46,6 +47,7 @@ func NewMissionManager(cfg *config.Config, b *bus.MessageBus) *MissionManager {
 	return &MissionManager{
 		cfg:      cfg,
 		bus:      b,
+		registry: r,
 		agentID:  agentID,
 		interval: interval,
 	}
@@ -78,12 +80,66 @@ func (m *MissionManager) Start(ctx context.Context) {
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
+	// 💓 Heartbeat ticker (every 60s)
+	heartbeatTicker := time.NewTicker(60 * time.Second)
+	defer heartbeatTicker.Stop()
+
+	// Initial heartbeat
+	m.reportHeartbeats(ctx, masterURL, apiKey)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			m.pollMissions(ctx, masterURL, apiKey)
+		case <-heartbeatTicker.C:
+			m.reportHeartbeats(ctx, masterURL, apiKey)
+		}
+	}
+}
+
+func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey string) {
+	if m.registry == nil {
+		return
+	}
+
+	m.registry.mu.RLock()
+	agents := make([]*AgentInstance, 0, len(m.registry.agents))
+	for _, a := range m.registry.agents {
+		agents = append(agents, a)
+	}
+	m.registry.mu.RUnlock()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	for _, agent := range agents {
+		// Get stats
+		usage := 0
+		if agent.Ledger != nil {
+			usage = agent.Ledger.GetTodayUsage()
+		}
+
+		payload := map[string]any{
+			"today_usage":      usage,
+			"max_daily_tokens": agent.MaxDailyTokens,
+		}
+		body, _ := json.Marshal(payload)
+
+		url := fmt.Sprintf("%s/api/agent/v1/agents/%s/heartbeat", masterURL, agent.ID)
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+		if err != nil {
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		if apiKey != "" {
+			req.Header.Set("X-API-Key", apiKey)
+		}
+
+		resp, err := client.Do(req)
+		if err == nil {
+			resp.Body.Close()
 		}
 	}
 }
