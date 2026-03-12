@@ -1,0 +1,26 @@
+# Binaries
+*-worker
+*-brain
+worker-bin
+siam-worker
+ottoclaw-brain
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Workspace and Data (SENSITIVE)
+workspace/
+workspace_nova/
+temp_workspace/
+*.log
+*.db
+*.sqlite
+
+# Go
+vendor/
+go.sum
+
+# OS
+.DS_Store
+Thumbs.db
