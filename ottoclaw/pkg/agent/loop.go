@@ -741,13 +741,33 @@ func (al *AgentLoop) processSystemMessage(
 	})
 }
 
+// checkBudget checks if the agent has exceeded its daily token budget.
+func (al *AgentLoop) checkBudget(agent *AgentInstance) error {
+	if agent.MaxDailyTokens > 0 {
+		todayUsed := agent.Ledger.GetTodayUsage()
+		if todayUsed >= agent.MaxDailyTokens {
+			return fmt.Errorf("daily token budget exceeded (%d/%d). Please contact your administrator or FinOps department", todayUsed, agent.MaxDailyTokens)
+		}
+	}
+	return nil
+}
+
 // runAgentLoop is the core message processing logic.
 func (al *AgentLoop) runAgentLoop(
 	ctx context.Context,
 	agent *AgentInstance,
 	opts processOptions,
 ) (string, error) {
-	// 0. Record last channel for heartbeat notifications (skip internal channels)
+	// 0. Check budget
+	if err := al.checkBudget(agent); err != nil {
+		logger.WarnCF("agent", "Budget exceeded", map[string]any{
+			"agent_id": agent.ID,
+			"error":    err.Error(),
+		})
+		return err.Error(), nil
+	}
+
+	// 1. Record last channel for heartbeat notifications (skip internal channels)
 	if opts.Channel != "" && opts.ChatID != "" {
 		// Don't record internal channels (cli, system, subagent)
 		if !constants.IsInternalChannel(opts.Channel) {
@@ -1000,6 +1020,12 @@ func (al *AgentLoop) runLLMIteration(
 		for retry := 0; retry <= maxRetries; retry++ {
 			response, err = callLLM()
 			if err == nil {
+				// Record usage
+				if agent.Ledger != nil && response.Usage != nil {
+					if recErr := agent.Ledger.Record(response.Usage); recErr != nil {
+						logger.WarnCF("agent", "Failed to record usage", map[string]any{"error": recErr.Error()})
+					}
+				}
 				break
 			}
 
@@ -1539,6 +1565,14 @@ func (al *AgentLoop) summarizeBatch(
 	if err != nil {
 		return "", err
 	}
+
+	// Record usage for summarization
+	if agent.Ledger != nil && response.Usage != nil {
+		if recErr := agent.Ledger.Record(response.Usage); recErr != nil {
+			logger.WarnCF("agent", "Failed to record summarization usage", map[string]any{"error": recErr.Error()})
+		}
+	}
+
 	return response.Content, nil
 }
 

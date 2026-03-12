@@ -37,6 +37,8 @@ type AgentInstance struct {
 	Subagents                 *config.SubagentsConfig
 	SkillsFilter              []string
 	Candidates                []providers.FallbackCandidate
+	MaxDailyTokens            int
+	Ledger                    *UsageLedger
 }
 
 // NewAgentInstance creates an agent instance from config.
@@ -192,7 +194,12 @@ func NewAgentInstance(
 
 	candidates := providers.ResolveCandidatesWithLookup(modelCfg, defaults.Provider, resolveFromModelList)
 
-	return &AgentInstance{
+	maxDailyTokens := defaults.MaxDailyTokens
+	if agentCfg != nil && agentCfg.MaxDailyTokens > 0 {
+		maxDailyTokens = agentCfg.MaxDailyTokens
+	}
+
+	instance := &AgentInstance{
 		ID:                        agentID,
 		Name:                      agentName,
 		Model:                     model,
@@ -212,7 +219,14 @@ func NewAgentInstance(
 		Subagents:                 subagents,
 		SkillsFilter:              skillsFilter,
 		Candidates:                candidates,
+		MaxDailyTokens:            maxDailyTokens,
+		Ledger:                    NewUsageLedger(workspace),
 	}
+
+	// Register tokenomics tools
+	instance.Tools.Register(&tools.SiamTokenStatusTool{Provider: instance})
+
+	return instance
 }
 
 // resolveAgentWorkspace determines the workspace directory for an agent.
@@ -269,4 +283,15 @@ func expandHome(path string) string {
 		return home
 	}
 	return path
+}
+
+func (a *AgentInstance) GetTodayUsage() int {
+	if a.Ledger == nil {
+		return 0
+	}
+	return a.Ledger.GetTodayUsage()
+}
+
+func (a *AgentInstance) GetMaxDailyTokens() int {
+	return a.MaxDailyTokens
 }

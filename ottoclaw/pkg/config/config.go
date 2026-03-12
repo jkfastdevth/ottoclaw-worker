@@ -137,6 +137,8 @@ type AgentConfig struct {
 	Model     *AgentModelConfig `json:"model,omitempty"`
 	Skills    []string          `json:"skills,omitempty"`
 	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
+	// Tokenomics
+	MaxDailyTokens int `json:"max_daily_tokens,omitempty" env:"OTTOCLAW_AGENT_{{.ID}}_MAX_DAILY_TOKENS"`
 }
 
 type SubagentsConfig struct {
@@ -183,6 +185,7 @@ type AgentDefaults struct {
 	SummarizeMessageThreshold int      `json:"summarize_message_threshold"     env:"OTTOCLAW_AGENTS_DEFAULTS_SUMMARIZE_MESSAGE_THRESHOLD"`
 	SummarizeTokenPercent     int      `json:"summarize_token_percent"         env:"OTTOCLAW_AGENTS_DEFAULTS_SUMMARIZE_TOKEN_PERCENT"`
 	MaxMediaSize              int      `json:"max_media_size,omitempty"        env:"OTTOCLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
+	MaxDailyTokens            int      `json:"max_daily_tokens,omitempty"     env:"OTTOCLAW_AGENTS_DEFAULTS_MAX_DAILY_TOKENS"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB
@@ -518,7 +521,8 @@ type ModelConfig struct {
 	RPM            int    `json:"rpm,omitempty"`              // Requests per minute limit
 	MaxTokensField string `json:"max_tokens_field,omitempty"` // Field name for max tokens (e.g., "max_completion_tokens")
 	RequestTimeout int    `json:"request_timeout,omitempty"`
-	ThinkingLevel  string `json:"thinking_level,omitempty"` // Extended thinking: off|low|medium|high|xhigh|adaptive
+	ThinkingLevel  string `json:"thinking_level,omitempty"`  // Extended thinking: off|low|medium|high|xhigh|adaptive
+	TokenPricePer1K float64 `json:"token_price_per_1k,omitempty"` // Price per 1,000 tokens for reporting
 }
 
 // Validate checks if the ModelConfig has all required fields.

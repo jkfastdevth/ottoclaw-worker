@@ -7,6 +7,7 @@ import (
 	"github.com/sipeed/ottoclaw/pkg/logger"
 	"github.com/sipeed/ottoclaw/pkg/providers"
 	"github.com/sipeed/ottoclaw/pkg/routing"
+	"github.com/sipeed/ottoclaw/pkg/tools"
 )
 
 // AgentRegistry manages multiple agent instances and routes messages to them.
@@ -49,6 +50,11 @@ func NewAgentRegistry(
 					"model":     instance.Model,
 				})
 		}
+	}
+
+	// Register global FinOps report tool to the main agent
+	if mainAgent, ok := registry.agents["main"]; ok {
+		mainAgent.Tools.Register(&tools.SiamFinOpsReportTool{Registry: registry})
 	}
 
 	return registry
@@ -111,4 +117,20 @@ func (r *AgentRegistry) GetDefaultAgent() *AgentInstance {
 		return agent
 	}
 	return nil
+}
+
+// SummarizeUsage returns usage statistics for all registered agents.
+func (r *AgentRegistry) SummarizeUsage() []tools.AgentUsageStats {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	stats := make([]tools.AgentUsageStats, 0, len(r.agents))
+	for id, agent := range r.agents {
+		stats = append(stats, tools.AgentUsageStats{
+			AgentID:        id,
+			TodayUsage:     agent.GetTodayUsage(),
+			MaxDailyTokens: agent.MaxDailyTokens,
+		})
+	}
+	return stats
 }
