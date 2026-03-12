@@ -56,9 +56,55 @@ func (s *SiamSyncChannel) Stop(ctx context.Context) error {
 }
 
 func (s *SiamSyncChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
-	// Sending back to Siam is currently not implemented via this polling channel
-	// Agents should use the siam_send_message tool to send messages out.
-	// This channel is purely for INBOUND sync.
+	// ── Telegram Bridge Broadcast ───────────────────────────────────
+	// Since SiamSync is inbound-only for the Master API queue, 
+	// we use direct Telegram broadcast for the OUTBOUND response.
+	bridgeChatID := os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
+	if bridgeChatID == "" {
+		bridgeChatID = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID")
+	}
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		botToken = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_TOKEN")
+	}
+	if botToken == "" {
+		botToken = os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN")
+	}
+	orchestrationEnabled := os.Getenv("TELEGRAM_ORCHESTRATION_ENABLED") == "true" ||
+		os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED") == "true"
+
+	if orchestrationEnabled && bridgeChatID != "" && botToken != "" && msg.Content != "" {
+		agentName := os.Getenv("AGENT_NAME")
+		if agentName == "" {
+			agentName = "Worker"
+		}
+		
+		target := msg.ChatID
+		if target == "" || target == "direct" {
+			target = "User"
+		}
+
+		broadcastMsg := fmt.Sprintf("[%s ↳ %s]\n%s", agentName, target, msg.Content)
+
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", botToken)
+		tgPayload := map[string]any{
+			"chat_id": bridgeChatID,
+			"text":    broadcastMsg,
+		}
+		body, _ := json.Marshal(tgPayload)
+		
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			logger.WarnCF("siam_sync", "Failed to broadcast response to Telegram", map[string]any{"error": err.Error()})
+			return nil // Don't fail the whole loop for broadcast failure
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		logger.InfoCF("siam_sync", "Broadcasted response to Telegram", map[string]any{"target": target})
+	}
+
 	return nil
 }
 

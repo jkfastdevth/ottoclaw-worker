@@ -39,6 +39,7 @@ var (
 	reCodeBlock     = regexp.MustCompile("```[\\w]*\\n?([\\s\\S]*?)```")
 	reInlineCode    = regexp.MustCompile("`([^`]+)`")
 	reOrchestration = regexp.MustCompile(`^@?([^\s:,]+)[:,\s]*[:,-]\s*(.*)$`)
+	reBridgeOrchestration = regexp.MustCompile(`^\[(.+?)\s*↳\s*(.+?)\]\s*\n?\s*([\s\S]*)$`)
 )
 
 type TelegramChannel struct {
@@ -597,24 +598,32 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	forceRespond := false
 
 	if tCfg.OrchestrationEnabled {
-		// 🛡️ Guard: skip bracket-notation broadcast messages in bridge chat.
-		// siam_send_message posts "[Sender ↳ Target]\nmessage" format to the group for transparency.
-		// The regex would extract "[Auric" → normalize to "auric" → accidentally match our own name.
-		// These messages are purely informational and must never trigger agent responses.
-		if strings.HasPrefix(content, "[") && chatIDStr == tCfg.BridgeChatID {
-			logger.DebugC("telegram", "Trace: Skipping bridge notification message")
-			return nil
-		}
-
 		matches := reOrchestration.FindStringSubmatch(content)
+		bridgeMatches := reBridgeOrchestration.FindStringSubmatch(content)
+		remoteSender := ""
+		targetAgent := ""
+		actualContent := ""
+
 		if len(matches) == 3 {
-			remoteSender := user.FirstName
+			remoteSender = user.FirstName
 			if remoteSender == "" {
 				remoteSender = user.Username
 			}
-			targetAgent := matches[1]
-			actualContent := matches[2]
+			targetAgent = matches[1]
+			actualContent = matches[2]
+		} else if len(bridgeMatches) == 4 {
+			remoteSender = bridgeMatches[1]
+			targetAgent = bridgeMatches[2]
+			actualContent = bridgeMatches[3]
+		}
 
+		// 🛡️ Guard: skip informational broadcast messages unless addressed to us.
+		if strings.HasPrefix(content, "[") && chatIDStr == tCfg.BridgeChatID && targetAgent == "" {
+			logger.DebugC("telegram", "Trace: Skipping bridge notification message (no target match)")
+			return nil
+		}
+
+		if targetAgent != "" {
 			myAgentName := os.Getenv("AGENT_NAME")
 			if myAgentName == "" {
 				myAgentName = c.config.Agents.Defaults.Model
