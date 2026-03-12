@@ -316,16 +316,33 @@ build_binaries() {
                 [[ -f "${tmp_bin}/ottoclaw-brain" ]] && cp "${tmp_bin}/ottoclaw-brain" /usr/local/bin/ottoclaw-brain
                 [[ -f "${tmp_bin}/siam-worker" ]] && cp "${tmp_bin}/siam-worker" /usr/local/bin/siam-worker
                 chmod +x /usr/local/bin/ottoclaw-brain /usr/local/bin/siam-worker
-                rm -rf "${tmp_bin}"
+                
+                # Update SCRIPT_DIR to point to where workspace/skills are
+                SCRIPT_DIR="${tmp_bin}"
                 use_binary=true
                 info "Installed pre-compiled binaries."
             fi
         else
-            warn "No pre-compiled binary found for ${SUFFIX} at ${VERSION}. Falling back to source build."
+            warn "No pre-compiled binary found for ${SUFFIX} at ${VERSION}."
         fi
     fi
 
     if [[ "$use_binary" == "false" ]]; then
+        # Check if source exists, if not clone it (for one-liner source build)
+        if [[ ! -d "${SCRIPT_DIR}/ottoclaw" ]]; then
+            warn "Source code not found in ${SCRIPT_DIR}. Downloading from GitHub..."
+            local tmp_src=$(mktemp -d)
+            if command -v git >/dev/null 2>&1; then
+                git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}" >/dev/null 2>&1
+            else
+                # Fallback to downloading zip if git is missing
+                curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.zip" -o "${tmp_src}/source.zip"
+                unzip -q "${tmp_src}/source.zip" -d "${tmp_src}"
+                mv "${tmp_src}/ottoclaw-worker-main/"* "${tmp_src}/"
+            fi
+            SCRIPT_DIR="${tmp_src}"
+        fi
+
         # Check for Go
         if ! command -v go >/dev/null 2>&1; then
             warn "Go not found. Installing Go 1.21..."

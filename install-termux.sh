@@ -107,7 +107,7 @@ build_binaries() {
     banner "Installing OttoClaw Binaries"
 
     local use_binary=false
-    if [[ -n "${SUFFIX}" ]]; then
+    if [[ -n "${SUFFIX:-}" ]]; then
         echo -e "  กำลังตรวจสอบ Binary สำหรับ ${SUFFIX}..."
         if curl -fsSL --head "${BINARY_URL}" >/dev/null 2>&1; then
             local tmp_bin=$(mktemp -d)
@@ -117,16 +117,33 @@ build_binaries() {
                 [[ -f "${tmp_bin}/ottoclaw-brain" ]] && cp "${tmp_bin}/ottoclaw-brain" "${BIN_DIR}/ottoclaw-brain"
                 [[ -f "${tmp_bin}/siam-worker" ]] && cp "${tmp_bin}/siam-worker" "${BIN_DIR}/siam-worker"
                 chmod +x "${BIN_DIR}/ottoclaw-brain" "${BIN_DIR}/siam-worker"
-                rm -rf "${tmp_bin}"
+                
+                # Update SCRIPT_DIR to point to where workspace/skills are
+                SCRIPT_DIR="${tmp_bin}"
                 use_binary=true
                 info "ติดตั้งผ่านดาวน์โหลด Binary สำเร็จ"
             fi
         else
-            warn "ไม่พบ Binary สำหรับ ${SUFFIX} ที่เวอร์ชัน ${VERSION}. กำลังเตรียมคอมไพล์จาก Source..."
+            warn "ไม่พบ Binary สำหรับ ${SUFFIX} ที่เวอร์ชัน ${VERSION}."
         fi
     fi
 
     if [[ "$use_binary" == "false" ]]; then
+        # Check if source exists, if not clone it (for one-liner source build)
+        if [[ ! -d "${SCRIPT_DIR}/ottoclaw" ]]; then
+            warn "ไม่พบ Source code ใน ${SCRIPT_DIR}. กำลังดาวน์โหลดจาก GitHub..."
+            local tmp_src=$(mktemp -d)
+            if command -v git >/dev/null 2>&1; then
+                git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}" >/dev/null 2>&1
+            else
+                # Fallback to downloading zip if git is missing
+                curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.zip" -o "${tmp_src}/source.zip"
+                unzip -q "${tmp_src}/source.zip" -d "${tmp_src}"
+                mv "${tmp_src}/ottoclaw-worker-main/"* "${tmp_src}/"
+            fi
+            SCRIPT_DIR="${tmp_src}"
+        fi
+
         # Build Brain (ottoclaw)
         echo "  Building ottoclaw-brain..."
         pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
