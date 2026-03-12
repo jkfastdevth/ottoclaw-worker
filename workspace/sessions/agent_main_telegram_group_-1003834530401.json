@@ -82,9 +82,36 @@
     {
       "role": "assistant",
       "content": "\u003cthink\u003e\nThe message was sent successfully. Let me inform the user.\n\u003c/think\u003e\n\nส่งข้อความทักทายและถามเรื่องระบบ Bridge ไปหา **kaidos** เรียบร้อยแล้วครับ ✅\n\nรอการตอบกลับจาก kaidos อยู่ครับ 🦞"
+    },
+    {
+      "role": "user",
+      "content": "มาทำงานหรือยัง"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "h5bxtnbaj",
+          "type": "function",
+          "function": {
+            "name": "siam_send_message",
+            "arguments": "{\"agent_id\":\"kaidos\",\"from\":\"Auric Spark\",\"message\":\"Hey kaidos! มาทำงานหรือยังครับ?\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "content": "{\"success\":true}",
+      "tool_call_id": "h5bxtnbaj"
+    },
+    {
+      "role": "assistant",
+      "content": "\u003cthink\u003e\nThe message was sent successfully. Let me inform the user.\n\u003c/think\u003e\n\nส่งข้อความไปถาม **kaidos** เรียบร้อยแล้วครับ ✅\n\nรอการตอบกลับจาก kaidos ครับ 🦞"
     }
   ],
   "summary": "\u003cthink\u003e\nLet me check the available agent images to see what models can be used.\n\u003c/think\u003e\n\n\n\u003cminimax:tool_call\u003e\n\u003cinvoke name=\"siam_list_images\"\u003e\n\u003c/invoke\u003e\n\u003c/minimax:tool_call\u003e",
   "created": "2026-03-10T17:16:26.326664732Z",
-  "updated": "2026-03-11T13:51:13.183663216Z"
+  "updated": "2026-03-12T05:12:20.900581007Z"
 }

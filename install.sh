@@ -70,6 +70,17 @@ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# ── Auto-load Credentials from .env ───────────────────────────────
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+    # Try to extract keys if not already set
+    [[ -z "${MASTER_API_KEY:-}" ]] && MASTER_API_KEY=$(grep "^MASTER_API_KEY=" "${REPO_ROOT}/.env" | cut -d'=' -f2- | tr -d '\r')
+    [[ -z "${NODE_SECRET:-}"   ]] && NODE_SECRET=$(grep "^NODE_SECRET=" "${REPO_ROOT}/.env" | cut -d'=' -f2- | tr -d '\r')
+    
+    if [[ -n "${MASTER_API_KEY:-}" || -n "${NODE_SECRET:-}" ]]; then
+        info "Auto-injected security keys from ${REPO_ROOT}/.env"
+    fi
+fi
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SHARED: Config wizard (used by both install and `ottoclaw config`)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -103,8 +114,8 @@ run_config_wizard() {
 
     # ── [1/3] Master Server ───────────────────────────────────────────────────
     echo -e "${BOLD}[1/3] System Configuration${RESET}"
-    AGENT_NAME=$(prompt_val "Agent Name (e.g. Kaidos)" "${AGENT_NAME:-Kaidos}")
-    ORCHESTRATOR_NICKNAMES=$(prompt_val "Agent Aliases (Orchestrator Nicknames, comma-sep)" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
+    AGENT_NAME=$(prompt_val "AGENT_NAME" "${AGENT_NAME:-Kaidos}")
+    ORCHESTRATOR_NICKNAMES=$(prompt_val "ORCHESTRATOR_NICKNAMES" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
     echo ""
     echo -e "  เลือกประเภทการเชื่อมต่อ:"
     echo -e "    ${CYAN}1${RESET}) Local LAN     — เครื่องอยู่วง network เดียวกัน (e.g. 192.168.x.x)"
@@ -144,9 +155,15 @@ run_config_wizard() {
     echo -e "\n  ${YELLOW}Hint:${RESET} ${HOST_HINT}"
     echo -e "  Ports → HTTP API :8080   gRPC :50051\n"
 
-    MASTER_HOST=$(    prompt_val "Master address" "${DEFAULT_HOST}")
-    MASTER_API_KEY=$( prompt_val "Master API Key" "${MASTER_API_KEY:-73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90}" "true")
-    NODE_SECRET=$(    prompt_val "Node Secret"    "${NODE_SECRET:-ea710cf8c0f08298e9aa938dff0e0133}"    "true")
+    MASTER_HOST=$(    prompt_val "MASTER_HOST" "${DEFAULT_HOST}")
+    
+    # Only prompt if not auto-injected from .env
+    if [[ -z "${MASTER_API_KEY:-}" ]]; then
+        MASTER_API_KEY=$( prompt_val "MASTER_API_KEY" "${MASTER_API_KEY:-73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90}" "true")
+    fi
+    if [[ -z "${NODE_SECRET:-}" ]]; then
+        NODE_SECRET=$(    prompt_val "NODE_SECRET"    "${NODE_SECRET:-ea710cf8c0f08298e9aa938dff0e0133}"    "true")
+    fi
 
     # Derive all URLs from a single master host + protocol
     MASTER_URL="${PROTOCOL}://${MASTER_HOST}:8080"

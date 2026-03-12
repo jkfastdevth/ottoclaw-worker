@@ -17,6 +17,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# ── Auto-load Credentials from .env ───────────────────────────────
+if [[ -f "${REPO_ROOT}/.env" ]]; then
+    # Try to extract keys if not already set
+    [[ -z "${MASTER_API_KEY:-}" ]] && MASTER_API_KEY=$(grep "^MASTER_API_KEY=" "${REPO_ROOT}/.env" | cut -d'=' -f2- | tr -d '\r')
+    [[ -z "${NODE_SECRET:-}"   ]] && NODE_SECRET=$(grep "^NODE_SECRET=" "${REPO_ROOT}/.env" | cut -d'=' -f2- | tr -d '\r')
+fi
+
 # ── Detect OS & Architecture ──────────────────────────────────────────────────
 OS_TYPE="$(uname -s)"
 ARCH="$(uname -m)"
@@ -329,10 +336,10 @@ run_config_wizard() {
     fi
 
     # --- Page 1: Agent Identity ---
-    AGENT_NAME=$(gui_input "🦞 OttoClaw Setup [1/3]" "Agent Name (ชื่อ AI ของคุณ):" "${AGENT_NAME}")
+    AGENT_NAME=$(gui_input "🦞 OttoClaw Setup [1/3]" "AGENT_NAME:" "${AGENT_NAME}")
     [[ -z "$AGENT_NAME" ]] && AGENT_NAME="Kaidos"
 
-    ORCHESTRATOR_NICKNAMES=$(gui_input "🦞 OttoClaw Setup [1/3]" "Agent Aliases (ชื่อเล่น, คั่นด้วย ,):" "${ORCHESTRATOR_NICKNAMES:-$AGENT_NAME}")
+    ORCHESTRATOR_NICKNAMES=$(gui_input "🦞 OttoClaw Setup [1/3]" "ORCHESTRATOR_NICKNAMES:" "${ORCHESTRATOR_NICKNAMES:-$AGENT_NAME}")
 
     # --- Page 2: Network ---
     local NET_CHOICE
@@ -354,11 +361,17 @@ run_config_wizard() {
         *) NET_LABEL="Local LAN"; DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}" ;;
     esac
 
-    MASTER_HOST=$(gui_input "🦞 Master Server [2/3]" "Master IP หรือ Domain (${NET_LABEL}):\n\nPorts → HTTP :8080  |  gRPC :50051" "${DEFAULT_HOST}")
-    MASTER_API_KEY=$(gui_password "🦞 Master Server [2/3]" "Master API Key:")
-    [[ -z "$MASTER_API_KEY" ]] && MASTER_API_KEY="73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90"
-    NODE_SECRET=$(gui_password "🦞 Master Server [2/3]" "Node Secret:")
-    [[ -z "$NODE_SECRET" ]] && NODE_SECRET="ea710cf8c0f08298e9aa938dff0e0133"
+    MASTER_HOST=$(gui_input "🦞 Master Server [2/3]" "MASTER_HOST (IP หรือ Domain):\n\nPorts → HTTP :8080  |  gRPC :50051" "${DEFAULT_HOST}")
+    
+    # Only prompt if not auto-injected from .env
+    if [[ -z "${MASTER_API_KEY:-}" ]]; then
+        MASTER_API_KEY=$(gui_password "🦞 Master Server [2/3]" "MASTER_API_KEY:")
+        [[ -z "$MASTER_API_KEY" ]] && MASTER_API_KEY="73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90"
+    fi
+    if [[ -z "${NODE_SECRET:-}" ]]; then
+        NODE_SECRET=$(gui_password "🦞 Master Server [2/3]" "NODE_SECRET:")
+        [[ -z "$NODE_SECRET" ]] && NODE_SECRET="ea710cf8c0f08298e9aa938dff0e0133"
+    fi
 
     MASTER_URL="${PROTOCOL}://${MASTER_HOST}:8080"
     MASTER_GRPC_URL="${MASTER_HOST}:50051"
