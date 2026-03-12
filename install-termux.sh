@@ -15,12 +15,24 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-# ── Detect Termux ─────────────────────────────────────────────────────────────
+# ── Detect Termux & Architecture ──────────────────────────────────────────────
 if [[ -z "${TERMUX_VERSION:-}" ]] && [[ ! -d "/data/data/com.termux" ]]; then
     echo "❌ Script นี้ออกแบบสำหรับ Termux บน Android เท่านั้น"
     echo "   สำหรับ Linux/Mac/Windows ใช้: bash install-gui.sh"
     exit 1
 fi
+
+ARCH=$(uname -m)
+SUFFIX=""
+case "$ARCH" in
+    aarch64) SUFFIX="android-arm64" ;;
+    x86_64)  SUFFIX="linux-amd64" ;; # For emulator testing
+esac
+
+# ── Release Configuration ─────────────────────────────────────────────────────
+VERSION="v1.0.0"
+REPO="jkfastdevth/ottoclaw-worker"
+BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/ottoclaw-worker-${SUFFIX}.tar.gz"
 
 # ── Paths (Termux user space — no root needed) ────────────────────────────────
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
@@ -86,21 +98,43 @@ install_deps() {
 # STEP 2: Build Binaries
 # ══════════════════════════════════════════════════════════════════════════════
 build_binaries() {
-    banner "Building OttoClaw Binaries"
+    banner "Installing OttoClaw Binaries"
 
-    # Build Brain (ottoclaw)
-    echo -e "  Building ${BOLD}ottoclaw-brain${RESET}..."
-    pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
-    popd >/dev/null
-    info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
+    local use_binary=false
+    if [[ -n "${SUFFIX}" ]]; then
+        echo -e "  กำลังตรวจสอบ Binary สำหรับ ${SUFFIX}..."
+        if curl -fsSL --head "${BINARY_URL}" >/dev/null 2>&1; then
+            local tmp_bin=$(mktemp -d)
+            if curl -fsSL "${BINARY_URL}" -o "${tmp_bin}/release.tar.gz"; then
+                echo -e "  กำลังขยายไฟล์..."
+                tar -xzf "${tmp_bin}/release.tar.gz" -C "${tmp_bin}"
+                [[ -f "${tmp_bin}/ottoclaw-brain" ]] && cp "${tmp_bin}/ottoclaw-brain" "${BIN_DIR}/ottoclaw-brain"
+                [[ -f "${tmp_bin}/siam-worker" ]] && cp "${tmp_bin}/siam-worker" "${BIN_DIR}/siam-worker"
+                chmod +x "${BIN_DIR}/ottoclaw-brain" "${BIN_DIR}/siam-worker"
+                rm -rf "${tmp_bin}"
+                use_binary=true
+                info "ติดตั้งผ่านดาวน์โหลด Binary สำเร็จ"
+            fi
+        else
+            warn "ไม่พบ Binary สำหรับ ${SUFFIX} ที่เวอร์ชัน ${VERSION}. กำลังเตรียมคอมไพล์จาก Source..."
+        fi
+    fi
 
-    # Build Arm (siam-worker)
-    echo -e "  Building ${BOLD}siam-worker${RESET}..."
-    pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
-    popd >/dev/null
-    info "siam-worker → ${BIN_DIR}/siam-worker"
+    if [[ "$use_binary" == "false" ]]; then
+        # Build Brain (ottoclaw)
+        echo "  Building ottoclaw-brain..."
+        pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
+        CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
+        popd >/dev/null
+        info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
+
+        # Build Arm (siam-worker)
+        echo "  Building siam-worker..."
+        pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
+        CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
+        popd >/dev/null
+        info "siam-worker → ${BIN_DIR}/siam-worker"
+    fi
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
