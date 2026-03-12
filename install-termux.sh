@@ -74,7 +74,13 @@ ask_yn() {
     [[ "${val,,}" == "y" || "${val,,}" == "yes" ]]
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd 2>/dev/null || echo ".")"
+# Handle curl | bash (unbound BASH_SOURCE) vs direct execution
+SCRIPT_DIR="$(pwd)"
+if [[ -n "${BASH_SOURCE+x}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+elif [[ -n "$0" && -f "$0" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 1: Install Termux Packages
