@@ -6,13 +6,14 @@
 ## 📋 สารบัญ
 1. [ภาพรวม](#ภาพรวม)
 2. [ข้อกำหนดระบบ](#ข้อกำหนดระบบ)
-3. [ติดตั้งบน Android (Termux)](#-ติดตั้งบน-android-termux)
-4. [ติดตั้งบน Linux GUI / macOS / Windows](#-ติดตั้งบน-linux-gui--macos--windows)
-5. [ติดตั้งบน Linux Server (Headless)](#-ติดตั้งบน-linux-server-headless)
-6. [การตั้งค่าหลังติดตั้ง](#การตั้งค่าหลังติดตั้ง)
-7. [คำสั่งการจัดการ](#คำสั่งการจัดการ)
-8. [การอัปเดต](#การอัปเดต)
-9. [การแก้ปัญหา](#การแก้ปัญหา)
+3. [วิธีที่ 1: Web-Based Installer (แนะนำ ✨)](#วิธีที่-1-web-based-installer-แนะนำ-)
+4. [วิธีที่ 2: Linux GUI / macOS / Windows](#วิธีที่-2-linux-gui--macos--windows)
+5. [วิธีที่ 3: Linux Server (Headless/CLI)](#วิธีที่-3-linux-server-headlesscli)
+6. [วิธีที่ 4: Android (Termux)](#วิธีที่-4-android-termux)
+7. [การตั้งค่าหลังติดตั้ง](#การตั้งค่าหลังติดตั้ง)
+8. [คำสั่งการจัดการ](#คำสั่งการจัดการ)
+9. [การอัปเดต](#การอัปเดต)
+10. [การแก้ปัญหา](#การแก้ปัญหา)
 
 ---
 
@@ -54,7 +55,87 @@ OttoClaw Worker ประกอบด้วย 2 ส่วนหลัก:
 
 ---
 
-## 📱 ติดตั้งบน Android (Termux)
+## 🌐 วิธีที่ 1: Web-Based Installer (แนะนำ ✨)
+
+นี่เป็นวิธีที่ง่ายและเป็นมืออาชีพที่สุด โดยจะเปิดหน้าเว็บสวยงามให้คุณตั้งค่าผ่าน Browser พร้อมแสดง Real-time Terminal Log ขณะติดตั้ง
+
+### ขั้นตอนการใช้งาน:
+
+```bash
+# Clone เฉพาะ Folder ติดตั้ง (หรือ Clone ทั้งโปรเจกต์)
+git clone https://github.com/jkfastdevth/Siam-Synapse.git
+cd Siam-Synapse/ottoclaw-worker
+
+# รันตัวติดตั้งเว็บ
+sudo bash install-web.sh
+```
+
+### ฟีเจอร์เด่น:
+- **Bootstrap Mode**: หากคุณมีเพียงชุดไฟล์ติดตั้ง ระบบจะทำการดึง Source Code ที่เหลือจาก GitHub มาให้เองอัตโนมัติ
+- **Premium UI**: หน้าจอตั้งค่าแบบ Glassmorphism ทันสมัย
+- **Auto-Injection**: หากพบไฟล์ `.env` ระบบจะดึง `MASTER_API_KEY` และ `NODE_SECRET` มาเติมให้ทันที
+- **Deployment Console**: เห็นทุกขั้นตอนการ Build และลง Service แบบสดๆ บนหน้าเว็บที่ `http://localhost:3333`
+
+---
+
+## 🖥️ วิธีที่ 2: Linux GUI / macOS / Windows
+
+### ขั้นตอนที่ 1 — Clone โปรเจค
+
+```bash
+git clone https://github.com/jkfastdevth/Siam-Synapse.git
+cd Siam-Synapse/ottoclaw-worker
+```
+
+### ขั้นตอนที่ 2 — รัน GUI Installer
+
+```bash
+# Linux / macOS
+bash install-gui.sh
+
+# Windows (WSL2 หรือ Git Bash)
+bash install-gui.sh
+```
+
+### GUI Dialogs ตาม OS
+
+| OS | GUI Toolkit | ที่ติดตั้ง |
+|-----|------------|-----------|
+| Linux (GNOME) | Zenity | ติดตั้งอัตโนมัติ |
+| Linux (KDE) | kdialog | ใช้ที่มีอยู่แล้ว |
+| macOS | AppleScript | built-in |
+| Windows WSL | PowerShell InputBox | built-in |
+| (ไม่มี GUI) | Terminal prompts | fallback อัตโนมัติ |
+
+> 💡 **Tip:** ถ้าไม่มี GUI toolkit จะ fallback เป็น terminal prompts อัตโนมัติ ใช้งานได้ปกติ
+
+### Services ที่ติดตั้งตาม OS
+
+| OS | Service Manager | Auto-Start |
+|-----|----------------|-----------|
+| Linux | systemd | ✅ Boot |
+| macOS | launchd | ✅ Login |
+| Windows | Task Scheduler | ✅ Login |
+
+---
+
+## 🐧 วิธีที่ 3: Linux Server (Headless/CLI)
+
+สำหรับ Server ที่ไม่มี GUI (VPS, Raspberry Pi):
+
+```bash
+git clone https://github.com/jkfastdevth/Siam-Synapse.git
+cd Siam-Synapse/ottoclaw-worker
+sudo bash install.sh
+```
+
+Installer จะใช้ **terminal prompts** และติดตั้งเป็น **systemd service** อัตโนมัติ
+
+> 💡 **Tip:** หน้าจอ CLI จะใช้ชื่อตัวแปรเทคนิค (e.g., `MASTER_API_KEY`) เพื่อให้ตรงกับมาตรฐานสากล
+
+---
+
+## 📱 วิธีที่ 4: Android (Termux)
 
 ### ขั้นตอนที่ 1 — ติดตั้ง Termux
 
@@ -102,61 +183,6 @@ Installer จะดำเนินการ:
   ? Master address [192.168.1.100]: 192.168.1.166
   ? Master API Key [***]: (กด Enter เพื่อใช้ default)
 ```
-
----
-
-## 🖥️ ติดตั้งบน Linux GUI / macOS / Windows
-
-### ขั้นตอนที่ 1 — Clone โปรเจค
-
-```bash
-git clone https://github.com/jkfastdevth/Siam-Synapse.git
-cd Siam-Synapse/ottoclaw-worker
-```
-
-### ขั้นตอนที่ 2 — รัน GUI Installer
-
-```bash
-# Linux / macOS
-bash install-gui.sh
-
-# Windows (WSL2 หรือ Git Bash)
-bash install-gui.sh
-```
-
-### GUI Dialogs ตาม OS
-
-| OS | GUI Toolkit | ที่ติดตั้ง |
-|-----|------------|-----------|
-| Linux (GNOME) | Zenity | ติดตั้งอัตโนมัติ |
-| Linux (KDE) | kdialog | ใช้ที่มีอยู่แล้ว |
-| macOS | AppleScript | built-in |
-| Windows WSL | PowerShell InputBox | built-in |
-| (ไม่มี GUI) | Terminal prompts | fallback อัตโนมัติ |
-
-> 💡 **Tip:** ถ้าไม่มี GUI toolkit จะ fallback เป็น terminal prompts อัตโนมัติ ใช้งานได้ปกติ
-
-### Services ที่ติดตั้งตาม OS
-
-| OS | Service Manager | Auto-Start |
-|-----|----------------|-----------|
-| Linux | systemd | ✅ Boot |
-| macOS | launchd | ✅ Login |
-| Windows | Task Scheduler | ✅ Login |
-
----
-
-## 🐧 ติดตั้งบน Linux Server (Headless)
-
-สำหรับ Server ที่ไม่มี GUI (VPS, Raspberry Pi):
-
-```bash
-git clone https://github.com/jkfastdevth/Siam-Synapse.git
-cd Siam-Synapse/ottoclaw-worker
-sudo bash install.sh
-```
-
-Installer จะใช้ **terminal prompts** และติดตั้งเป็น **systemd service** อัตโนมัติ
 
 ---
 
