@@ -15,7 +15,7 @@ mkdir -p "${RELEASE_DIR}"
 PLATFORMS=(
     "linux/amd64//linux-amd64"
     "linux/arm64//linux-arm64"
-    "android/arm64//android-arm64" # For Termux (usually uses linux binaries but specialized builds can help)
+    "linux/arm64//android-arm64" # For Termux (using linux/arm64 is safer)
 )
 
 build_platform() {
