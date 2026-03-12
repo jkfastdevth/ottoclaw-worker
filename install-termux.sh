@@ -97,7 +97,7 @@ build_binaries() {
 
     # Build Arm (siam-worker)
     echo -e "  Building ${BOLD}siam-worker${RESET}..."
-    pushd "${SCRIPT_DIR}/../worker" >/dev/null
+    pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
     CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
     popd >/dev/null
     info "siam-worker → ${BIN_DIR}/siam-worker"

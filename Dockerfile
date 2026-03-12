@@ -18,12 +18,12 @@ RUN go mod download && \
 # ─────────────────────────────────────────────────────────────────────────────
 FROM golang:1.24-alpine AS siam-builder
 WORKDIR /app/worker
-# worker/ has its own go.mod; keep relative replace ../proto working
-COPY worker/go.mod worker/go.sum ./
-COPY proto/ ../proto/
-RUN rm -f ../proto/control*
+# Build using the local standalone siam-arm directory
+COPY ottoclaw-worker/siam-arm/go.mod ottoclaw-worker/siam-arm/go.sum ./
+COPY ottoclaw-worker/siam-arm/proto/ ./proto/
+RUN rm -f ./proto/control*
 
-COPY worker/main.go ./
+COPY ottoclaw-worker/siam-arm/main.go ./
 RUN go mod download && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/siam-worker .
 

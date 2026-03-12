@@ -312,7 +312,7 @@ build_binaries() {
     info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
 
     echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
-    pushd "${REPO_ROOT}/worker" >/dev/null
+    pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
     popd >/dev/null
     info "siam-worker → /usr/local/bin/siam-worker"
@@ -417,7 +417,7 @@ SOULEOF
     popd >/dev/null
     echo "   ✓ ottoclaw-brain rebuilt"
     echo "🔨 Rebuilding siam-worker..."
-    pushd "$REPO_DIR/worker" >/dev/null
+    pushd "$(dirname "$INSTALL_SH")/siam-arm" >/dev/null
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
     popd >/dev/null
     echo "   ✓ siam-worker rebuilt"
