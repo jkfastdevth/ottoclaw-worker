@@ -246,7 +246,6 @@ run_config_wizard() {
             DEFAULT_HOST="${MASTER_HOST:-1.2.3.4}"
             if ask_yn "Use HTTPS?" "n"; then PROTOCOL="https"; fi
             ;;
-            ;;
         *) 
             NET_LABEL="Local LAN"
             LAN_IP=$(get_local_ip)
