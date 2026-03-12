@@ -30,9 +30,9 @@ case "$ARCH" in
 esac
 
 # ── Release Configuration ─────────────────────────────────────────────────────
-VERSION="v1.0.0"
+VERSION="latest"
 REPO="jkfastdevth/ottoclaw-worker"
-BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/ottoclaw-worker-${SUFFIX}.tar.gz"
+BINARY_URL="https://github.com/${REPO}/releases/latest/download/ottoclaw-worker-${SUFFIX}.tar.gz"
 
 # ── Paths (Termux user space — no root needed) ────────────────────────────────
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"

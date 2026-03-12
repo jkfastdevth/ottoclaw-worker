@@ -68,9 +68,9 @@ esac
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 # ── Release Configuration ─────────────────────────────────────────────────────
-VERSION="v1.0.0" # Default version
+VERSION="latest"
 REPO="jkfastdevth/ottoclaw-worker"
-BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/ottoclaw-worker-${SUFFIX}.tar.gz"
+BINARY_URL="https://github.com/${REPO}/releases/latest/download/ottoclaw-worker-${SUFFIX}.tar.gz"
 
 # ── Locate Source ─────────────────────────────────────────────────────────────
 # Handle curl | bash (unbound BASH_SOURCE) vs direct execution
