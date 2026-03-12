@@ -186,10 +186,8 @@ async function fetchProjectId(accessToken: string): Promise<string> {
 ```typescript
 const decode = (s: string) => Buffer.from(s, "base64").toString();
 
-const CLIENT_ID = decode(
-  "MTA3MTAwNjA2MDU5MS10bWhzc2luMmgyMWxjcmUyMzV2dG9sb2poNGc0MDNlcC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbQ=="
-);
-const CLIENT_SECRET = decode("R09DU1BYLUs1OEZXUjQ4NkxkTEoxbUxCOHNYQzR6NnFEQWY=");
+const CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"; // Set via GOOGLE_ANTIGRAVITY_CLIENT_ID
+const CLIENT_SECRET = "YOUR_GOOGLE_CLIENT_SECRET"; // Set via GOOGLE_ANTIGRAVITY_CLIENT_SECRET
 ```
 
 ### OAuth Flow Modes
