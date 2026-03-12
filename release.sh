@@ -34,22 +34,4 @@ git commit -m "$msg"
 git push origin main
 echo -e "  ${GREEN}✓${RESET} Pushed to GitHub main."
 
-# 5. Tagging
-echo -ne "\n${BOLD}ต้องการสร้าง Tag Release หรือไม่?${RESET} [y/N]: "
-read -r want_tag
-
-if [[ "${want_tag,,}" == "y" ]]; then
-    echo -ne "ระบุหมายเลขเวอร์ชัน (เช่น v1.0.0): "
-    read -r tag_name
-    
-    if [[ -n "$tag_name" ]]; then
-        echo -e "🏷️  Tagging ${tag_name}..."
-        git tag "$tag_name"
-        git push origin "$tag_name"
-        echo -e "  ${GREEN}✓${RESET} Tag ${tag_name} pushed. GitHub Action will now build binaries."
-    else
-        echo "❌ ข้ามการสร้าง Tag เนื่องจากไม่ได้ระบุชื่อ"
-    fi
-fi
-
 echo -e "\n${GREEN}${BOLD}✅ เสร็จสมบูรณ์!${RESET} โค้ดของคุณออนไลน์แล้วครับ 🐯🚀🛸"
