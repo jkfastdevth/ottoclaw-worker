@@ -37,7 +37,7 @@ prompt_val() {
         display_default=$(echo -n "$default" | sed 's/./*/g')
     fi
     
-    if [[ "$secret" == "true" ]]; then
+    if [[ "$secret" == "true" && "${HIDE_SECRETS:-true}" == "true" ]]; then
         # Redirect prompt to stderr so it's not captured by $(prompt_val ...)
         echo -ne "  ${CYAN}?${RESET}  ${label} [${display_default}]: " >&2
         read -s value < /dev/tty; echo "" >&2
@@ -138,6 +138,16 @@ run_config_wizard() {
         TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
         GOOGLE_EMAIL="${GOOGLE_EMAIL:-}"
         GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD:-}"
+
+        echo -e "  🛡️  Input Security:"
+        HIDE_SECRETS=$(prompt_val "Hide secret keys during input? [Y/n]" "y")
+        if [[ "${HIDE_SECRETS,,}" == "n" || "${HIDE_SECRETS,,}" == "no" ]]; then
+            HIDE_SECRETS="false"
+            info "Keys will be visible as you type/paste them for verification."
+        else
+            HIDE_SECRETS="true"
+        fi
+        echo ""
     fi
 
     # Extract MASTER_HOST from existing MASTER_URL if reconfiguring

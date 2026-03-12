@@ -27,11 +27,12 @@ echo -ne "\n${BOLD}Commit message${RESET} (Enter for 'update: release'): "
 read -r msg
 msg="${msg:-update: release}"
 
-# 4. Push to Main
-echo -e "\n🚀 Pushing to main..."
+# 4. Push to Remote
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo -e "\n🚀 Pushing to ${CURRENT_BRANCH}..."
 git add .
 git commit -m "$msg"
-git push origin main
-echo -e "  ${GREEN}✓${RESET} Pushed to GitHub main."
+git push origin "$CURRENT_BRANCH"
+echo -e "  ${GREEN}✓${RESET} Pushed to GitHub ${CURRENT_BRANCH}."
 
 echo -e "\n${GREEN}${BOLD}✅ เสร็จสมบูรณ์!${RESET} โค้ดของคุณออนไลน์แล้วครับ 🐯🚀🛸"

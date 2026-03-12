@@ -58,7 +58,8 @@ ask() {
     local label="$1" default="$2" secret="${3:-false}" val=""
     local disp="$default"
     [[ "$secret" == "true" && -n "$default" ]] && disp=$(echo -n "$default" | sed 's/./*/g')
-    if [[ "$secret" == "true" ]]; then
+    
+    if [[ "$secret" == "true" && "${HIDE_SECRETS:-true}" == "true" ]]; then
         echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -s val < /dev/tty; echo "" >&2
     else
         echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -r val < /dev/tty
@@ -207,6 +208,15 @@ run_config_wizard() {
         NODE_SECRET="${NODE_SECRET:-}"
         WORKER_TELEGRAM_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
         TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
+        
+        echo -e "  🛡️  ความปลอดภัยการป้อนข้อมูล:"
+        if ask_yn "ต้องการซ่อนคีย์ระว่างพิมพ์ (Hide secrets)? " "y"; then
+            HIDE_SECRETS="true"
+        else
+            HIDE_SECRETS="false"
+            info "ระบบจะแสดงค่าที่คุณพิมพ์/วาง เพื่อให้คุณตรวจสอบความถูกต้องได้"
+        fi
+        echo ""
     fi
 
     # Derive MASTER_HOST from existing MASTER_URL
@@ -446,16 +456,20 @@ case "${1:-}" in
 
   stop)
     echo "🛑 Stopping OttoClaw services..."
+    # 1. Try stopping via PID files
     for pidfile in "${LOG_DIR}/ottoclaw-brain.pid" "${LOG_DIR}/siam-worker.pid"; do
         if [[ -f "$pidfile" ]]; then
             pid=$(cat "$pidfile")
             if kill -0 "$pid" 2>/dev/null; then
-                kill "$pid" && echo "   Stopped PID $pid"
+                kill "$pid" && echo "   Stopped PID $pid (via pidfile)"
             fi
             rm -f "$pidfile"
         fi
     done
-    echo "✅ Stopped."
+    # 2. Force kill any remaining processes (to avoid port/telegram conflict)
+    pkill -f "ottoclaw-brain" 2>/dev/null || true
+    pkill -f "siam-worker" 2>/dev/null || true
+    echo "✅ All processes stopped."
     ;;
 
   restart)
@@ -611,6 +625,8 @@ install_wrapper
 
 # 7. Start
 banner "Starting Services"
+# Force stop any old instances before starting (prevents Telegram conflict)
+"${BIN_DIR}/ottoclaw" stop 2>/dev/null || true
 if ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
     "${BIN_DIR}/ottoclaw" start
 fi
