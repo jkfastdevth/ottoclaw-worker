@@ -176,6 +176,8 @@ build_binaries() {
         local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
         mkdir -p "${ONBOARD_DIR}"
         rm -rf "${ONBOARD_DIR}/workspace"
+        # Create empty workspace if missing to avoid build failure
+        mkdir -p "${SCRIPT_DIR}/workspace"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
         CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
         popd >/dev/null
@@ -627,8 +629,18 @@ run_config_wizard "false"
 
 # 4. Setup dirs
 banner "Setting Up"
-mkdir -p "${OTTOCLAW_HOME}" "${OTTOCLAW_WORKSPACE}/v2" "${LOG_DIR}"
-[[ -d "${SCRIPT_DIR}/workspace" ]] && cp -rf "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
+mkdir -p "${BIN_DIR}" "${LOG_DIR}" "${WORKSPACE_DIR}/v2"
+
+# Create empty local dirs if missing to avoid copy errors
+mkdir -p "${SCRIPT_DIR}/workspace" "${SCRIPT_DIR}/skills"
+
+[[ -d "${SCRIPT_DIR}/workspace" ]] && \
+    cp -rf "${SCRIPT_DIR}/workspace/." "${WORKSPACE_DIR}/" 2>/dev/null || true
+
+if [[ -d "${SCRIPT_DIR}/skills" ]]; then
+    mkdir -p "${WORKSPACE_DIR}/skills"
+    cp -rf "${SCRIPT_DIR}/skills/." "${WORKSPACE_DIR}/skills/" 2>/dev/null || true
+fi
 
 # 5. Write config files
 write_env_file

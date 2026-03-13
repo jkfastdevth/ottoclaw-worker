@@ -406,6 +406,8 @@ build_binaries() {
         local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
         mkdir -p "${ONBOARD_DIR}"
         rm -rf "${ONBOARD_DIR}/workspace"
+        # Create empty workspace if missing to avoid build failure
+        mkdir -p "${SCRIPT_DIR}/workspace"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
         CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
         popd >/dev/null
@@ -732,6 +734,9 @@ SERVICE_USER="root"
 [[ -n "${RUN_AS_USER:-}" ]] && SERVICE_USER="${RUN_AS_USER}"
 
 mkdir -p "${OTTOCLAW_HOME}" "${OTTOCLAW_WORKSPACE}/v2" /etc/ottoclaw
+
+# Create empty local dirs if missing to avoid copy errors
+mkdir -p "${SCRIPT_DIR}/workspace" "${SCRIPT_DIR}/skills"
 
 [[ -d "${SCRIPT_DIR}/workspace" ]] && \
     cp -rf "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true

@@ -298,6 +298,12 @@ build_binaries() {
 
     gui_progress "Building" "กำลัง build ottoclaw-brain..." bash -c "
         cd '${SCRIPT_DIR}/ottoclaw'
+        # Ensure workspace is available for embedding
+        local ONBOARD_DIR='cmd/ottoclaw/internal/onboard'
+        mkdir -p \"\${ONBOARD_DIR}\"
+        rm -rf \"\${ONBOARD_DIR}/workspace\"
+        mkdir -p \"\${SCRIPT_DIR}/workspace\"
+        cp -rf \"\${SCRIPT_DIR}/workspace\" \"\${ONBOARD_DIR}/workspace\"
         CGO_ENABLED=0 go build -buildvcs=false -ldflags='-s -w' -o '${INSTALL_BIN}/${BRAIN_NAME}' ./cmd/ottoclaw
     "
     info "ottoclaw-brain → ${INSTALL_BIN}/${BRAIN_NAME}"
@@ -749,6 +755,12 @@ do_update() {
     # 3. Rebuild
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
+    # Ensure workspace is available for embedding
+    local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
+    mkdir -p "${ONBOARD_DIR}"
+    rm -rf "${ONBOARD_DIR}/workspace"
+    mkdir -p "${SCRIPT_DIR}/workspace"
+    cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
     CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
     popd >/dev/null
     info "ottoclaw-brain rebuilt"
