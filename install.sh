@@ -405,6 +405,12 @@ build_binaries() {
         # Ensure workspace is available for embedding
         local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
         mkdir -p "${ONBOARD_DIR}"
+<<<<<<< HEAD
+=======
+        rm -rf "${ONBOARD_DIR}/workspace"
+        # Create empty workspace if missing to avoid build failure
+        mkdir -p "${SCRIPT_DIR}/workspace"
+>>>>>>> 1e1eb641eb2a848a112b39b7c5194286b5aef1a2
         touch "${SCRIPT_DIR}/workspace/placeholder.txt"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
         CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
@@ -429,14 +435,6 @@ install_wrapper() {
 # OttoClaw CLI Wrapper — Intercepts management commands
 BRAIN="/usr/local/bin/ottoclaw-brain"
 INSTALL_SH="$(find /opt/siam-synapse /home -name install.sh -path "*/ottoclaw-worker/*" 2>/dev/null | head -1)"
-
-# ── Colors & Helpers ──────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
-
-info()   { echo -e "  ${GREEN}✓${RESET}  $1"; }
-warn()   { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
-error()  { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
 
 case "${1:-}" in
   config)
@@ -740,6 +738,10 @@ SERVICE_USER="root"
 [[ -n "${RUN_AS_USER:-}" ]] && SERVICE_USER="${RUN_AS_USER}"
 
 mkdir -p "${OTTOCLAW_HOME}" "${OTTOCLAW_WORKSPACE}/v2" /etc/ottoclaw
+
+# Create empty local dirs if missing to avoid copy errors
+mkdir -p "${SCRIPT_DIR}/workspace" "${SCRIPT_DIR}/skills"
+touch "${SCRIPT_DIR}/workspace/placeholder.txt"
 
 [[ -d "${SCRIPT_DIR}/workspace" ]] && \
     cp -rf "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
