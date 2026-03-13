@@ -302,7 +302,9 @@ build_binaries() {
         local ONBOARD_DIR='cmd/ottoclaw/internal/onboard'
         mkdir -p \"\${ONBOARD_DIR}\"
         rm -rf \"\${ONBOARD_DIR}/workspace\"
+        mkdir -p \"\${ONBOARD_DIR}/workspace\"
         mkdir -p \"\${SCRIPT_DIR}/workspace\"
+        touch \"\${SCRIPT_DIR}/workspace/placeholder.txt\"
         cp -rf \"\${SCRIPT_DIR}/workspace\" \"\${ONBOARD_DIR}/workspace\"
         CGO_ENABLED=0 go build -buildvcs=false -ldflags='-s -w' -o '${INSTALL_BIN}/${BRAIN_NAME}' ./cmd/ottoclaw
     "
@@ -760,6 +762,7 @@ do_update() {
     mkdir -p "${ONBOARD_DIR}"
     rm -rf "${ONBOARD_DIR}/workspace"
     mkdir -p "${SCRIPT_DIR}/workspace"
+    touch "${SCRIPT_DIR}/workspace/placeholder.txt"
     cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
     CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
     popd >/dev/null

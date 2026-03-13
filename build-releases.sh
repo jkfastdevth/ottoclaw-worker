@@ -39,6 +39,7 @@ build_platform() {
     rm -rf "${ONBOARD_DIR}/workspace"
     # Ensure local workspace exists before copying
     mkdir -p "${SCRIPT_DIR}/workspace"
+    touch "${SCRIPT_DIR}/workspace/placeholder.txt"
     cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
     
     GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
