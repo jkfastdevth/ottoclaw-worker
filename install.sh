@@ -407,13 +407,13 @@ build_binaries() {
         mkdir -p "${ONBOARD_DIR}"
         rm -rf "${ONBOARD_DIR}/workspace"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
-        CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
         popd >/dev/null
         info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
 
         echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
         pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-        CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
         popd >/dev/null
         info "siam-worker → /usr/local/bin/siam-worker"
     fi
@@ -429,6 +429,14 @@ install_wrapper() {
 # OttoClaw CLI Wrapper — Intercepts management commands
 BRAIN="/usr/local/bin/ottoclaw-brain"
 INSTALL_SH="$(find /opt/siam-synapse /home -name install.sh -path "*/ottoclaw-worker/*" 2>/dev/null | head -1)"
+
+# ── Colors & Helpers ──────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+
+info()   { echo -e "  ${GREEN}✓${RESET}  $1"; }
+warn()   { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
+error()  { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
 
 case "${1:-}" in
   config)
@@ -520,12 +528,12 @@ SOULEOF
     systemctl stop ottoclaw-worker siam-worker 2>/dev/null || true
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "$(dirname "$INSTALL_SH")/ottoclaw" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
     popd >/dev/null
     echo "   ✓ ottoclaw-brain rebuilt"
     echo "🔨 Rebuilding siam-worker..."
     pushd "$(dirname "$INSTALL_SH")/siam-arm" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
     popd >/dev/null
     echo "   ✓ siam-worker rebuilt"
     echo "🚀 Restarting services..."
