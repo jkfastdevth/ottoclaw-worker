@@ -37,16 +37,12 @@ build_platform() {
     local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
     mkdir -p "${ONBOARD_DIR}"
     rm -rf "${ONBOARD_DIR}/workspace"
-<<<<<<< HEAD
-    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
-=======
     # Ensure local workspace exists before copying
     mkdir -p "${SCRIPT_DIR}/workspace"
     touch "${SCRIPT_DIR}/workspace/placeholder.txt"
     cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
     
-    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
->>>>>>> 1e1eb641eb2a848a112b39b7c5194286b5aef1a2
+    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
     popd >/dev/null
 
     # 2. Build Arm (siam-worker)

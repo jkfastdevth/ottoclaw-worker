@@ -761,9 +761,6 @@ do_update() {
     # 3. Rebuild
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-<<<<<<< HEAD
-    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
-=======
     # Ensure workspace is available for embedding
     local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
     mkdir -p "${ONBOARD_DIR}"
@@ -771,8 +768,7 @@ do_update() {
     mkdir -p "${SCRIPT_DIR}/workspace"
     touch "${SCRIPT_DIR}/workspace/placeholder.txt"
     cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
-    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
->>>>>>> 1e1eb641eb2a848a112b39b7c5194286b5aef1a2
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
     popd >/dev/null
     info "ottoclaw-brain rebuilt"
 

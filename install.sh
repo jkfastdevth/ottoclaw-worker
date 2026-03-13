@@ -405,12 +405,9 @@ build_binaries() {
         # Ensure workspace is available for embedding
         local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
         mkdir -p "${ONBOARD_DIR}"
-<<<<<<< HEAD
-=======
         rm -rf "${ONBOARD_DIR}/workspace"
         # Create empty workspace if missing to avoid build failure
         mkdir -p "${SCRIPT_DIR}/workspace"
->>>>>>> 1e1eb641eb2a848a112b39b7c5194286b5aef1a2
         touch "${SCRIPT_DIR}/workspace/placeholder.txt"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
         CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
