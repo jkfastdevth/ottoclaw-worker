@@ -405,15 +405,15 @@ build_binaries() {
         # Ensure workspace is available for embedding
         local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
         mkdir -p "${ONBOARD_DIR}"
-        rm -rf "${ONBOARD_DIR}/workspace"
+        touch "${SCRIPT_DIR}/workspace/placeholder.txt"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
-        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+        CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
         popd >/dev/null
         info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
 
         echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
         pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+        CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
         popd >/dev/null
         info "siam-worker → /usr/local/bin/siam-worker"
     fi
@@ -528,12 +528,12 @@ SOULEOF
     systemctl stop ottoclaw-worker siam-worker 2>/dev/null || true
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "$(dirname "$INSTALL_SH")/ottoclaw" >/dev/null
-    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
     popd >/dev/null
     echo "   ✓ ottoclaw-brain rebuilt"
     echo "🔨 Rebuilding siam-worker..."
     pushd "$(dirname "$INSTALL_SH")/siam-arm" >/dev/null
-    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
     popd >/dev/null
     echo "   ✓ siam-worker rebuilt"
     echo "🚀 Restarting services..."

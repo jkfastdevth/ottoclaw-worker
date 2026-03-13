@@ -37,13 +37,13 @@ build_platform() {
     local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
     mkdir -p "${ONBOARD_DIR}"
     rm -rf "${ONBOARD_DIR}/workspace"
-    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
+    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/ottoclaw-brain${ext}" ./cmd/ottoclaw
     popd >/dev/null
 
     # 2. Build Arm (siam-worker)
     echo "  [2/2] Building siam-worker..."
     pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/siam-worker${ext}" .
+    GOOS=${os} GOARCH=${arch} CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${temp_build_dir}/siam-worker${ext}" .
     popd >/dev/null
 
     # 3. Copy support files
