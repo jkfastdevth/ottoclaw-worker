@@ -177,14 +177,14 @@ build_binaries() {
         mkdir -p "${ONBOARD_DIR}"
         rm -rf "${ONBOARD_DIR}/workspace"
         cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
-        CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
+        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
         popd >/dev/null
         info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
 
         # Build Arm (siam-worker)
         echo "  Building siam-worker..."
         pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-        CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
+        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
         popd >/dev/null
         info "siam-worker → ${BIN_DIR}/siam-worker"
     fi
@@ -433,6 +433,14 @@ WORKER="${PREFIX:-/data/data/com.termux/files/usr}/bin/siam-worker"
 LOG_DIR="${HOME:-/data/data/com.termux/files/home}/.ottoclaw/logs"
 mkdir -p "$LOG_DIR"
 
+# ── Colors & Helpers ──────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+
+info()   { echo -e "  ${GREEN}✓${RESET}  $1"; }
+warn()   { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
+error()  { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
+
 _load_env() { set -o allexport; source "$ENV_FILE" 2>/dev/null || true; set +o allexport; }
 
 case "${1:-}" in
@@ -536,10 +544,10 @@ case "${1:-}" in
     BRAIN_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/ottoclaw-brain"
     WORKER_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/siam-worker"
     pushd "${REPO_DIR}/ottoclaw" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BRAIN_BIN" ./cmd/ottoclaw && echo "  ✓ ottoclaw-brain rebuilt"
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "$BRAIN_BIN" ./cmd/ottoclaw && echo "  ✓ ottoclaw-brain rebuilt"
     popd >/dev/null
     pushd "${REPO_DIR}/siam-arm" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o "$WORKER_BIN" . && echo "  ✓ siam-worker rebuilt"
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "$WORKER_BIN" . && echo "  ✓ siam-worker rebuilt"
     popd >/dev/null
     echo "🚀 Restarting services..."
     "$0" start

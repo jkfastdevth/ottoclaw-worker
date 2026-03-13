@@ -298,13 +298,13 @@ build_binaries() {
 
     gui_progress "Building" "กำลัง build ottoclaw-brain..." bash -c "
         cd '${SCRIPT_DIR}/ottoclaw'
-        CGO_ENABLED=0 go build -ldflags='-s -w' -o '${INSTALL_BIN}/${BRAIN_NAME}' ./cmd/ottoclaw
+        CGO_ENABLED=0 go build -buildvcs=false -ldflags='-s -w' -o '${INSTALL_BIN}/${BRAIN_NAME}' ./cmd/ottoclaw
     "
     info "ottoclaw-brain → ${INSTALL_BIN}/${BRAIN_NAME}"
 
     gui_progress "Building" "กำลัง build siam-worker..." bash -c "
         cd '${REPO_ROOT}/siam-arm'
-        CGO_ENABLED=0 go build -ldflags='-s -w' -o '${INSTALL_BIN}/${WORKER_NAME}' .
+        CGO_ENABLED=0 go build -buildvcs=false -ldflags='-s -w' -o '${INSTALL_BIN}/${WORKER_NAME}' .
     "
     info "siam-worker → ${INSTALL_BIN}/${WORKER_NAME}"
 }
@@ -749,13 +749,13 @@ do_update() {
     # 3. Rebuild
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${BRAIN_NAME}" ./cmd/ottoclaw
     popd >/dev/null
     info "ottoclaw-brain rebuilt"
 
     echo "🔨 Rebuilding siam-worker..."
     pushd "${REPO_ROOT}/siam-arm" >/dev/null
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o "${INSTALL_BIN}/${WORKER_NAME}" .
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${INSTALL_BIN}/${WORKER_NAME}" .
     popd >/dev/null
     info "siam-worker rebuilt"
 
