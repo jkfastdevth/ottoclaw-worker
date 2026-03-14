@@ -1,0 +1,44 @@
+services:
+  # ─────────────────────────────────────────────
+  # OttoClaw Agent (one-shot query) - Full MCP Support
+  #   docker compose -f docker/docker-compose.full.yml run --rm ottoclaw-agent -m "Hello"
+  # ─────────────────────────────────────────────
+  ottoclaw-agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.full
+    container_name: ottoclaw-agent-full
+    profiles:
+      - agent
+    volumes:
+      - ../config/config.json:/root/.ottoclaw/config.json:ro
+      - ottoclaw-workspace:/root/.ottoclaw/workspace
+      - ottoclaw-npm-cache:/root/.npm # npm cache for faster MCP server installs
+    entrypoint: ["ottoclaw", "agent"]
+    stdin_open: true
+    tty: true
+
+  # ─────────────────────────────────────────────
+  # OttoClaw Gateway (Long-running Bot) - Full MCP Support
+  #   docker compose -f docker/docker-compose.full.yml --profile gateway up
+  # ─────────────────────────────────────────────
+  ottoclaw-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.full
+    container_name: ottoclaw-gateway-full
+    restart: unless-stopped
+    profiles:
+      - gateway
+    volumes:
+      # Configuration file
+      - ../config/config.json:/root/.ottoclaw/config.json:ro
+      # Persistent workspace (sessions, memory, logs)
+      - ottoclaw-workspace:/root/.ottoclaw/workspace
+      # NPM cache for faster MCP server installs
+      - ottoclaw-npm-cache:/root/.npm
+    command: ["gateway"]
+
+volumes:
+  ottoclaw-workspace:
+  ottoclaw-npm-cache: # Cache npm packages to speed up MCP server installations

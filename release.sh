@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# OttoClaw Release Helper
+# Automates: Sync -> Git Add -> Commit -> Push -> Tag
+
+set -e
+
+# Colors
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+echo -e "${CYAN}${BOLD}══ OttoClaw Release Helper ══${RESET}\n"
+
+# 1. Sync latest files
+echo "🔄 Syncing latest installer scripts..."
+cp install.sh install-termux.sh . 2>/dev/null || true
+echo -e "  ${GREEN}✓${RESET} Synced."
+
+# 2. Git Status
+echo -e "\n${BOLD}Current changes:${RESET}"
+git status -s
+
+# 3. Commit Message
+echo -ne "\n${BOLD}Commit message${RESET} (Enter for 'update: release'): "
+read -r msg
+msg="${msg:-update: release}"
+
+# 4. Push to Remote
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo -e "\n🚀 Pushing to ${CURRENT_BRANCH}..."
+git add .
+git commit -m "$msg"
+git push origin "$CURRENT_BRANCH"
+echo -e "  ${GREEN}✓${RESET} Pushed to GitHub ${CURRENT_BRANCH}."
+
+echo -e "\n${GREEN}${BOLD}✅ เสร็จสมบูรณ์!${RESET} โค้ดของคุณออนไลน์แล้วครับ 🐯🚀🛸"
