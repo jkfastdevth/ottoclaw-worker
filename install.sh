@@ -71,9 +71,22 @@ get_local_ip() {
     echo -n "$local_ip"
 }
 
+# ── Detect Termux ─────────────────────────────────────────────────────────────
+if [[ -d "/data/data/com.termux" ]] || [[ -n "${TERMUX_VERSION:-}" ]]; then
+    banner "Termux Detected"
+    echo "This script (install.sh) is for standard Linux with root access."
+    echo "Redirecting to specialized Termux installer..."
+    echo ""
+    if [[ -f "${SCRIPT_DIR}/install-termux.sh" ]]; then
+        exec bash "${SCRIPT_DIR}/install-termux.sh" "$@"
+    else
+        error "install-termux.sh not found. Please use the Termux-specific installer."
+    fi
+fi
+
 # ── Root Check ────────────────────────────────────────────────────────────────
 if [[ "$EUID" -ne 0 ]]; then
-    error "Please run as root: sudo bash install.sh"
+    error "Please run as root (or you might be on Termux, use install-termux.sh)"
 fi
 
 # ── Detect Architecture ───────────────────────────────────────────────────────
