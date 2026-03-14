@@ -1219,6 +1219,22 @@ func (al *AgentLoop) runLLMIteration(
 					}
 				}
 
+				// 🛡️ RBAC Check: Ensure agent has permission to run this tool
+				if err := al.canExecuteTool(agent, tc.Name); err != nil {
+					logger.WarnCF("agent", "RBAC Access Denied", map[string]any{
+						"agent_id": agent.ID,
+						"role":     agent.Role,
+						"tool":     tc.Name,
+					})
+					agentResults[idx].result = &tools.ToolResult{
+						Err:     err,
+						ForLLM:  err.Error(),
+						ForUser: err.Error(),
+						Silent:  false,
+					}
+					return
+				}
+
 				toolResult := agent.Tools.ExecuteWithContext(
 					ctx,
 					tc.Name,
@@ -1716,4 +1732,36 @@ func (al *AgentLoop) cleanupProcessedMessages() {
 		}
 		return true
 	})
+}
+
+// canExecuteTool checks if the agent's role allows executing a specific tool.
+func (al *AgentLoop) canExecuteTool(agent *AgentInstance, toolName string) error {
+	role := strings.ToLower(agent.Role)
+	// Default to 'guest' if role is empty for security
+	if role == "" {
+		role = "guest"
+	}
+
+	if role == "admin" {
+		return nil
+	}
+
+	// List of sensitive tools that are restricted for lower roles
+	restricted := map[string]bool{
+		"exec":          true,
+		"write_file":    true,
+		"edit_file":     true,
+		"append_file":   true,
+		"spawn":         true,
+		"install_skill": true,
+	}
+
+	if restricted[toolName] {
+		if role != "trusted" {
+			return fmt.Errorf("🔒 Access Denied: tool '%s' is restricted for role '%s'. Please upgrade to 'Trusted' or 'Admin'", toolName, agent.Role)
+		}
+		// 'trusted' role is allowed here; 'exec' tool has its own internal pattern filtering
+	}
+
+	return nil
 }

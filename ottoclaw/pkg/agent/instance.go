@@ -39,6 +39,7 @@ type AgentInstance struct {
 	Candidates                []providers.FallbackCandidate
 	MaxDailyTokens            int
 	Ledger                    *UsageLedger
+	Role                      string
 }
 
 // NewAgentInstance creates an agent instance from config.
@@ -147,6 +148,8 @@ func NewAgentInstance(
 		summarizeTokenPercent = 75
 	}
 
+	role := resolveAgentRole(agentCfg, defaults)
+
 	// Resolve fallback candidates
 	modelCfg := providers.ModelConfig{
 		Primary:   model,
@@ -221,6 +224,7 @@ func NewAgentInstance(
 		Candidates:                candidates,
 		MaxDailyTokens:            maxDailyTokens,
 		Ledger:                    NewUsageLedger(workspace),
+		Role:                      role,
 	}
 
 	// Register tokenomics tools
@@ -268,6 +272,17 @@ func resolveAgentFallbacks(agentCfg *config.AgentConfig, defaults *config.AgentD
 		return agentCfg.Model.Fallbacks
 	}
 	return defaults.ModelFallbacks
+}
+
+// resolveAgentRole determines the role for an agent, falling back to defaults.
+func resolveAgentRole(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) string {
+	if agentCfg != nil && strings.TrimSpace(agentCfg.Role) != "" {
+		return strings.TrimSpace(agentCfg.Role)
+	}
+	if strings.TrimSpace(defaults.Role) != "" {
+		return strings.TrimSpace(defaults.Role)
+	}
+	return "guest" // Default to most restrictive for safety
 }
 
 func compilePatterns(patterns []string) []*regexp.Regexp {

@@ -137,6 +137,8 @@ type AgentConfig struct {
 	Model     *AgentModelConfig `json:"model,omitempty"`
 	Skills    []string          `json:"skills,omitempty"`
 	Subagents *SubagentsConfig  `json:"subagents,omitempty"`
+	// Governance
+	Role           string            `json:"role,omitempty" env:"OTTOCLAW_AGENT_{{.ID}}_ROLE"`
 	// Tokenomics
 	MaxDailyTokens int `json:"max_daily_tokens,omitempty" env:"OTTOCLAW_AGENT_{{.ID}}_MAX_DAILY_TOKENS"`
 }
@@ -186,6 +188,8 @@ type AgentDefaults struct {
 	SummarizeTokenPercent     int      `json:"summarize_token_percent"         env:"OTTOCLAW_AGENTS_DEFAULTS_SUMMARIZE_TOKEN_PERCENT"`
 	MaxMediaSize              int      `json:"max_media_size,omitempty"        env:"OTTOCLAW_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
 	MaxDailyTokens            int      `json:"max_daily_tokens,omitempty"     env:"OTTOCLAW_AGENTS_DEFAULTS_MAX_DAILY_TOKENS"`
+	// Governance
+	Role                      string   `json:"role,omitempty"                 env:"OTTOCLAW_AGENTS_DEFAULTS_ROLE"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB

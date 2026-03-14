@@ -116,12 +116,15 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 	for _, agent := range agents {
 		// Get stats
 		usage := 0
+		cost := 0.0
 		if agent.Ledger != nil {
 			usage = agent.Ledger.GetTodayUsage()
+			cost = agent.Ledger.GetEstimatedCost()
 		}
 
 		payload := map[string]any{
 			"today_usage":      usage,
+			"today_cost":       cost,
 			"max_daily_tokens": agent.MaxDailyTokens,
 		}
 		body, _ := json.Marshal(payload)

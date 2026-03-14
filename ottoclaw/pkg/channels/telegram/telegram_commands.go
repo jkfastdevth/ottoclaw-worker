@@ -15,6 +15,7 @@ import (
 	"io"
 
 	"github.com/sipeed/ottoclaw/pkg/config"
+	"github.com/sipeed/ottoclaw/pkg/utils"
 )
 
 type TelegramCommander interface {
@@ -23,6 +24,7 @@ type TelegramCommander interface {
 	Show(ctx context.Context, message telego.Message) error
 	List(ctx context.Context, message telego.Message) error
 	Soul(ctx context.Context, message telego.Message) error
+	Update(ctx context.Context, message telego.Message) error
 }
 
 type cmd struct {
@@ -48,10 +50,10 @@ func commandArgs(text string) string {
 func (c *cmd) Help(ctx context.Context, message telego.Message) error {
 	msg := `/start - Start the bot
 /help - Show this help message
-/soul - View current Soul identity
-/soul [content] - Manually update the Soul identity
-/show [model|channel] - Show current configuration
-/list [models|channels] - List available options
+/soul [content] - อัปเดตข้อมูลวิญญาณเอเจนต์ (Soul)
+/show [model|channel] - ดูการตั้งค่าปัจจุบัน
+/list [models|channels] - รายชื่อตัวเลือกที่ใช้งานได้
+/update - ดึงโค้ดล่าสุด, คอมไพล์ใหม่ และรีสตาร์ทระบบอัตโนมัติ
 	`
 	_, err := c.bot.SendMessage(ctx, &telego.SendMessageParams{
 		ChatID: telego.ChatID{ID: message.Chat.ID},
@@ -305,4 +307,62 @@ func (c *cmd) Soul(ctx context.Context, message telego.Message) error {
 		ParseMode: telego.ModeMarkdown,
 	})
 	return err
+}
+
+func (c *cmd) Update(ctx context.Context, message telego.Message) error {
+	// 1. Notify user
+	_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: message.Chat.ID},
+		Text:   "🔄 *กำลังเริ่มกระบวนการอัปเดตระบบ...*\n\n1/3: 📥 กำลังดึงโค้ดล่าสุดจาก Git...",
+		ParseMode: telego.ModeMarkdown,
+	})
+
+	// 2. Git Pull
+	out, err := utils.RunCommand("git", "pull")
+	if err != nil {
+		_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+			ChatID: telego.ChatID{ID: message.Chat.ID},
+			Text:   fmt.Sprintf("❌ *Git Pull ล้มเหลว:*\n\n```\n%s\n```", err.Error()),
+			ParseMode: telego.ModeMarkdown,
+		})
+		return err
+	}
+
+	_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: message.Chat.ID},
+		Text:   fmt.Sprintf("✅ *ดึงโค้ดล่าสุดสำเร็จ*\n\n```\n%s\n```\n2/3: 🛠️ กำลังคอมไพล์ไบนารีใหม่...", out),
+		ParseMode: telego.ModeMarkdown,
+	})
+
+	// 3. Go Build
+	out, err = utils.RunCommand("go", "build", "-o", "ottoclaw_new", "./cmd/ottoclaw")
+	if err != nil {
+		_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+			ChatID: telego.ChatID{ID: message.Chat.ID},
+			Text:   fmt.Sprintf("❌ *การคอมไพล์ล้มเหลว:*\n\n```\n%s\n```", err.Error()),
+			ParseMode: telego.ModeMarkdown,
+		})
+		return err
+	}
+
+	// 4. Swap and Restart
+	_ = os.Rename("ottoclaw_new", "ottoclaw")
+	
+	// Get Final Status before exit if possible (or just notify and exit)
+	// Since we are about to exit, we'll send the success message and then exit.
+	// The Thai status message the user saw is likely what they want.
+	
+	statusMsg := "✅ *อัปเดตระบบสำเร็จแล้ว!*\n\n3/3: 🚀 กำลังรีสตาร์ทระบบเพื่อประยุกต์ใช้การเปลี่ยนแปลง..."
+	
+	_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+		ChatID: telego.ChatID{ID: message.Chat.ID},
+		Text:   statusMsg,
+		ParseMode: telego.ModeMarkdown,
+	})
+
+	// Give a small delay for the message to be sent
+	time.Sleep(2 * time.Second)
+	
+	os.Exit(0)
+	return nil
 }

@@ -151,6 +151,10 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	}, th.CommandEqual("soul"))
 
 	bh.HandleMessage(func(ctx *th.Context, message telego.Message) error {
+		return c.commands.Update(ctx, message)
+	}, th.CommandEqual("update"))
+
+	bh.HandleMessage(func(ctx *th.Context, message telego.Message) error {
 		return c.handleMessage(ctx, &message)
 	}, th.AnyMessage())
 
@@ -655,7 +659,16 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				}
 			}
 
-			if isMatch && (chatIDStr == tCfg.BridgeChatID || message.Chat.Type == "private") {
+			if targetNorm == "all" {
+				content = actualContent
+				forceRespond = true
+				logger.InfoCF("telegram", "Broadcast message intercepted", map[string]any{
+					"from": remoteSender,
+					"to":   "all",
+				})
+				// Broadcast to all other agents via Master API
+				go c.broadcastToOtherAgents(remoteSender, actualContent)
+			} else if isMatch && (chatIDStr == tCfg.BridgeChatID || message.Chat.Type == "private") {
 				// We are the intended target in a Bridge/DM!
 				sender = bus.SenderInfo{
 					Platform:    "siam",
@@ -1000,6 +1013,13 @@ func (c *TelegramChannel) isBotMentioned(message *telego.Message) bool {
 		return false
 	}
 
+	// 📬 Reply Check: If this is a reply to our own message, consider it a mention
+	if message.ReplyToMessage != nil && message.ReplyToMessage.From != nil {
+		if message.ReplyToMessage.From.Username == botUsername {
+			return true
+		}
+	}
+
 	entities := message.Entities
 	if entities == nil {
 		entities = message.CaptionEntities
@@ -1071,4 +1091,54 @@ func (c *TelegramChannel) stripBotMention(content string) string {
 	re := regexp.MustCompile(`(?i)@` + regexp.QuoteMeta(botUsername))
 	content = re.ReplaceAllString(content, "")
 	return strings.TrimSpace(content)
+}
+
+// broadcastToOtherAgents sends a message to all known agents in the network except itself.
+func (c *TelegramChannel) broadcastToOtherAgents(from, content string) {
+	masterURL := os.Getenv("MASTER_API_URL")
+	if masterURL == "" {
+		masterURL = "http://master:8080"
+	}
+	masterAPIKey := os.Getenv("MASTER_API_KEY")
+
+	myAgentName := os.Getenv("AGENT_NAME")
+	if myAgentName == "" {
+		myAgentName = c.config.Agents.Defaults.Model
+	}
+	myNorm := utils.NormalizeID(myAgentName)
+
+	knownSouls := c.dynamicNames
+	if len(knownSouls) == 0 {
+		return // Nothing to broadcast to
+	}
+
+	payload := map[string]any{
+		"message": fmt.Sprintf("[%s]: %s", from, content),
+		"from":    from,
+	}
+	bodyData, _ := json.Marshal(payload)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	for _, soul := range knownSouls {
+		soulNorm := utils.NormalizeID(soul)
+		if soulNorm == myNorm || soulNorm == "all" {
+			continue // Skip ourselves and avoid loops
+		}
+
+		endpoint := fmt.Sprintf("%s/api/agent/v1/agents/%s/message", strings.TrimRight(masterURL, "/"), soulNorm)
+		req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(bodyData))
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if masterAPIKey != "" {
+			req.Header.Set("X-API-Key", masterAPIKey)
+		}
+
+		resp, err := client.Do(req)
+		if err == nil && resp != nil {
+			resp.Body.Close()
+		}
+	}
 }
