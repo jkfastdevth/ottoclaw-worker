@@ -355,7 +355,7 @@ TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID:-}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED:-false}
 
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
-OTTOCLAW_WORKSPACE=${OTTOCLAW_WORKSPACE}/v2
+OTTOCLAW_WORKSPACE="${OTTOCLAW_HOME}/workspace/v2"
 OTTOCLAW_CONFIG=${OTTOCLAW_CONFIG}
 OTTOCLAW_BIN=${BIN_DIR}/ottoclaw-brain
 EOF
@@ -364,7 +364,8 @@ EOF
 }
 
 generate_config_json() {
-    mkdir -p "${OTTOCLAW_WORKSPACE}/v2"
+    local WORKSPACE_V2="${OTTOCLAW_HOME}/workspace/v2"
+    mkdir -p "${WORKSPACE_V2}"
     local TG_FRAG=""
     if [[ -n "${WORKER_TELEGRAM_TOKEN:-}" ]]; then
         local ALLOW_FRAG=""
@@ -381,7 +382,7 @@ generate_config_json() {
 {
   "agents": {
     "defaults": {
-      "workspace": "${OTTOCLAW_WORKSPACE}/v2",
+      "workspace": "${WORKSPACE_V2}",
       "model": "${OTTOCLAW_MODEL_NAME}",
       "max_tokens": 8192,
       "max_tool_iterations": 20
@@ -404,7 +405,7 @@ EOF
 }
 
 forge_soul() {
-    local SOUL_PATH="${OTTOCLAW_WORKSPACE}/v2/SOUL.md"
+    local SOUL_PATH="${OTTOCLAW_HOME}/workspace/v2/SOUL.md"
     mkdir -p "$(dirname "$SOUL_PATH")"
     cat > "$SOUL_PATH" <<SOULEOF
 # AI Soul Persona
