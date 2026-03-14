@@ -762,7 +762,7 @@ func SaveConfig(path string, cfg *Config) error {
 	}
 
 	// Use unified atomic write utility with explicit sync for flash storage reliability.
-	return fileutil.WriteFileAtomic(path, data, 0o644)
+	return fileutil.WriteFileAtomic(path, data, 0o600)
 }
 
 func (c *Config) WorkspacePath() string {

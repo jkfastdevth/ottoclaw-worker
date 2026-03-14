@@ -457,7 +457,7 @@ _load_env() { set -o allexport; source "$ENV_FILE" 2>/dev/null || true; set +o a
 
 case "${1:-}" in
   start)
-    "$0" stop 2>/dev/null || true
+    "$0" stop --quiet 2>/dev/null || true
     _load_env
     echo "🚀 Starting siam-worker (Arm)..."
     nohup "$WORKER" >> "${LOG_DIR}/siam-worker.log" 2>&1 &
@@ -478,7 +478,7 @@ case "${1:-}" in
     ;;
 
   stop)
-    echo "🛑 Stopping OttoClaw services..."
+    [[ "${2:-}" != "--quiet" ]] && echo "🛑 Stopping OttoClaw services..."
     # 1. Try stopping via PID files
     for pidfile in "${LOG_DIR}/ottoclaw-brain.pid" "${LOG_DIR}/siam-worker.pid"; do
         if [[ -f "$pidfile" ]]; then
@@ -491,12 +491,9 @@ case "${1:-}" in
             rm -f "$pidfile"
         fi
     done
-    # 2. Force kill any remaining processes (to avoid port/telegram conflict)
-    # Using specific pkill to ensure no orphan brains remain
+    # 2. Force kill specific processes (to avoid port/telegram conflict)
     pkill -9 -f "ottoclaw-brain" 2>/dev/null || true
     pkill -9 -f "siam-worker" 2>/dev/null || true
-    # Fallback for hidden processes or orphans
-    pgrep -f "ottoclaw" | xargs kill -9 2>/dev/null || true
     echo "✅ All processes stopped."
     ;;
 
@@ -672,7 +669,7 @@ install_wrapper
 # 7. Start
 banner "Starting Services"
 # Force stop any old instances before starting (prevents Telegram conflict)
-"${BIN_DIR}/ottoclaw" stop 2>/dev/null || true
+"${BIN_DIR}/ottoclaw" stop --quiet 2>/dev/null || true
 if ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
     "${BIN_DIR}/ottoclaw" start
 fi

@@ -515,21 +515,24 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		DisplayName: displayName,
 	}
 
+	chatID := message.Chat.ID
+	chatIDStr := fmt.Sprintf("%d", chatID)
+	tCfg := c.config.Channels.Telegram
+
 	// check allowlist to avoid downloading attachments for rejected users
-	if !c.IsAllowedSender(sender) {
+	isBridgeMessage := tCfg.OrchestrationEnabled && chatIDStr == tCfg.BridgeChatID
+	if !c.IsAllowedSender(sender) && !isBridgeMessage {
 		logger.DebugCF("telegram", "Trace: Message rejected by allowlist", map[string]any{
 			"user_id": platformID,
 		})
 		return nil
 	}
 
-	chatID := message.Chat.ID
 	c.chatIDs[platformID] = chatID
 
 	content := ""
 	mediaPaths := []string{}
 
-	chatIDStr := fmt.Sprintf("%d", chatID)
 	messageIDStr := fmt.Sprintf("%d", message.MessageID)
 	scope := channels.BuildMediaScope("telegram", chatIDStr, messageIDStr)
 
@@ -609,7 +612,6 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	}
 
 	// ── Telegram Orchestration (Simulated DM / Bridge) ─────────────
-	tCfg := c.config.Channels.Telegram
 	forceRespond := false
 
 	if tCfg.OrchestrationEnabled {
