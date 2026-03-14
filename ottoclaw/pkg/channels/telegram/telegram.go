@@ -174,6 +174,9 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	// 🌐 Start Dynamic Nickname Polling
 	go c.pollDynamicNames()
 
+	// 📢 Report Startup Status
+	go c.reportStatus("online")
+
 	return nil
 }
 
@@ -1148,5 +1151,49 @@ func (c *TelegramChannel) broadcastToOtherAgents(from, content string) {
 		if err == nil && resp != nil {
 			resp.Body.Close()
 		}
+	}
+}
+
+// reportStatus sends a status update message to the designated bridge channel.
+func (c *TelegramChannel) reportStatus(status string) {
+	tCfg := c.config.Channels.Telegram
+	if tCfg.BridgeChatID == "" {
+		logger.DebugC("telegram", "No BridgeChatID configured, skipping status report")
+		return
+	}
+
+	chatID, err := strconv.ParseInt(tCfg.BridgeChatID, 10, 64)
+	if err != nil {
+		logger.WarnCF("telegram", "Invalid BridgeChatID for status report", map[string]any{
+			"bridge_chat_id": tCfg.BridgeChatID,
+			"error":          err.Error(),
+		})
+		return
+	}
+
+	var text string
+	switch status {
+	case "online":
+		myAgentName := os.Getenv("AGENT_NAME")
+		if myAgentName == "" {
+			myAgentName = c.config.Agents.Defaults.Model
+		}
+		text = fmt.Sprintf("🚀 *Siam-Synapse Worker Status*\n\nAgent: `%s`\nStatus: 🟢 *Online*\nTime: `%s`",
+			myAgentName, time.Now().Format("2006-01-02 15:04:05"))
+	default:
+		return
+	}
+
+	_, err = c.bot.SendMessage(context.Background(), &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: telego.ModeMarkdown,
+	})
+	if err != nil {
+		logger.WarnCF("telegram", "Failed to send startup status report", map[string]any{
+			"error": err.Error(),
+		})
+	} else {
+		logger.InfoC("telegram", "Startup status report sent to Bridge channel")
 	}
 }
