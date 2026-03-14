@@ -312,7 +312,10 @@ run_config_wizard() {
     echo -e "  บน Termux บริการจะรันเป็น background process ผ่าน nohup\n"
 
     NODE_ID="android-$(hostname 2>/dev/null || echo 'device')"
-    OTTOCLAW_MODE="worker"
+    # 🛡️ Force mode to "orchestrator" for native Termux installs.
+    # This prevents siam-worker from auto-igniting its own brain process,
+    # avoiding duplicate Telegram pollers and 409 Conflict errors.
+    OTTOCLAW_MODE="orchestrator"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -482,8 +485,11 @@ case "${1:-}" in
         fi
     done
     # 2. Force kill any remaining processes (to avoid port/telegram conflict)
+    # Using specific pkill to ensure no orphan brains remain
     pkill -9 -f "ottoclaw-brain" 2>/dev/null || true
     pkill -9 -f "siam-worker" 2>/dev/null || true
+    # Fallback for hidden processes or orphans
+    pgrep -f "ottoclaw" | xargs kill -9 2>/dev/null || true
     echo "✅ All processes stopped."
     ;;
 
