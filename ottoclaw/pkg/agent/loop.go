@@ -1758,7 +1758,7 @@ func (al *AgentLoop) canExecuteTool(agent *AgentInstance, toolName string) error
 
 	if restricted[toolName] {
 		if role != "trusted" {
-			return fmt.Errorf("🔒 Access Denied: tool '%s' is restricted for role '%s'. Please upgrade to 'Trusted' or 'Admin'", toolName, agent.Role)
+			return fmt.Errorf("🔒 Access Denied: tool '%s' is restricted for role '%s'. Please upgrade to 'Trusted' or 'Admin' in your config.json if you are the owner", toolName, agent.Role)
 		}
 		// 'trusted' role is allowed here; 'exec' tool has its own internal pattern filtering
 	}

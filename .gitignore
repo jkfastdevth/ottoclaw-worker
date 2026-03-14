@@ -19,7 +19,6 @@ temp_workspace/
 
 # Go
 vendor/
-go.sum
 
 # OS
 .DS_Store

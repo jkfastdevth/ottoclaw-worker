@@ -174,6 +174,9 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	// 🌐 Start Dynamic Nickname Polling
 	go c.pollDynamicNames()
 
+	// 📢 Report Startup Status
+	go c.reportStatus("online")
+
 	return nil
 }
 
@@ -512,21 +515,24 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		DisplayName: displayName,
 	}
 
+	chatID := message.Chat.ID
+	chatIDStr := fmt.Sprintf("%d", chatID)
+	tCfg := c.config.Channels.Telegram
+
 	// check allowlist to avoid downloading attachments for rejected users
-	if !c.IsAllowedSender(sender) {
+	isBridgeMessage := tCfg.OrchestrationEnabled && chatIDStr == tCfg.BridgeChatID
+	if !c.IsAllowedSender(sender) && !isBridgeMessage {
 		logger.DebugCF("telegram", "Trace: Message rejected by allowlist", map[string]any{
 			"user_id": platformID,
 		})
 		return nil
 	}
 
-	chatID := message.Chat.ID
 	c.chatIDs[platformID] = chatID
 
 	content := ""
 	mediaPaths := []string{}
 
-	chatIDStr := fmt.Sprintf("%d", chatID)
 	messageIDStr := fmt.Sprintf("%d", message.MessageID)
 	scope := channels.BuildMediaScope("telegram", chatIDStr, messageIDStr)
 
@@ -606,7 +612,6 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	}
 
 	// ── Telegram Orchestration (Simulated DM / Bridge) ─────────────
-	tCfg := c.config.Channels.Telegram
 	forceRespond := false
 
 	if tCfg.OrchestrationEnabled {
@@ -1148,5 +1153,58 @@ func (c *TelegramChannel) broadcastToOtherAgents(from, content string) {
 		if err == nil && resp != nil {
 			resp.Body.Close()
 		}
+	}
+}
+
+// reportStatus sends a status update message to the designated bridge channel.
+func (c *TelegramChannel) reportStatus(status string) {
+	tCfg := c.config.Channels.Telegram
+	bridgeID := tCfg.BridgeChatID
+	if bridgeID == "" {
+		// Fallback to environment variable if not in config
+		bridgeID = os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
+		if bridgeID == "" {
+			bridgeID = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID")
+		}
+	}
+
+	if bridgeID == "" {
+		logger.DebugC("telegram", "No BridgeChatID configured or in environment, skipping status report")
+		return
+	}
+
+	chatID, err := strconv.ParseInt(bridgeID, 10, 64)
+	if err != nil {
+		logger.WarnCF("telegram", "Invalid BridgeChatID for status report", map[string]any{
+			"bridge_chat_id": tCfg.BridgeChatID,
+			"error":          err.Error(),
+		})
+		return
+	}
+
+	var text string
+	switch status {
+	case "online":
+		myAgentName := os.Getenv("AGENT_NAME")
+		if myAgentName == "" {
+			myAgentName = c.config.Agents.Defaults.Model
+		}
+		text = fmt.Sprintf("🚀 *Siam-Synapse Worker Status*\n\nAgent: `%s`\nStatus: 🟢 *Online*\nTime: `%s`",
+			myAgentName, time.Now().Format("2006-01-02 15:04:05"))
+	default:
+		return
+	}
+
+	_, err = c.bot.SendMessage(context.Background(), &telego.SendMessageParams{
+		ChatID:    telego.ChatID{ID: chatID},
+		Text:      text,
+		ParseMode: telego.ModeMarkdown,
+	})
+	if err != nil {
+		logger.WarnCF("telegram", "Failed to send startup status report", map[string]any{
+			"error": err.Error(),
+		})
+	} else {
+		logger.InfoC("telegram", "Startup status report sent to Bridge channel")
 	}
 }

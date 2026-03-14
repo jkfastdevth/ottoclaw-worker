@@ -333,6 +333,7 @@ write_env_file() {
 NODE_ID=${NODE_ID}
 AGENT_NAME=${AGENT_NAME}
 ORCHESTRATOR_NICKNAMES=${ORCHESTRATOR_NICKNAMES}
+ORCHESTRATOR_DEFAULT_LISTENER=true
 OTTOCLAW_MODE=${OTTOCLAW_MODE}
 
 MASTER_URL=${MASTER_URL}
@@ -353,9 +354,12 @@ TELEGRAM_BOT_TOKEN=${WORKER_TELEGRAM_TOKEN:-}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM:-}
 TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID:-}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED:-false}
+OTTOCLAW_CHANNELS_TELEGRAM_TOKEN=${WORKER_TELEGRAM_TOKEN:-}
+OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID:-}
+OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED:-false}
 
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
-OTTOCLAW_WORKSPACE=${OTTOCLAW_WORKSPACE}/v2
+OTTOCLAW_WORKSPACE="${OTTOCLAW_HOME}/workspace/v2"
 OTTOCLAW_CONFIG=${OTTOCLAW_CONFIG}
 OTTOCLAW_BIN=${BIN_DIR}/ottoclaw-brain
 EOF
@@ -364,15 +368,18 @@ EOF
 }
 
 generate_config_json() {
-    mkdir -p "${OTTOCLAW_WORKSPACE}/v2"
+    local WORKSPACE_V2="${OTTOCLAW_HOME}/workspace/v2"
+    mkdir -p "${WORKSPACE_V2}"
     local TG_FRAG=""
     if [[ -n "${WORKER_TELEGRAM_TOKEN:-}" ]]; then
         local ALLOW_FRAG=""
         [[ -n "${TELEGRAM_ALLOW_FROM:-}" ]] && \
             ALLOW_FRAG=", \"allow_from\": [$(echo "$TELEGRAM_ALLOW_FROM" | sed 's/,/","/g' | sed 's/^/"/' | sed 's/$/"/')]"
         local ORCH_FRAG=""
-        if [[ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" == "true" && -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]]; then
-            ORCH_FRAG=", \"orchestration_enabled\": true, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
+        if [[ -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]]; then
+        local ORCH_STATE="false"
+        [[ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" == "true" ]] && ORCH_STATE="true"
+            ORCH_FRAG=", \"orchestration_enabled\": ${ORCH_STATE}, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
         fi
         TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${WORKER_TELEGRAM_TOKEN}\"${ALLOW_FRAG}${ORCH_FRAG}, \"typing\": {\"enabled\": true} }"
     fi
@@ -381,7 +388,7 @@ generate_config_json() {
 {
   "agents": {
     "defaults": {
-      "workspace": "${OTTOCLAW_WORKSPACE}/v2",
+      "workspace": "${WORKSPACE_V2}",
       "model": "${OTTOCLAW_MODEL_NAME}",
       "max_tokens": 8192,
       "max_tool_iterations": 20
@@ -404,7 +411,7 @@ EOF
 }
 
 forge_soul() {
-    local SOUL_PATH="${OTTOCLAW_WORKSPACE}/v2/SOUL.md"
+    local SOUL_PATH="${OTTOCLAW_HOME}/workspace/v2/SOUL.md"
     mkdir -p "$(dirname "$SOUL_PATH")"
     cat > "$SOUL_PATH" <<SOULEOF
 # AI Soul Persona
@@ -450,7 +457,7 @@ _load_env() { set -o allexport; source "$ENV_FILE" 2>/dev/null || true; set +o a
 
 case "${1:-}" in
   start)
-    "$0" stop 2>/dev/null || true
+    "$0" stop --quiet 2>/dev/null || true
     _load_env
     echo "🚀 Starting siam-worker (Arm)..."
     nohup "$WORKER" >> "${LOG_DIR}/siam-worker.log" 2>&1 &
@@ -471,7 +478,7 @@ case "${1:-}" in
     ;;
 
   stop)
-    echo "🛑 Stopping OttoClaw services..."
+    [[ "${2:-}" != "--quiet" ]] && echo "🛑 Stopping OttoClaw services..."
     # 1. Try stopping via PID files
     for pidfile in "${LOG_DIR}/ottoclaw-brain.pid" "${LOG_DIR}/siam-worker.pid"; do
         if [[ -f "$pidfile" ]]; then
@@ -484,12 +491,9 @@ case "${1:-}" in
             rm -f "$pidfile"
         fi
     done
-    # 2. Force kill any remaining processes (to avoid port/telegram conflict)
-    # Using specific pkill to ensure no orphan brains remain
+    # 2. Force kill specific processes (to avoid port/telegram conflict)
     pkill -9 -f "ottoclaw-brain" 2>/dev/null || true
     pkill -9 -f "siam-worker" 2>/dev/null || true
-    # Fallback for hidden processes or orphans
-    pgrep -f "ottoclaw" | xargs kill -9 2>/dev/null || true
     echo "✅ All processes stopped."
     ;;
 
@@ -665,7 +669,7 @@ install_wrapper
 # 7. Start
 banner "Starting Services"
 # Force stop any old instances before starting (prevents Telegram conflict)
-"${BIN_DIR}/ottoclaw" stop 2>/dev/null || true
+"${BIN_DIR}/ottoclaw" stop --quiet 2>/dev/null || true
 if ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
     "${BIN_DIR}/ottoclaw" start
 fi

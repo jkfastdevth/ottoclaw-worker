@@ -35,6 +35,7 @@ func DefaultConfig() *Config {
 				MaxToolIterations:         50,
 				SummarizeMessageThreshold: 20,
 				SummarizeTokenPercent:     75,
+				Role:                      "admin",
 			},
 		},
 		Bindings: []AgentBinding{},
