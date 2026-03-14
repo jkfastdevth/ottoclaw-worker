@@ -1,6 +1,6 @@
 module github.com/jkfastdevth/Siam-Synapse/worker
 
-go 1.24.0
+go 1.22
 
 replace github.com/jkfastdevth/Siam-Synapse/proto => ./proto
 
