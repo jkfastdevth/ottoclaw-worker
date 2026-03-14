@@ -461,7 +461,7 @@ case "${1:-}" in
     _load_env
     echo "🚀 Starting siam-worker (Arm)..."
     nohup "$WORKER" >> "${LOG_DIR}/siam-worker.log" 2>&1 &
-    local ARMPID=$!
+    ARMPID=$!
     echo $ARMPID > "${LOG_DIR}/siam-worker.pid"
     sleep 2
     echo "🧠 Starting ottoclaw-brain (Brain)..."
