@@ -317,12 +317,22 @@ func (c *cmd) Update(ctx context.Context, message telego.Message) error {
 		ParseMode: telego.ModeMarkdown,
 	})
 
-	// 2. Git Pull
-	out, err := utils.RunCommand("git", "pull")
+	// 2. Git Fetch & Reset (Better than pull for automated updates)
+	_, err := utils.RunCommand("git", "fetch", "--all")
 	if err != nil {
 		_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
 			ChatID: telego.ChatID{ID: message.Chat.ID},
-			Text:   fmt.Sprintf("❌ *Git Pull ล้มเหลว:*\n\n```\n%s\n```", err.Error()),
+			Text:   fmt.Sprintf("❌ *Git Fetch ล้มเหลว:*\n\n```\n%s\n```", err.Error()),
+			ParseMode: telego.ModeMarkdown,
+		})
+		return err
+	}
+
+	out, err := utils.RunCommand("git", "reset", "--hard", "origin/main")
+	if err != nil {
+		_, _ = c.bot.SendMessage(ctx, &telego.SendMessageParams{
+			ChatID: telego.ChatID{ID: message.Chat.ID},
+			Text:   fmt.Sprintf("❌ *Git Reset ล้มเหลว:*\n\n```\n%s\n```", err.Error()),
 			ParseMode: telego.ModeMarkdown,
 		})
 		return err
