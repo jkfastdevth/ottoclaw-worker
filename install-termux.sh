@@ -630,18 +630,18 @@ run_config_wizard "false"
 
 # 4. Setup dirs
 banner "Setting Up"
-mkdir -p "${BIN_DIR}" "${LOG_DIR}" "${WORKSPACE_DIR}/v2"
+mkdir -p "${BIN_DIR}" "${LOG_DIR}" "${OTTOCLAW_WORKSPACE}/v2"
 
 # Create empty local dirs if missing to avoid copy errors
 mkdir -p "${SCRIPT_DIR}/workspace" "${SCRIPT_DIR}/skills"
 touch "${SCRIPT_DIR}/workspace/placeholder.txt"
 
 [[ -d "${SCRIPT_DIR}/workspace" ]] && \
-    cp -rf "${SCRIPT_DIR}/workspace/." "${WORKSPACE_DIR}/" 2>/dev/null || true
+    cp -rf "${SCRIPT_DIR}/workspace/." "${OTTOCLAW_WORKSPACE}/" 2>/dev/null || true
 
 if [[ -d "${SCRIPT_DIR}/skills" ]]; then
-    mkdir -p "${WORKSPACE_DIR}/skills"
-    cp -rf "${SCRIPT_DIR}/skills/." "${WORKSPACE_DIR}/skills/" 2>/dev/null || true
+    mkdir -p "${OTTOCLAW_WORKSPACE}/skills"
+    cp -rf "${SCRIPT_DIR}/skills/." "${OTTOCLAW_WORKSPACE}/skills/" 2>/dev/null || true
 fi
 
 # 5. Write config files
