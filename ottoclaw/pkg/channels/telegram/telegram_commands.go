@@ -48,8 +48,8 @@ func commandArgs(text string) string {
 }
 
 func (c *cmd) Help(ctx context.Context, message telego.Message) error {
-	msg := `/start - Start the bot
-/help - Show this help message
+	msg := `/start - เริ่มต้นการใช้งานบอท
+/help - แสดงข้อความช่วยเหลือนี้
 /soul [content] - อัปเดตข้อมูลวิญญาณเอเจนต์ (Soul)
 /show [model|channel] - ดูการตั้งค่าปัจจุบัน
 /list [models|channels] - รายชื่อตัวเลือกที่ใช้งานได้
@@ -68,7 +68,7 @@ func (c *cmd) Help(ctx context.Context, message telego.Message) error {
 func (c *cmd) Start(ctx context.Context, message telego.Message) error {
 	_, err := c.bot.SendMessage(ctx, &telego.SendMessageParams{
 		ChatID: telego.ChatID{ID: message.Chat.ID},
-		Text:   "Hello! I am OttoClaw 🦞",
+		Text:   "สวัสดี! ฉันคือ OttoClaw 🦞 พร้อมรับใช้แล้วครับ",
 		ReplyParameters: &telego.ReplyParameters{
 			MessageID: message.MessageID,
 		},

@@ -255,19 +255,27 @@ func (c *TelegramChannel) initBotCommands(ctx context.Context) error {
 	commands := []telego.BotCommand{
 		{
 			Command:     "start",
-			Description: "Start the bot",
+			Description: "เริ่มต้นการใช้งานบอท",
 		},
 		{
 			Command:     "help",
-			Description: "Show a help message",
+			Description: "แสดงข้อความช่วยเหลือ",
 		},
 		{
 			Command:     "show",
-			Description: "Show current configuration",
+			Description: "ดูการตั้งค่าปัจจุบัน",
 		},
 		{
 			Command:     "list",
-			Description: "List available options",
+			Description: "รายชื่อตัวเลือกที่ใช้งานได้",
+		},
+		{
+			Command:     "soul",
+			Description: "อัปเดตข้อมูลวิญญาณเอเจนต์",
+		},
+		{
+			Command:     "update",
+			Description: "อัปเดตระบบและรีสตาร์ทอัตโนมัติ",
 		},
 	}
 
