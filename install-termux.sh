@@ -447,10 +447,12 @@ _load_env() { set -o allexport; source "$ENV_FILE" 2>/dev/null || true; set +o a
 
 case "${1:-}" in
   start)
+    "$0" stop 2>/dev/null || true
     _load_env
     echo "🚀 Starting siam-worker (Arm)..."
     nohup "$WORKER" >> "${LOG_DIR}/siam-worker.log" 2>&1 &
-    echo $! > "${LOG_DIR}/siam-worker.pid"
+    local ARMPID=$!
+    echo $ARMPID > "${LOG_DIR}/siam-worker.pid"
     sleep 2
     echo "🧠 Starting ottoclaw-brain (Brain)..."
     nohup "$BRAIN" gateway --debug >> "${LOG_DIR}/ottoclaw-brain.log" 2>&1 &
@@ -472,14 +474,16 @@ case "${1:-}" in
         if [[ -f "$pidfile" ]]; then
             pid=$(cat "$pidfile")
             if kill -0 "$pid" 2>/dev/null; then
-                kill "$pid" && echo "   Stopped PID $pid (via pidfile)"
+                kill "$pid" 2>/dev/null && echo "   Stopped PID $pid (via pidfile)"
+                sleep 0.5
+                kill -9 "$pid" 2>/dev/null || true
             fi
             rm -f "$pidfile"
         fi
     done
     # 2. Force kill any remaining processes (to avoid port/telegram conflict)
-    pkill -f "ottoclaw-brain" 2>/dev/null || true
-    pkill -f "siam-worker" 2>/dev/null || true
+    pkill -9 -f "ottoclaw-brain" 2>/dev/null || true
+    pkill -9 -f "siam-worker" 2>/dev/null || true
     echo "✅ All processes stopped."
     ;;
 
