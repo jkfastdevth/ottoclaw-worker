@@ -354,6 +354,9 @@ TELEGRAM_BOT_TOKEN=${WORKER_TELEGRAM_TOKEN:-}
 TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM:-}
 TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID:-}
 TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED:-false}
+OTTOCLAW_CHANNELS_TELEGRAM_TOKEN=${WORKER_TELEGRAM_TOKEN:-}
+OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID:-}
+OTTOCLAW_CHANNELS_TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED:-false}
 
 OTTOCLAW_HOME=${OTTOCLAW_HOME}
 OTTOCLAW_WORKSPACE="${OTTOCLAW_HOME}/workspace/v2"
@@ -373,8 +376,10 @@ generate_config_json() {
         [[ -n "${TELEGRAM_ALLOW_FROM:-}" ]] && \
             ALLOW_FRAG=", \"allow_from\": [$(echo "$TELEGRAM_ALLOW_FROM" | sed 's/,/","/g' | sed 's/^/"/' | sed 's/$/"/')]"
         local ORCH_FRAG=""
-        if [[ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" == "true" && -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]]; then
-            ORCH_FRAG=", \"orchestration_enabled\": true, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
+        if [[ -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]]; then
+        local ORCH_STATE="false"
+        [[ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" == "true" ]] && ORCH_STATE="true"
+            ORCH_FRAG=", \"orchestration_enabled\": ${ORCH_STATE}, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
         fi
         TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${WORKER_TELEGRAM_TOKEN}\"${ALLOW_FRAG}${ORCH_FRAG}, \"typing\": {\"enabled\": true} }"
     fi

@@ -1157,12 +1157,21 @@ func (c *TelegramChannel) broadcastToOtherAgents(from, content string) {
 // reportStatus sends a status update message to the designated bridge channel.
 func (c *TelegramChannel) reportStatus(status string) {
 	tCfg := c.config.Channels.Telegram
-	if tCfg.BridgeChatID == "" {
-		logger.DebugC("telegram", "No BridgeChatID configured, skipping status report")
+	bridgeID := tCfg.BridgeChatID
+	if bridgeID == "" {
+		// Fallback to environment variable if not in config
+		bridgeID = os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
+		if bridgeID == "" {
+			bridgeID = os.Getenv("OTTOCLAW_CHANNELS_TELEGRAM_BRIDGE_CHAT_ID")
+		}
+	}
+
+	if bridgeID == "" {
+		logger.DebugC("telegram", "No BridgeChatID configured or in environment, skipping status report")
 		return
 	}
 
-	chatID, err := strconv.ParseInt(tCfg.BridgeChatID, 10, 64)
+	chatID, err := strconv.ParseInt(bridgeID, 10, 64)
 	if err != nil {
 		logger.WarnCF("telegram", "Invalid BridgeChatID for status report", map[string]any{
 			"bridge_chat_id": tCfg.BridgeChatID,
