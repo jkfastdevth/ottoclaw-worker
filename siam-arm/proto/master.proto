@@ -33,6 +33,8 @@ message NodeStatus {
   string role = 10;
   string department = 11;
   string org_id = 12;
+  float battery_level = 13;
+  float temperature = 14;
 }
 
 // ข้อความการตอบรับ

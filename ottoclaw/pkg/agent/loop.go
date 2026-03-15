@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -119,6 +120,9 @@ func registerSharedTools(
 			continue
 		}
 
+		// Register Dynamic "Forge" Tools from Database
+		fetchAndRegisterCustomTools(cfg, agent)
+
 		// Web tools
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
@@ -164,6 +168,9 @@ func registerSharedTools(
 			agent.Tools.Register(tools.NewSPITool())
 		}
 
+		// Specialized IoT Toolbox for high-level hardware control
+		agent.Tools.Register(tools.NewIoTToolbox())
+
 		// Message tool
 		if cfg.Tools.IsToolEnabled("message") {
 			messageTool := tools.NewMessageTool()
@@ -177,6 +184,29 @@ func registerSharedTools(
 				})
 			})
 			agent.Tools.Register(messageTool)
+		}
+
+		// Swarm tools
+		if cfg.Tools.IsToolEnabled("swarm") {
+			agent.Tools.Register(tools.NewSwarmNegotiateTool(
+				cfg.Channels.SiamSync.MasterURL,
+				cfg.Channels.SiamSync.APIKey,
+				agentID,
+			))
+			agent.Tools.Register(tools.NewSwarmVoteTool(
+				cfg.Channels.SiamSync.MasterURL,
+				cfg.Channels.SiamSync.APIKey,
+				agentID,
+			))
+		}
+		// Astral Bridge Broadcast tool
+		agent.Tools.Register(tools.NewBroadcastTool())
+
+
+		// Knowledge / Akashic Library tools (RAG)
+		if cfg.Tools.IsToolEnabled("knowledge") {
+			agent.Tools.Register(tools.NewLearnTool(cfg.Channels.SiamSync.MasterURL, cfg.Channels.SiamSync.APIKey))
+			agent.Tools.Register(tools.NewRecallTool(cfg.Channels.SiamSync.MasterURL, cfg.Channels.SiamSync.APIKey))
 		}
 
 		// Skill discovery and installation tools
@@ -215,6 +245,49 @@ func registerSharedTools(
 			} else {
 				logger.WarnCF("agent", "spawn tool requires subagent to be enabled", nil)
 			}
+		}
+	}
+}
+
+func fetchAndRegisterCustomTools(cfg *config.Config, agent *AgentInstance) {
+	masterURL := cfg.Channels.SiamSync.MasterURL
+	if masterURL == "" {
+		masterURL = os.Getenv("MASTER_API_URL")
+	}
+	if masterURL == "" {
+		return
+	}
+
+	resp, err := http.Get(fmt.Sprintf("%s/api/agent/v1/forge/tools", masterURL))
+	if err != nil {
+		logger.WarnCF("agent", "Failed to fetch custom tools", map[string]any{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return
+	}
+
+	var result struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Language    string `json:"language"`
+			Code        string `json:"code"`
+			Parameters  string `json:"parameters"`
+		} `json:"tools"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+		count := 0
+		for _, ct := range result.Tools {
+			tool := tools.NewDynamicScriptTool(ct.Name, ct.Description, ct.Language, ct.Code, ct.Parameters)
+			agent.Tools.Register(tool)
+			count++
+		}
+		if count > 0 {
+			logger.InfoCF("agent", "Registered Dynamic Tools from The Forge", map[string]any{"count": count})
 		}
 	}
 }
@@ -788,8 +861,35 @@ func (al *AgentLoop) runAgentLoop(
 	var history []providers.Message
 	var summary string
 	if !opts.NoHistory {
+		// 💾 Mission Reincarnation: Check if we have a checkpoint in Metadata
+		if cp, ok := opts.Metadata["checkpoint"]; ok && cp != "" {
+			var cpMessages []providers.Message
+			if err := json.Unmarshal([]byte(cp), &cpMessages); err == nil && len(cpMessages) > 0 {
+				// If session is empty, seed it with checkpoint
+				if len(agent.Sessions.GetHistory(opts.SessionKey)) == 0 {
+					logger.InfoCF("agent", "Mission Reincarnation: Resuming from checkpoint", map[string]any{
+						"messages": len(cpMessages),
+					})
+					for _, m := range cpMessages {
+						agent.Sessions.AddFullMessage(opts.SessionKey, m)
+					}
+				}
+			}
+		}
+
 		history = agent.Sessions.GetHistory(opts.SessionKey)
 		summary = agent.Sessions.GetSummary(opts.SessionKey)
+
+		// 📚 Phase 9: Auto-Recall (Akashic Library RAG)
+		if al.missionManager != nil && opts.UserMessage != "" {
+			knowledgeContext, err := al.missionManager.SearchKnowledge(ctx, opts.UserMessage)
+			if err == nil && knowledgeContext != "" {
+				opts.UserMessage = opts.UserMessage + "\n" + knowledgeContext
+				logger.InfoCF("agent", "Akashic Library: Injected relevant context", map[string]any{
+					"session": opts.SessionKey,
+				})
+			}
+		}
 	}
 	messages := agent.ContextBuilder.BuildMessages(
 		history,
@@ -992,6 +1092,20 @@ func (al *AgentLoop) runLLMIteration(
 			}
 		}
 
+		// 🛡️ Phase 5: FinOps (Usage Enforcement)
+		// Check if agent has exceeded its daily token limit before making costly calls.
+		todayUsage := agent.GetTodayUsage()
+		if agent.MaxDailyTokens > 0 && todayUsage >= agent.MaxDailyTokens {
+			errMsg := fmt.Sprintf("Daily token limit exceeded (%d/%d). Soul preservation mode active — mission aborted.",
+				todayUsage, agent.MaxDailyTokens)
+			logger.WarnCF("agent", "FinOps Violation", map[string]any{
+				"agent_id": agent.ID,
+				"usage":    todayUsage,
+				"limit":    agent.MaxDailyTokens,
+			})
+			return errMsg, iteration, fmt.Errorf("daily token limit exceeded")
+		}
+
 		callLLM := func() (*providers.LLMResponse, error) {
 			if len(agent.Candidates) > 1 && al.fallback != nil {
 				fbResult, fbErr := al.fallback.Execute(
@@ -1027,6 +1141,9 @@ func (al *AgentLoop) runLLMIteration(
 					if recErr := agent.Ledger.Record(response.Usage); recErr != nil {
 						logger.WarnCF("agent", "Failed to record usage", map[string]any{"error": recErr.Error()})
 					}
+					// 📊 Phase 5: FinOps (Usage Reporting)
+					// Non-blocking report to Master for centralized tracking
+					tools.GetAuditClient().ReportUsage(ctx, response.Usage.TotalTokens)
 				}
 				break
 			}
@@ -1199,8 +1316,40 @@ func (al *AgentLoop) runLLMIteration(
 			go func(idx int, tc providers.ToolCall) {
 				defer wg.Done()
 
-				argsJSON, _ := json.Marshal(tc.Arguments)
-				argsPreview := utils.Truncate(string(argsJSON), 200)
+				// 🚦 Phase 5: Human-in-the-Loop Interceptor
+				// Check if action is "risky" and requires explicit human approval.
+				inputJSON, _ := json.Marshal(tc.Arguments)
+				if al.isRiskyAction(tc.Name, string(inputJSON)) {
+					logger.WarnCF("agent", "HITL Interceptor triggered: Risky action detected", map[string]any{
+						"tool": tc.Name,
+					})
+					
+					// Notify user that we are waiting for approval
+					al.bus.PublishOutbound(ctx, bus.OutboundMessage{
+						Channel: opts.Channel,
+						ChatID:  opts.ChatID,
+						Content: fmt.Sprintf("⚠️ Action Required: The agent wants to execute a risky tool: `%s`. Waiting for human approval in the dashboard...", tc.Name),
+					})
+
+					approved, err := tools.GetAuditClient().WaitApproval(ctx, tc.Name, string(inputJSON))
+					if err != nil || !approved {
+						status := "rejected"
+						if err != nil {
+							status = "error: " + err.Error()
+						}
+						agentResults[idx].result = &tools.ToolResult{
+							Err:     fmt.Errorf("action rejected by human"),
+							ForLLM:  "Action was rejected by human controller. Do not attempt again without modification.",
+							ForUser: "I've cancelled the action as requested.",
+						}
+						tools.GetAuditClient().Log(ctx, tc.Name, string(inputJSON), agentResults[idx].result.ForLLM, status)
+						return
+					}
+					
+					logger.InfoCF("agent", "HITL: Action approved, proceeding", map[string]any{"tool": tc.Name})
+				}
+
+				argsPreview := utils.Truncate(string(inputJSON), 200)
 				logger.InfoCF("agent", fmt.Sprintf("Tool call: %s(%s)", tc.Name, argsPreview),
 					map[string]any{
 						"agent_id":  agent.ID,
@@ -1245,6 +1394,15 @@ func (al *AgentLoop) runLLMIteration(
 					asyncCallback,
 				)
 				agentResults[idx].result = toolResult
+
+				// ⚖️ Phase 5: Action Vault (Auditing)
+				// Record the tool execution to the Master's audit log.
+				// This ensures ALL tools are audited consistently.
+				auditStatus := "success"
+				if toolResult.Err != nil {
+					auditStatus = "failed"
+				}
+				tools.GetAuditClient().Log(ctx, tc.Name, string(inputJSON), toolResult.ForLLM, auditStatus)
 			}(i, tc)
 		}
 		wg.Wait()
@@ -1301,6 +1459,17 @@ func (al *AgentLoop) runLLMIteration(
 
 			// Save tool result message to session
 			agent.Sessions.AddFullMessage(opts.SessionKey, toolResultMsg)
+		}
+
+		// 💾 Phase 7: Periodic Checkpointing (Mission Reincarnation)
+		// Report progress to Master after each tool iteration so it can be resumed if we crash.
+		if missionID, ok := opts.Metadata["mission_id"]; ok && missionID != "" {
+			checkpointData, _ := json.Marshal(messages)
+			go func() {
+				if cpErr := al.missionManager.ReportCheckpoint(context.Background(), missionID, string(checkpointData)); cpErr != nil {
+					logger.WarnCF("agent", "Failed to save mission checkpoint", map[string]any{"error": cpErr.Error(), "mission_id": missionID})
+				}
+			}()
 		}
 	}
 
@@ -1376,6 +1545,49 @@ func (al *AgentLoop) forceCompression(agent *AgentInstance, sessionKey string) {
 		"dropped_msgs": droppedCount,
 		"new_count":    len(newHistory),
 	})
+}
+
+// isRiskyAction returns true if the tool call matches security-sensitive patterns.
+func (al *AgentLoop) isRiskyAction(toolName, input string) bool {
+	// 🛡️ Predefined list of risky tools (now configurable via OTTOCLAW_RISKY_TOOLS)
+	riskyTools := map[string]bool{
+		"exec":             true,   // Any shell command
+		"spawn_agent":       true,   // Spawning new agents (can be costly)
+		"delete_file":       true,   // Destructive file operations
+		"write_file":        true,   // Potential data corruption/malware
+		"terminate_node":    true,   // Infrastructure destruction
+		"promotion_ritual": true,   // High-level broadcast
+	}
+
+	// Override or extend with env var
+	if envRisky := os.Getenv("OTTOCLAW_RISKY_TOOLS"); envRisky != "" {
+		for _, t := range strings.Split(envRisky, ",") {
+			riskyTools[strings.TrimSpace(t)] = true
+		}
+	}
+
+	if riskyTools[toolName] {
+		// Further refine shell risks
+		if toolName == "exec" {
+			inputLower := strings.ToLower(input)
+			// Sensitive keywords that ALWAYS trigger HITL
+			riskyKeywords := []string{"rm ", "sudo ", ">", "mkfs", "dd ", "chmod", "chown", "reboot", "shutdown", "exit"}
+			for _, kw := range riskyKeywords {
+				if strings.Contains(inputLower, kw) {
+					return true
+				}
+			}
+			// For shell, we might allow non-destructive reads? 
+			// For now, let's keep it safe and require approval for everything except maybe basic info
+			if strings.Contains(inputLower, "ls ") || strings.Contains(inputLower, "pwd") || strings.Contains(inputLower, "whoami") || strings.Contains(inputLower, "cat ") {
+				return false
+			}
+			return true // Default for exec is risky
+		}
+		return true
+	}
+
+	return false
 }
 
 // GetStartupInfo returns information about loaded tools and skills for logging.
@@ -1569,6 +1781,20 @@ func (al *AgentLoop) summarizeBatch(
 	}
 	prompt := sb.String()
 
+	// 🛡️ Phase 5: FinOps (Usage Enforcement)
+	// Check if agent has exceeded its daily token limit before making costly calls.
+	todayUsage := agent.GetTodayUsage()
+	if agent.MaxDailyTokens > 0 && todayUsage >= agent.MaxDailyTokens {
+		errMsg := fmt.Sprintf("Daily token limit exceeded (%d/%d). Soul preservation mode active — mission aborted.",
+			todayUsage, agent.MaxDailyTokens)
+		logger.WarnCF("agent", "FinOps Violation", map[string]any{
+			"agent_id": agent.ID,
+			"usage":    todayUsage,
+			"limit":    agent.MaxDailyTokens,
+		})
+		return errMsg, fmt.Errorf("daily token limit exceeded")
+	}
+
 	response, err := agent.Provider.Chat(
 		ctx,
 		[]providers.Message{{Role: "user", Content: prompt}},
@@ -1584,11 +1810,13 @@ func (al *AgentLoop) summarizeBatch(
 		return "", err
 	}
 
-	// Record usage for summarization
+	// 📊 Phase 5: FinOps (Usage Reporting)
 	if agent.Ledger != nil && response.Usage != nil {
 		if recErr := agent.Ledger.Record(response.Usage); recErr != nil {
 			logger.WarnCF("agent", "Failed to record summarization usage", map[string]any{"error": recErr.Error()})
 		}
+		// Non-blocking report to Master for centralized tracking
+		tools.GetAuditClient().ReportUsage(ctx, response.Usage.TotalTokens)
 	}
 
 	return response.Content, nil
@@ -1754,6 +1982,13 @@ func (al *AgentLoop) canExecuteTool(agent *AgentInstance, toolName string) error
 		"append_file":   true,
 		"spawn":         true,
 		"install_skill": true,
+	}
+
+	// Override or extend with env var
+	if envRestricted := os.Getenv("OTTOCLAW_RESTRICTED_TOOLS"); envRestricted != "" {
+		for _, t := range strings.Split(envRestricted, ",") {
+			restricted[strings.TrimSpace(t)] = true
+		}
 	}
 
 	if restricted[toolName] {

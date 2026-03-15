@@ -74,6 +74,11 @@ var (
 		regexp.MustCompile(`\bssh\b.*@`),
 		regexp.MustCompile(`\beval\b`),
 		regexp.MustCompile(`\bsource\s+.*\.sh\b`),
+		regexp.MustCompile(`\b(nc|netcat|nmap|telnet)\b`),
+		regexp.MustCompile(`\b(scp|sftp|ftp|rsync)\b`),
+		regexp.MustCompile(`\b(base64|openssl)\b.*-d\b`),
+		regexp.MustCompile(`\b(find|grep)\s+.*/\.ssh\b`),
+		regexp.MustCompile(`\bcrontab\s+-e\b`),
 	}
 
 	// absolutePathPattern matches absolute file paths in commands (Unix and Windows).
@@ -184,7 +189,6 @@ func (t *ExecTool) Parameters() map[string]any {
 }
 
 func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
-	audit := GetAuditClient()
 
 	command, ok := args["command"].(string)
 	if !ok {
@@ -212,7 +216,6 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult
 	}
 
 	if guardError := t.guardCommand(command, cwd); guardError != "" {
-		audit.Log(ctx, "exec", command, guardError, "intercepted")
 		return ErrorResult(guardError)
 	}
 
@@ -291,12 +294,6 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult
 	if len(output) > maxLen {
 		output = output[:maxLen] + fmt.Sprintf("\n... (truncated, %d more chars)", len(output)-maxLen)
 	}
-
-	status := "success"
-	if err != nil {
-		status = "failed"
-	}
-	audit.Log(ctx, "exec", command, output, status)
 
 	return &ToolResult{
 		ForLLM:  output,
