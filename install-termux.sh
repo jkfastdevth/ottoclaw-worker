@@ -239,11 +239,16 @@ run_config_wizard() {
         echo ""
     fi
 
-    # Derive MASTER_HOST from existing MASTER_URL
-    if [[ -n "${MASTER_URL:-}" && -z "${MASTER_HOST:-}" ]]; then
-        MASTER_HOST=$(echo "${MASTER_URL}" | sed 's|http://||;s|:8080||')
+    # Derive DEFAULT_HOST from existing MASTER_URL or detected IPs
+    local DEFAULT_HOST=""
+    if [[ -n "${MASTER_URL:-}" ]]; then
+        DEFAULT_HOST=$(echo "${MASTER_URL}" | sed 's|http://||;s|:8080||')
     fi
-    MASTER_HOST="${MASTER_HOST:-192.168.1.1}"
+    DEFAULT_HOST="${DEFAULT_HOST:-${MASTER_HOST:-192.168.1.100}}"
+    
+    # We want to force a prompt in interactive mode, so we don't set MASTER_HOST here.
+    # The 'ask' function will use DEFAULT_HOST if MASTER_HOST is not in the environment.
+    unset MASTER_HOST
 
     # [1/3] System
     echo -e "${BOLD}[1/3] System${RESET}"
