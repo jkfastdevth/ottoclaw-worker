@@ -13,6 +13,11 @@ type Tool interface {
 	Execute(ctx context.Context, args map[string]any) *ToolResult
 }
 
+// AuditLogger is implemented by clients who want to record tool executions.
+type AuditLogger interface {
+	AuditAction(agentID, nodeID, toolName, input, output, status string)
+}
+
 // --- Request-scoped tool context (channel / chatID) ---
 //
 // Carried via context.Value so that concurrent tool calls each receive

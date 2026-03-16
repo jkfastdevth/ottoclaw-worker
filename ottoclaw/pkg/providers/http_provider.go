@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/sipeed/ottoclaw/pkg/providers/openai_compat"
+	"github.com/sipeed/ottoclaw/pkg/utils"
 )
 
 type HTTPProvider struct {
 	delegate *openai_compat.Provider
+	limiter  *utils.RateLimiter
 }
 
 func NewHTTPProvider(apiKey, apiBase, proxy string) *HTTPProvider {
@@ -42,6 +44,12 @@ func NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
 	}
 }
 
+func (p *HTTPProvider) SetRPM(rpm int) {
+	if rpm > 0 {
+		p.limiter = utils.NewRateLimiter(rpm)
+	}
+}
+
 func (p *HTTPProvider) Chat(
 	ctx context.Context,
 	messages []Message,
@@ -49,6 +57,9 @@ func (p *HTTPProvider) Chat(
 	model string,
 	options map[string]any,
 ) (*LLMResponse, error) {
+	if p.limiter != nil {
+		p.limiter.Wait()
+	}
 	return p.delegate.Chat(ctx, messages, tools, model, options)
 }
 

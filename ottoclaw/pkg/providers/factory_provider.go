@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sipeed/ottoclaw/pkg/config"
+	"github.com/sipeed/ottoclaw/pkg/utils"
 )
 
 // createClaudeAuthProvider creates a Claude provider using OAuth credentials from auth store.
@@ -84,13 +85,17 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		if apiBase == "" {
 			apiBase = getDefaultAPIBase(protocol)
 		}
-		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+		hp := NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
 			cfg.APIKey,
 			apiBase,
-			cfg.Proxy,
+			utils.GetEffectiveProxy(cfg.Proxy),
 			cfg.MaxTokensField,
 			cfg.RequestTimeout,
-		), modelID, nil
+		)
+		if cfg.RPM > 0 {
+			hp.SetRPM(cfg.RPM)
+		}
+		return hp, modelID, nil
 
 	case "litellm", "openrouter", "groq", "zhipu", "gemini", "nvidia",
 		"ollama", "moonshot", "shengsuanyun", "deepseek", "cerebras",
@@ -103,13 +108,17 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		if apiBase == "" {
 			apiBase = getDefaultAPIBase(protocol)
 		}
-		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+		hp := NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
 			cfg.APIKey,
 			apiBase,
-			cfg.Proxy,
+			utils.GetEffectiveProxy(cfg.Proxy),
 			cfg.MaxTokensField,
 			cfg.RequestTimeout,
-		), modelID, nil
+		)
+		if cfg.RPM > 0 {
+			hp.SetRPM(cfg.RPM)
+		}
+		return hp, modelID, nil
 
 	case "anthropic":
 		if cfg.AuthMethod == "oauth" || cfg.AuthMethod == "token" {
@@ -128,13 +137,17 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		if cfg.APIKey == "" {
 			return nil, "", fmt.Errorf("api_key is required for anthropic protocol (model: %s)", cfg.Model)
 		}
-		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+		hp := NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
 			cfg.APIKey,
 			apiBase,
-			cfg.Proxy,
+			utils.GetEffectiveProxy(cfg.Proxy),
 			cfg.MaxTokensField,
 			cfg.RequestTimeout,
-		), modelID, nil
+		)
+		if cfg.RPM > 0 {
+			hp.SetRPM(cfg.RPM)
+		}
+		return hp, modelID, nil
 
 	case "antigravity":
 		return NewAntigravityProvider(), modelID, nil

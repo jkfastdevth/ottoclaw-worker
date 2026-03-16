@@ -346,3 +346,4 @@ func resolveProviderSelection(cfg *config.Config) (providerSelection, error) {
 
 	return sel, nil
 }
+

@@ -23,6 +23,7 @@ type ExecTool struct {
 	allowPatterns       []*regexp.Regexp
 	customAllowPatterns []*regexp.Regexp
 	restrictToWorkspace bool
+	strictMode          bool
 }
 
 var (
@@ -81,8 +82,11 @@ var (
 		regexp.MustCompile(`\bcrontab\s+-e\b`),
 	}
 
-	// absolutePathPattern matches absolute file paths in commands (Unix and Windows).
-	absolutePathPattern = regexp.MustCompile(`[A-Za-z]:\\[^\\\"']+|/[^\s\"']+`)
+	// absolutePathPattern matches potential absolute file paths or path-like strings in commands.
+	// 1. Windows: C:\path or C:/path
+	// 2. Unix: /path
+	// 3. Traversal: ../path
+	absolutePathPattern = regexp.MustCompile(`(?i)([a-z]:[\\/][^ \t\n"'>|]+)|(/[^ \t\n"'>|]+)|(\.\.[\\/][^ \t\n"'>|]+)`)
 
 	// safePaths are kernel pseudo-devices that are always safe to reference in
 	// commands, regardless of workspace restriction. They contain no user data
@@ -160,6 +164,7 @@ func NewExecToolWithConfig(workingDir string, restrict bool, config *config.Conf
 		allowPatterns:       allowPatterns,
 		customAllowPatterns: customAllowPatterns,
 		restrictToWorkspace: restrict,
+		strictMode:          os.Getenv("OTTOCLAW_SHELL_STRICT") == "true",
 	}, nil
 }
 
@@ -323,7 +328,7 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 		}
 	}
 
-	if len(t.allowPatterns) > 0 {
+	if t.strictMode || len(t.allowPatterns) > 0 {
 		allowed := false
 		for _, pattern := range t.allowPatterns {
 			if pattern.MatchString(lower) {
@@ -332,7 +337,11 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 			}
 		}
 		if !allowed {
-			return "Command blocked by safety guard (not in allowlist)"
+			msg := "Command blocked by safety guard (not in allowlist)"
+			if t.strictMode {
+				msg = "Command blocked by safety guard (Strict Mode: mandatory allowlist required)"
+			}
+			return msg
 		}
 	}
 

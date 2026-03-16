@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
+
+	"github.com/sipeed/ottoclaw/pkg/utils"
 )
 
 type SwarmNegotiateTool struct {
@@ -70,8 +73,8 @@ func (t *SwarmNegotiateTool) Execute(ctx context.Context, args map[string]any) *
 	}
 	body, _ := json.Marshal(payload)
 
-	url := fmt.Sprintf("%s/api/agent/v1/swarm/negotiate", t.MasterURL)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	apiURL := fmt.Sprintf("%s/api/agent/v1/swarm/negotiate", t.MasterURL)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(body))
 	if err != nil {
 		return ErrorResult(err.Error())
 	}
@@ -81,6 +84,14 @@ func (t *SwarmNegotiateTool) Execute(ctx context.Context, args map[string]any) *
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
+	proxy := utils.GetEffectiveProxy("")
+	if proxy != "" {
+		if parsed, err := url.Parse(proxy); err == nil {
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(parsed),
+			}
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to reach swarm orchestrator: %v", err))
@@ -156,8 +167,8 @@ func (t *SwarmVoteTool) Execute(ctx context.Context, args map[string]any) *ToolR
 	}
 	body, _ := json.Marshal(payload)
 
-	url := fmt.Sprintf("%s/api/agent/v1/swarm/consensus/%s/vote", t.MasterURL, consensusID)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	apiURL := fmt.Sprintf("%s/api/agent/v1/swarm/consensus/%s/vote", t.MasterURL, consensusID)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(body))
 	if err != nil {
 		return ErrorResult(err.Error())
 	}
@@ -167,6 +178,14 @@ func (t *SwarmVoteTool) Execute(ctx context.Context, args map[string]any) *ToolR
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
+	proxy := utils.GetEffectiveProxy("")
+	if proxy != "" {
+		if parsed, err := url.Parse(proxy); err == nil {
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(parsed),
+			}
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to cast vote: %v", err))

@@ -143,7 +143,7 @@ func registerSharedTools(
 				GLMSearchEngine:      cfg.Tools.Web.GLMSearch.SearchEngine,
 				GLMSearchMaxResults:  cfg.Tools.Web.GLMSearch.MaxResults,
 				GLMSearchEnabled:     cfg.Tools.Web.GLMSearch.Enabled,
-				Proxy:                cfg.Tools.Web.Proxy,
+				Proxy:                utils.GetEffectiveProxy(cfg.Tools.Web.Proxy),
 			})
 			if err != nil {
 				logger.ErrorCF("agent", "Failed to create web search tool", map[string]any{"error": err.Error()})
@@ -152,7 +152,7 @@ func registerSharedTools(
 			}
 		}
 		if cfg.Tools.IsToolEnabled("web_fetch") {
-			fetchTool, err := tools.NewWebFetchToolWithProxy(50000, cfg.Tools.Web.Proxy, cfg.Tools.Web.FetchLimitBytes)
+			fetchTool, err := tools.NewWebFetchToolWithProxy(50000, utils.GetEffectiveProxy(cfg.Tools.Web.Proxy), cfg.Tools.Web.FetchLimitBytes)
 			if err != nil {
 				logger.ErrorCF("agent", "Failed to create web fetch tool", map[string]any{"error": err.Error()})
 			} else {

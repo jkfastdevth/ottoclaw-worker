@@ -56,6 +56,15 @@ err()    { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
 ask() {
     # Usage: ask "Label" "default" [secret]
     local label="$1" default="$2" secret="${3:-false}" val=""
+    
+    # 🤖 Automation: Check if an environment variable exists for this field
+    # Normalize label to uppercase, replace spaces/special chars with underscores
+    local env_name=$(echo "$label" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:lower:]' '[:upper:]' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+    if [[ -n "${!env_name:-}" ]]; then
+        echo -n "${!env_name}"
+        return
+    fi
+
     local disp="$default"
     [[ "$secret" == "true" && -n "$default" ]] && disp=$(echo -n "$default" | sed 's/./*/g')
     
@@ -89,6 +98,14 @@ get_local_ip() {
 
 ask_yn() {
     local label="$1" default="$2" val
+    
+    # 🤖 Automation check
+    local env_name=$(echo "$label" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:lower:]' '[:upper:]' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+    if [[ -n "${!env_name:-}" ]]; then
+        [[ "${!env_name,,}" == "y" || "${!env_name,,}" == "yes" || "${!env_name}" == "1" || "${!env_name,,}" == "true" ]]
+        return
+    fi
+
     echo -ne "  ${CYAN}?${RESET}  ${label} [${default}]: " >&2
     read -r val < /dev/tty
     val="${val:-$default}"
@@ -230,8 +247,8 @@ run_config_wizard() {
 
     # [1/3] System
     echo -e "${BOLD}[1/3] System${RESET}"
-    AGENT_NAME=$(ask "Agent Name (e.g. Kaidos)" "${AGENT_NAME:-Kaidos}")
-    ORCHESTRATOR_NICKNAMES=$(ask "Aliases (comma-sep)" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
+    AGENT_NAME=$(ask "AGENT_NAME" "${AGENT_NAME:-Kaidos}")
+    ORCHESTRATOR_NICKNAMES=$(ask "AGENT_ALIASES" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
 
     echo ""
     echo -e "  เลือกประเภท Network:"
@@ -239,7 +256,7 @@ run_config_wizard() {
     echo -e "    ${CYAN}2${RESET}) Tailscale VPN (100.x.x.x)"
     echo -e "    ${CYAN}3${RESET}) VPS / Public"
     echo ""
-    NET_TYPE=$(ask "Network type [1/2/3]" "${NET_TYPE:-1}")
+    NET_TYPE=$(ask "NETWORK_TYPE" "${NET_TYPE:-1}")
     NET_TYPE=$(echo "$NET_TYPE" | tr -dc '1-3'); NET_TYPE="${NET_TYPE:-1}"
 
     PROTOCOL="http"
@@ -275,9 +292,9 @@ run_config_wizard() {
     info "Network: ${NET_LABEL} (${PROTOCOL})"
     echo -e "  Ports → HTTP :8080   gRPC :50051\n"
 
-    MASTER_HOST=$(  ask "Master address" "${DEFAULT_HOST}")
-    MASTER_API_KEY=$(ask "Master API Key"  "${MASTER_API_KEY:-73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90}" "true")
-    NODE_SECRET=$(  ask "Node Secret"     "${NODE_SECRET:-ea710cf8c0f08298e9aa938dff0e0133}" "true")
+    MASTER_HOST=$(  ask "MASTER_HOST" "${DEFAULT_HOST}")
+    MASTER_API_KEY=$(ask "MASTER_KEY"  "${MASTER_API_KEY:-73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90}" "true")
+    NODE_SECRET=$(  ask "SECRET"     "${NODE_SECRET:-ea710cf8c0f08298e9aa938dff0e0133}" "true")
 
     MASTER_URL="${PROTOCOL}://${MASTER_HOST}:8080"
     MASTER_GRPC_URL="${MASTER_HOST}:50051"
@@ -295,13 +312,13 @@ run_config_wizard() {
 
     # [2/3] Telegram (Optional)
     echo -e "${BOLD}[2/3] Telegram (Optional — กด Enter เพื่อข้าม)${RESET}"
-    WORKER_TELEGRAM_TOKEN=$(ask "Telegram Bot Token" "${WORKER_TELEGRAM_TOKEN:-}" "true")
+    WORKER_TELEGRAM_TOKEN=$(ask "TG_TOKEN" "${WORKER_TELEGRAM_TOKEN:-}" "true")
     TELEGRAM_ALLOW_FROM=""; TELEGRAM_BRIDGE_CHAT_ID=""; TELEGRAM_ORCHESTRATION_ENABLED="false"
     if [[ -n "${WORKER_TELEGRAM_TOKEN:-}" ]]; then
-        TELEGRAM_ALLOW_FROM=$(ask "Allowed User IDs (comma-sep)" "${TELEGRAM_ALLOW_FROM:-}")
+        TELEGRAM_ALLOW_FROM=$(ask "TG_ALLOW" "${TELEGRAM_ALLOW_FROM:-}")
         if ask_yn "Enable Agent-to-Agent via Telegram? [y/N]" "n"; then
             TELEGRAM_ORCHESTRATION_ENABLED="true"
-            TELEGRAM_BRIDGE_CHAT_ID=$(ask "Telegram Bridge Group ID" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
+            TELEGRAM_BRIDGE_CHAT_ID=$(ask "TG_BRIDGE" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
         fi
     fi
 

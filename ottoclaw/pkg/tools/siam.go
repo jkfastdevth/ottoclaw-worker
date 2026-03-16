@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/sipeed/ottoclaw/pkg/utils"
 )
 
 // siamClient is a shared HTTP helper for Siam-Synapse Master API calls.
@@ -20,10 +23,19 @@ type siamClient struct {
 }
 
 func newSiamClient(baseURL, apiKey string) *siamClient {
+	client := &http.Client{Timeout: 15 * time.Second}
+	proxy := utils.GetEffectiveProxy("")
+	if proxy != "" {
+		if parsed, err := url.Parse(proxy); err == nil {
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(parsed),
+			}
+		}
+	}
 	return &siamClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 15 * time.Second},
+		http:    client,
 	}
 }
 
@@ -70,11 +82,27 @@ func (c *siamClient) delete(path string) ([]byte, error) {
 	return data, err
 }
 
+// AuditAction logs a tool execution to the Master.
+func (c *siamClient) AuditAction(agentID, nodeID, toolName, input, output, status string) {
+	payload := map[string]any{
+		"agent_id":  agentID,
+		"node_id":   nodeID,
+		"tool_name": toolName,
+		"input":     input,
+		"output":    output,
+		"status":    status,
+	}
+	_, _, err := c.do("POST", "/api/agent/v1/audit/log", payload)
+	if err != nil {
+		fmt.Printf("⚠️  Failed to log audit for %s: %v\n", toolName, err)
+	}
+}
+
 // NewSiamToolset creates all Siam-Synapse tools, reading SIAM_MASTER_URL
 // and SIAM_API_KEY (or MASTER_API_URL / MASTER_API_KEY) from the environment.
-func NewSiamToolset(masterURL, apiKey string) []Tool {
+func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 	client := newSiamClient(masterURL, apiKey)
-	return []Tool{
+	toolset := []Tool{
 		&SiamGetMetricsTool{client: client},
 		&SiamGetAgentsTool{client: client},
 		&SiamSpawnAgentTool{client: client},
@@ -101,6 +129,7 @@ func NewSiamToolset(masterURL, apiKey string) []Tool {
 		&SiamDriveDownloadTool{},
 		&SiamReadEmailsTool{},
 	}
+	return toolset, client
 }
 
 // SiamDelegateMissionTool — delegate a persistent task to another agent.
@@ -126,6 +155,10 @@ func (t *SiamDelegateMissionTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Optional: ID of the current mission you are working on, to link this new task as a sub-mission.",
 			},
+			"requires_approval": map[string]any{
+				"type":        "boolean",
+				"description": "Optional: If true, the mission will require human approval before starting.",
+			},
 		},
 		"required": []string{"agent_id", "description"},
 	}
@@ -149,6 +182,9 @@ func (t *SiamDelegateMissionTool) Execute(_ context.Context, args map[string]any
 	}
 	if parentID != "" {
 		payload["parent_id"] = parentID
+	}
+	if reqApp, ok := args["requires_approval"].(bool); ok && reqApp {
+		payload["requires_approval"] = true
 	}
 
 	data, err := t.client.post("/api/agent/v1/missions", payload)
@@ -657,14 +693,14 @@ func (t *SiamSendMessageTool) Execute(_ context.Context, args map[string]any) *T
 }
 
 // NewSiamToolsetFromEnv creates the Siam toolset by reading env vars automatically.
-// Returns nil slice if SIAM_MASTER_URL / MASTER_API_URL is not set.
-func NewSiamToolsetFromEnv() []Tool {
+// Returns nil if SIAM_MASTER_URL / MASTER_API_URL is not set.
+func NewSiamToolsetFromEnv() ([]Tool, AuditLogger) {
 	masterURL := os.Getenv("SIAM_MASTER_URL")
 	if masterURL == "" {
 		masterURL = os.Getenv("MASTER_API_URL")
 	}
 	if masterURL == "" {
-		return nil
+		return nil, nil
 	}
 	apiKey := os.Getenv("SIAM_API_KEY")
 	if apiKey == "" {
