@@ -641,6 +641,7 @@ type ToolsConfig struct {
 	Spawn           ToolConfig         `json:"spawn"                                                    envPrefix:"OTTOCLAW_TOOLS_SPAWN_"`
 	SPI             ToolConfig         `json:"spi"                                                      envPrefix:"OTTOCLAW_TOOLS_SPI_"`
 	Subagent        ToolConfig         `json:"subagent"                                                 envPrefix:"OTTOCLAW_TOOLS_SUBAGENT_"`
+	Swarm           ToolConfig         `json:"swarm"                                                    envPrefix:"OTTOCLAW_TOOLS_SWARM_"`
 	WebFetch        ToolConfig         `json:"web_fetch"                                                envPrefix:"OTTOCLAW_TOOLS_WEB_FETCH_"`
 	WriteFile       ToolConfig         `json:"write_file"                                               envPrefix:"OTTOCLAW_TOOLS_WRITE_FILE_"`
 }

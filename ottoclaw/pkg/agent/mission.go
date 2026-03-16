@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sipeed/ottoclaw/pkg/bus"
 	"github.com/sipeed/ottoclaw/pkg/config"
 	"github.com/sipeed/ottoclaw/pkg/logger"
+	"os/signal"
+	"syscall"
 )
 
 type Mission struct {
@@ -21,6 +24,7 @@ type Mission struct {
 	ParentID    string    `json:"parent_id"`
 	Status      string    `json:"status"`
 	Result      string    `json:"result"`
+	Checkpoint  string    `json:"checkpoint"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -87,10 +91,18 @@ func (m *MissionManager) Start(ctx context.Context) {
 	// Initial heartbeat
 	m.reportHeartbeats(ctx, masterURL, apiKey)
 
+	// 🚀 Phase 6: Listen for SIGUSR1 to trigger immediate poll (Master Nudge)
+	nudgeChan := make(chan os.Signal, 1)
+	signal.Notify(nudgeChan, syscall.SIGUSR1)
+	defer signal.Stop(nudgeChan)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-nudgeChan:
+			logger.InfoC("mission", "🚀 Received SIGUSR1 nudge! Polling missions immediately...")
+			m.pollMissions(ctx, masterURL, apiKey)
 		case <-ticker.C:
 			m.pollMissions(ctx, masterURL, apiKey)
 		case <-heartbeatTicker.C:
@@ -126,6 +138,7 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 			"today_usage":      usage,
 			"today_cost":       cost,
 			"max_daily_tokens": agent.MaxDailyTokens,
+			"tools":            agent.Tools.List(),
 		}
 		body, _ := json.Marshal(payload)
 
@@ -203,6 +216,7 @@ func (m *MissionManager) injectMission(ctx context.Context, mission Mission) {
 		Metadata: map[string]string{
 			"mission_id": mission.ID,
 			"parent_id":  mission.ParentID,
+			"checkpoint": mission.Checkpoint,
 			"type":       "mission",
 		},
 	}
@@ -260,4 +274,103 @@ func (m *MissionManager) ReportResult(ctx context.Context, missionID string, suc
 	}
 
 	return nil
+}
+
+func (m *MissionManager) ReportCheckpoint(ctx context.Context, missionID string, checkpoint string) error {
+	masterURL := m.cfg.Channels.SiamSync.MasterURL
+	if masterURL == "" {
+		masterURL = os.Getenv("MASTER_API_URL")
+	}
+	if masterURL == "" {
+		masterURL = "http://master:8080"
+	}
+
+	apiKey := m.cfg.Channels.SiamSync.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("MASTER_API_KEY")
+	}
+
+	url := fmt.Sprintf("%s/api/agent/v1/missions/%s", masterURL, missionID)
+	payload := map[string]string{
+		"status":     "running",
+		"checkpoint": checkpoint,
+	}
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("master returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+func (m *MissionManager) SearchKnowledge(ctx context.Context, query string) (string, error) {
+	masterURL := m.cfg.Channels.SiamSync.MasterURL
+	if masterURL == "" {
+		masterURL = os.Getenv("MASTER_API_URL")
+	}
+	if masterURL == "" {
+		masterURL = "http://master:8080"
+	}
+
+	apiKey := m.cfg.Channels.SiamSync.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("MASTER_API_KEY")
+	}
+
+	url := fmt.Sprintf("%s/api/agent/v1/knowledge/search?query=%s&limit=3", masterURL, query)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("master returned status %d", resp.StatusCode)
+	}
+
+	var entries []struct {
+		Fact       string  `json:"fact"`
+		Confidence float64 `json:"confidence"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return "", err
+	}
+
+	if len(entries) == 0 {
+		return "", nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n[Akashic Library - Relevant Context]\n")
+	for _, e := range entries {
+		sb.WriteString(fmt.Sprintf("- %s (Confidence: %.2f)\n", e.Fact, e.Confidence))
+	}
+	return sb.String(), nil
 }

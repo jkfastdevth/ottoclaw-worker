@@ -2,7 +2,9 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -12,8 +14,9 @@ import (
 )
 
 type ToolRegistry struct {
-	tools map[string]Tool
-	mu    sync.RWMutex
+	tools   map[string]Tool
+	Auditor AuditLogger // 🛡️ Transparency & Action Vault
+	mu      sync.RWMutex
 }
 
 func NewToolRegistry() *ToolRegistry {
@@ -110,6 +113,24 @@ func (r *ToolRegistry) ExecuteWithContext(
 				"duration_ms":   duration.Milliseconds(),
 				"result_length": len(result.ForLLM),
 			})
+	}
+
+	// 🛡️ Automated Auditing (Action Vault)
+	if r.Auditor != nil && !result.Async {
+		status := "success"
+		if result.IsError {
+			status = "failed"
+		}
+		agentIDParam := agentID
+		if agentIDParam == "" {
+			agentIDParam = ToolAgentID(ctx)
+		}
+		nodeID := os.Getenv("NODE_ID")
+		if nodeID == "" {
+			nodeID = "local"
+		}
+		inputJSON, _ := json.Marshal(args)
+		go r.Auditor.AuditAction(agentIDParam, nodeID, name, string(inputJSON), result.ForLLM, status)
 	}
 
 	return result

@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/sipeed/ottoclaw/pkg/crypto"
 )
 
 // WriteFileAtomic atomically writes data to a file using a temp file + rename pattern.
@@ -116,4 +118,21 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	// Success: skip cleanup (file was renamed, no temp to remove)
 	cleanup = false
 	return nil
+}
+// ReadFileEncrypted reads a file and decrypts its content using the provided passphrase.
+func ReadFileEncrypted(path string, passphrase []byte) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.Decrypt(data, passphrase)
+}
+
+// WriteFileEncrypted encrypts data and writes it atomically to the target path.
+func WriteFileEncrypted(path string, data []byte, perm os.FileMode, passphrase []byte) error {
+	encrypted, err := crypto.Encrypt(data, passphrase)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt data: %w", err)
+	}
+	return WriteFileAtomic(path, encrypted, perm)
 }

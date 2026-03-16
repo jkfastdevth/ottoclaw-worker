@@ -56,6 +56,11 @@ func NewAgentInstance(
 	fallbacks := resolveAgentFallbacks(agentCfg, defaults)
 
 	restrict := defaults.RestrictToWorkspace
+	if os.Getenv("OTTOCLAW_RESTRICT_WORKSPACE") == "true" {
+		restrict = true
+	} else if os.Getenv("OTTOCLAW_RESTRICT_WORKSPACE") == "false" {
+		restrict = false
+	}
 	readRestrict := restrict && !defaults.AllowReadOutsideWorkspace
 
 	// Compile path whitelist patterns from config.
@@ -89,9 +94,11 @@ func NewAgentInstance(
 	}
 
 	// Siam-Synapse orchestrator tools — enabled when SIAM_MASTER_URL / MASTER_API_URL is set
-	for _, t := range tools.NewSiamToolsetFromEnv() {
+	siamTools, siamAuditor := tools.NewSiamToolsetFromEnv()
+	for _, t := range siamTools {
 		toolsRegistry.Register(t)
 	}
+	toolsRegistry.Auditor = siamAuditor
 
 	sessionsDir := filepath.Join(workspace, "sessions")
 	sessionsManager := session.NewSessionManager(sessionsDir)

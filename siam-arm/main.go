@@ -166,6 +166,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"strconv"
 	"net"
 	"runtime"
 
@@ -220,6 +221,42 @@ func getSafeEnv() []string {
 	}
 
 	return safeEnv
+}
+
+// getBatteryAndTemp reads hardware telemetry from sysfs (Android/Linux)
+func getBatteryAndTemp() (float32, float32) {
+	battery := float32(0)
+	temp := float32(0)
+
+	// Try battery paths
+	batPaths := []string{
+		"/sys/class/power_supply/battery/capacity",
+		"/sys/class/power_supply/BAT0/capacity",
+	}
+	for _, path := range batPaths {
+		if data, err := os.ReadFile(path); err == nil {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 32); err == nil {
+				battery = float32(val)
+				break
+			}
+		}
+	}
+
+	// Try thermal paths (results are usually in millidegrees Celsius)
+	tempPaths := []string{
+		"/sys/class/thermal/thermal_zone0/temp",
+		"/sys/class/thermal/thermal_zone1/temp",
+	}
+	for _, path := range tempPaths {
+		if data, err := os.ReadFile(path); err == nil {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 32); err == nil {
+				temp = float32(val) / 1000.0
+				break
+			}
+		}
+	}
+
+	return battery, temp
 }
 
 // จำลองฟังก์ชัน restartContainer
@@ -775,6 +812,8 @@ func main() {
 			}
 		}
 
+		batLevel, cpuTemp := getBatteryAndTemp()
+
 		status := &proto.NodeStatus{
 			NodeId:     nodeID,
 			CpuUsage:   cpuUsage,
@@ -788,6 +827,8 @@ func main() {
 			Role:       reportedRole,
 			Department: reportedDepartment,
 			OrgId:      reportedOrgID,
+			BatteryLevel: batLevel,
+			Temperature:  cpuTemp,
 		}
 
 		// 🛡️ Add Soul Metadata Header (X-API implementation)
