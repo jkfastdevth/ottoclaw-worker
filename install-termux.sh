@@ -251,7 +251,7 @@ run_config_wizard() {
     ORCHESTRATOR_NICKNAMES=$(ask "AGENT_ALIASES" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
 
     echo ""
-    echo -e "  เลือกประเภท Network:"
+    echo -e "  เลือกประเภท Network ระบุไอพีของเครื่อง Master:"
     echo -e "    ${CYAN}1${RESET}) Local LAN     (192.168.x.x)"
     echo -e "    ${CYAN}2${RESET}) Tailscale VPN (100.x.x.x)"
     echo -e "    ${CYAN}3${RESET}) VPS / Public"
