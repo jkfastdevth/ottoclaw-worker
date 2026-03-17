@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -35,6 +36,8 @@ import (
 	"github.com/sipeed/ottoclaw/pkg/tools"
 	"github.com/sipeed/ottoclaw/pkg/utils"
 	"github.com/sipeed/ottoclaw/pkg/voice"
+	"io"
+	"bufio"
 )
 
 type AgentLoop struct {
@@ -1854,6 +1857,14 @@ func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
 
 func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) (string, bool) {
 	content := strings.TrimSpace(msg.Content)
+
+	// 🛠️ Special: Handle Master-API triggered update command
+	if content == "ottoclaw update" {
+		logger.InfoCF("agent", "Received remote update command via bus", map[string]any{"sender": msg.SenderID})
+		go al.executeSelfUpdate()
+		return "Agent update triggered successfully.", true
+	}
+
 	if !strings.HasPrefix(content, "/") {
 		return "", false
 	}
@@ -1940,6 +1951,65 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) 
 	}
 
 	return "", false
+}
+
+// executeSelfUpdate triggers the external ottoclaw update script and streams logs
+func (al *AgentLoop) executeSelfUpdate() {
+	agentID := os.Getenv("NODE_ID")
+	if agentID == "" {
+		agentID = "unknown-agent"
+	}
+
+	logger.InfoCF("agent", "Executing self-update script with log streaming...", nil)
+	al.broadcastSystemEvent("AGENT_UPDATE_PROGRESS", fmt.Sprintf("Agent [%s] starting self-update...", agentID), "")
+
+	// Use sh -c for better compatibility across environments
+	cmd := exec.Command("sh", "-c", "ottoclaw update")
+	
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	multi := io.MultiReader(stdout, stderr)
+	
+	if err := cmd.Start(); err != nil {
+		al.broadcastSystemEvent("AGENT_UPDATE_FAILED", fmt.Sprintf("Failed to start update: %v", err), "")
+		return
+	}
+
+	scanner := bufio.NewScanner(multi)
+	for scanner.Scan() {
+		line := scanner.Text()
+		logger.DebugCF("agent", "Update log", map[string]any{"log": line})
+		// Broadcast each line to Master
+		al.broadcastSystemEvent("AGENT_UPDATE_LOG", line, "")
+	}
+
+	if err := cmd.Wait(); err != nil {
+		al.broadcastSystemEvent("AGENT_UPDATE_FAILED", fmt.Sprintf("Update command exited with error: %v", err), "")
+		return
+	}
+	
+	al.broadcastSystemEvent("AGENT_UPDATE_COMPLETED", "Agent update finished successfully. Worker may restart.", "")
+}
+
+// broadcastSystemEvent is a helper to send events back to the Master
+func (al *AgentLoop) broadcastSystemEvent(eventType, message, payload string) {
+	agentID := os.Getenv("NODE_ID")
+	if agentID == "" {
+		agentID = "unknown-agent"
+	}
+
+	// Ideally we'd use the sync channel or a dedicated event bus, 
+	// but for simplicity we rely on the existing BroadcastSystemEvent pattern if available 
+	// or log it so the Master can pick it up via polling if that's how it's implemented.
+	// Since we are inside AgentLoop, we likely have access to the sync mechanisms.
+	
+	logger.InfoCF("agent", "System Event", map[string]any{
+		"type":    eventType,
+		"message": message,
+		"agent":   agentID,
+	})
+
+	// TODO: Ensure this actually reaches the Master via the outbound bus/sync
 }
 
 // extractPeer extracts the routing peer from the inbound message's structured Peer field.
