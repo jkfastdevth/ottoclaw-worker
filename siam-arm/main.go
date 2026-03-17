@@ -596,7 +596,7 @@ func main() {
 					log.Printf("✅ [Workspace Sync] File %s updated successfully.", filename)
 					
 					// 🔥 Trigger Hot Reload if it's a critical file
-					isCritical := (filename == "SOUL.md" || filename == "AGENTS.md")
+					isCritical := (filename == "SOUL.md" || filename == "AGENTS.md" || filename == "ROLE")
 					
 					if isCritical && os.Getenv("OTTOCLAW_MODE") != "orchestrator" {
 						log.Printf("🔥 [Hot Reload] Critical file %s changed. Restarting brain...", filename)
