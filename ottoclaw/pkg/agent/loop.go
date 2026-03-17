@@ -983,8 +983,15 @@ func (al *AgentLoop) runAgentLoop(
 	// 9. Report Mission Result if applicable
 	if missionID, ok := opts.Metadata["mission_id"]; ok && missionID != "" {
 		logger.InfoCF("agent", "Reporting mission result", map[string]any{"mission_id": missionID})
+		
+		// Strip <think>...</think> tags which might clutter the mission result output
+		cleanedContent := finalContent
+		thinkReg := regexp.MustCompile(`(?s)<think>.*?</think>`)
+		cleanedContent = thinkReg.ReplaceAllString(cleanedContent, "")
+		cleanedContent = strings.TrimSpace(cleanedContent)
+
 		go func() {
-			if err := al.missionManager.ReportResult(context.Background(), missionID, true, finalContent); err != nil {
+			if err := al.missionManager.ReportResult(context.Background(), missionID, true, cleanedContent); err != nil {
 				logger.ErrorCF("agent", "Failed to report mission result", map[string]any{"error": err.Error(), "mission_id": missionID})
 			}
 		}()

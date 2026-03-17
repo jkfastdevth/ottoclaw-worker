@@ -163,6 +163,7 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 
 func (m *MissionManager) pollMissions(ctx context.Context, masterURL, apiKey string) {
 	url := fmt.Sprintf("%s/api/agent/v1/missions/%s?status=pending", masterURL, m.agentID)
+	logger.InfoCF("mission", "Polling URL", map[string]any{"url": url})
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -181,13 +182,17 @@ func (m *MissionManager) pollMissions(ctx context.Context, masterURL, apiKey str
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.WarnCF("mission", "Poll failed or returned non-200", map[string]any{"status": resp.StatusCode})
 		return
 	}
 
 	var missions []Mission
 	if err := json.NewDecoder(resp.Body).Decode(&missions); err != nil {
+		logger.WarnCF("mission", "Failed to decode missions", map[string]any{"error": err.Error()})
 		return
 	}
+
+	logger.InfoCF("mission", "Poll complete", map[string]any{"count": len(missions)})
 
 	for _, mission := range missions {
 		m.injectMission(ctx, mission)

@@ -596,7 +596,7 @@ func main() {
 					log.Printf("✅ [Workspace Sync] File %s updated successfully.", filename)
 					
 					// 🔥 Trigger Hot Reload if it's a critical file
-					isCritical := (filename == "SOUL.md" || filename == "AGENTS.md")
+					isCritical := (filename == "SOUL.md" || filename == "AGENTS.md" || filename == "ROLE")
 					
 					if isCritical && os.Getenv("OTTOCLAW_MODE") != "orchestrator" {
 						log.Printf("🔥 [Hot Reload] Critical file %s changed. Restarting brain...", filename)
@@ -747,6 +747,9 @@ func main() {
 	}
 
 	osInfo := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+	if _, err := os.Stat("/data/data/com.termux"); err == nil {
+		osInfo = "Termux " + osInfo // Clearly mark as Termux for SSH port auto-detection in Master
+	}
 
 	// 5. Loop ส่ง Heartbeat ทุกๆ 5 วินาที
 	fmt.Println("🚀 Worker Node Started: Sending heartbeats to Master...")
@@ -773,7 +776,23 @@ func main() {
 			totalRamGB = float64(m.Total) / (1024 * 1024 * 1024)
 		}
 
+		// Read actual CPU hardware model from /proc/cpuinfo (works on Android/Linux)
+		cpuModel := ""
+		if b, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+			for _, line := range strings.Split(string(b), "\n") {
+				if strings.HasPrefix(line, "Hardware\t") || strings.HasPrefix(line, "model name") {
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) == 2 {
+						cpuModel = strings.TrimSpace(parts[1])
+						break
+					}
+				}
+			}
+		}
 		sysSpec := fmt.Sprintf("%d Cores CPU, %.1fGB RAM", runtime.NumCPU(), totalRamGB)
+		if cpuModel != "" {
+			sysSpec = fmt.Sprintf("%s (%d Cores, %.1fGB RAM)", cpuModel, runtime.NumCPU(), totalRamGB)
+		}
 		
 		// 🔍 [Phase 2] Read tool list exported by the ottoclaw brain
 		var reportedTools []string
