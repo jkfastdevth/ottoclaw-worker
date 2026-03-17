@@ -437,6 +437,24 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 								"chat_id":     msg.ChatID,
 								"content_len": len(response),
 							})
+
+						// 🌟 Send CC to the last active channel if msg.Channel == "mission"
+						if msg.Channel == "mission" && al.state != nil {
+							lastCh := al.state.GetLastChannel()
+							lastChat := al.state.GetLastChatID()
+							if lastCh != "" && lastChat != "" && !constants.IsInternalChannel(lastCh) {
+								al.bus.PublishOutbound(ctx, bus.OutboundMessage{
+									Channel: lastCh,
+									ChatID:  lastChat,
+									Content: "📋 **Mission Report:**\n\n" + response,
+								})
+								logger.InfoCF("agent", "CC'd mission response to last active channel",
+									map[string]any{
+										"channel": lastCh,
+										"chat_id": lastChat,
+									})
+							}
+						}
 					} else {
 						logger.DebugCF(
 							"agent",

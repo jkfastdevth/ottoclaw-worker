@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"os/signal"
+	"syscall"
+
 	"github.com/sipeed/ottoclaw/pkg/bus"
 	"github.com/sipeed/ottoclaw/pkg/config"
 	"github.com/sipeed/ottoclaw/pkg/logger"
-	"os/signal"
-	"syscall"
 )
 
 type Mission struct {
