@@ -681,19 +681,22 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 				})
 				// Broadcast to all other agents via Master API
 				go c.broadcastToOtherAgents(remoteSender, actualContent)
-			} else if isMatch && (chatIDStr == tCfg.BridgeChatID || message.Chat.Type == "private") {
-				// We are the intended target in a Bridge/DM!
+			} else if (isMatch && chatIDStr == tCfg.BridgeChatID) || message.Chat.Type == "private" {
+				// We are the intended target in a Bridge (by name) or DM (always)!
+				if isMatch {
+					content = actualContent
+				}
 				sender = bus.SenderInfo{
 					Platform:    "siam",
 					PlatformID:  remoteSender,
 					CanonicalID: identity.BuildCanonicalID("siam", remoteSender),
 					DisplayName: remoteSender,
 				}
-				content = actualContent
 				forceRespond = true
 				logger.InfoCF("telegram", "Orchestration message intercepted", map[string]any{
 					"from":    remoteSender,
 					"to":      targetAgent,
+					"is_dm":   message.Chat.Type == "private",
 				})
 			} else if isMatch {
 				// Targeted by name in a normal group: proceed with normal group identification
