@@ -207,11 +207,23 @@ func (s *SiamSyncChannel) fetchMessages(ctx context.Context, masterURL, apiKey, 
 	}
 
 	var result struct {
-		Messages []string `json:"messages"`
+		Messages  []string          `json:"messages"`
+		SystemEnv map[string]string `json:"system_env"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		logger.ErrorCF("siam_sync", "Failed to decode messages", map[string]any{"error": err.Error()})
 		return
+	}
+
+	// ── Inject System Environment Variables ────────────────────────
+	if len(result.SystemEnv) > 0 {
+		for k, v := range result.SystemEnv {
+			if v != "" {
+				os.Setenv(k, v)
+				//logger.DebugCF("siam_sync", "Injected system env", map[string]any{"key": k})
+			}
+		}
+		logger.InfoCF("siam_sync", "Injected system environment variables", map[string]any{"count": len(result.SystemEnv)})
 	}
 
 	for _, m := range result.Messages {

@@ -446,6 +446,13 @@ install_wrapper() {
 BRAIN="/usr/local/bin/ottoclaw-brain"
 INSTALL_SH="$(find /opt/siam-synapse /home -name install.sh -path "*/ottoclaw-worker/*" 2>/dev/null | head -1)"
 
+# ── Colors & Helpers (Copied from installer) ───────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
+info()   { echo -e "  ${GREEN}✓${RESET}  $1"; }
+warn()   { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
+error()  { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
+
 case "${1:-}" in
   config)
     # ── Reconfigure settings ──────────────────────────────────
@@ -526,6 +533,8 @@ SOULEOF
     echo ""
     echo "⏳ Pulling latest code..."
     if [[ -d "${REPO_DIR}/.git" ]]; then
+        # Ensure git doesn't complain about ownership when running as root
+        git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
         git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
     else
         warn "Not a git repository. Re-running installer to fetch latest code..."
@@ -536,6 +545,7 @@ SOULEOF
     systemctl stop ottoclaw-worker siam-worker 2>/dev/null || true
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "$(dirname "$INSTALL_SH")/ottoclaw" >/dev/null
+    # Fix: exit 128 "error obtaining VCS status" by using -buildvcs=false
     CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
     popd >/dev/null
     echo "   ✓ ottoclaw-brain rebuilt"
