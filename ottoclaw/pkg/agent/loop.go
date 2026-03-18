@@ -798,6 +798,37 @@ func (al *AgentLoop) processSystemMessage(
 		originChatID = msg.ChatID
 	}
 
+	// 🕵️ Selective Relay (Token Optimization - FinOps)
+	// If the message is a Strategic Oversight report from the Master, 
+	// and it's a successful notification, relay it directly.
+	if strings.Contains(msg.Content, "Strategic Oversight") {
+		isSuccess := strings.Contains(msg.Content, "completed") || strings.Contains(msg.Content, "✅")
+		
+		// If it's a success OR we are low on tokens, relay without LLM
+		if isSuccess || al.isBudgetLow() {
+			logger.InfoCF("agent", "Selective Relay triggered: Bypassing LLM for Master notification", map[string]any{
+				"is_success": isSuccess,
+			})
+			
+			// Relay to last active channel if origin was internal/system
+			targetCh := originChannel
+			targetChat := originChatID
+			if constants.IsInternalChannel(targetCh) && al.state != nil {
+				targetCh = al.state.GetLastChannel()
+				targetChat = al.state.GetLastChatID()
+			}
+
+			if targetCh != "" && targetChat != "" && !constants.IsInternalChannel(targetCh) {
+				al.bus.PublishOutbound(ctx, bus.OutboundMessage{
+					Channel: targetCh,
+					ChatID:  targetChat,
+					Content: msg.Content,
+				})
+				return "RELAYED_SILENTLY", nil
+			}
+		}
+	}
+
 	// Extract subagent result from message content
 	// Format: "Task 'label' completed.\n\nResult:\n<actual content>"
 	content := msg.Content
@@ -835,6 +866,17 @@ func (al *AgentLoop) processSystemMessage(
 		EnableSummary:   false,
 		SendResponse:    true,
 	})
+}
+
+// isBudgetLow returns true if the default agent is near its daily token limit (80%+).
+func (al *AgentLoop) isBudgetLow() bool {
+	agent := al.registry.GetDefaultAgent()
+	if agent == nil || agent.MaxDailyTokens == 0 {
+		return false
+	}
+	
+	usage := agent.Ledger.GetTodayUsage()
+	return usage >= (agent.MaxDailyTokens * 80 / 100)
 }
 
 // checkBudget checks if the agent has exceeded its daily token budget.

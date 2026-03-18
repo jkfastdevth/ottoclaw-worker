@@ -256,6 +256,9 @@ func (m *MissionManager) ReportResult(ctx context.Context, missionID string, suc
 		"status": status,
 		"result": output,
 	}
+	if !success {
+		payload["error"] = output
+	}
 	body, _ := json.Marshal(payload)
 
 	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewBuffer(body))
