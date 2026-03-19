@@ -352,6 +352,11 @@ OTTOCLAW_BIN=/usr/local/bin/ottoclaw-brain
 EOF
     chmod 600 /etc/ottoclaw/env
     info "Environment saved → /etc/ottoclaw/env (mode 600)"
+    
+    # 🔖 Write Version File
+    if [[ -d "${REPO_ROOT}/.git" ]]; then
+        git -C "${REPO_ROOT}" describe --tags --always > /etc/ottoclaw/version 2>/dev/null || true
+    fi
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -535,7 +540,8 @@ SOULEOF
     if [[ -d "${REPO_DIR}/.git" ]]; then
         # Ensure git doesn't complain about ownership when running as root
         git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
-        git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
+        git -C "$REPO_DIR" pull --ff-only && git -C "$REPO_DIR" fetch --tags || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
+        git -C "$REPO_DIR" describe --tags --always > /etc/ottoclaw/version 2>/dev/null || true
     else
         warn "Not a git repository. Re-running installer to fetch latest code..."
         sudo bash "$INSTALL_SH"
