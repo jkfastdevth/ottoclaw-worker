@@ -241,6 +241,12 @@ func (s *SiamSyncChannel) fetchMessages(ctx context.Context, masterURL, apiKey, 
 			}
 		}
 
+		if content == "SYSTEM_HOT_RELOAD" {
+			logger.WarnCF("siam_sync", "🚨 SYSTEM_HOT_RELOAD triggered, restarting Agent binary to load full config setup...", nil)
+			// Trigger Exit with code 1 so systemd or supervisor restarts it automatically (Restart=on-failure)
+			os.Exit(1)
+		}
+
 		// Inject into bus
 		peer := bus.Peer{
 			ID:   sender,
