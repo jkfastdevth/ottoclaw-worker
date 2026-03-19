@@ -112,6 +112,14 @@ func (m *MissionManager) Start(ctx context.Context) {
 	}
 }
 
+func (m *MissionManager) getVersion() string {
+	data, err := os.ReadFile("/etc/ottoclaw/version")
+	if err != nil {
+		return "latest"
+	}
+	return strings.TrimSpace(string(data))
+}
+
 func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey string) {
 	if m.registry == nil {
 		return
@@ -140,6 +148,7 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 			"today_cost":       cost,
 			"max_daily_tokens": agent.MaxDailyTokens,
 			"tools":            agent.Tools.List(),
+			"version":          m.getVersion(),
 		}
 		body, _ := json.Marshal(payload)
 

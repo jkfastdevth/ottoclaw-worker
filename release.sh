@@ -1,38 +1,45 @@
-#!/usr/bin/env bash
-# OttoClaw Release Helper
-# Automates: Sync -> Git Add -> Commit -> Push -> Tag
-
+#!/bin/bash
 set -e
 
-# Colors
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BOLD='\033[1m'
-RESET='\033[0m'
+# 🌳 Get current branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
 
-echo -e "${CYAN}${BOLD}══ OttoClaw Release Helper ══${RESET}\n"
+if [ "$BRANCH" != "main" ] && [ "$BRANCH" != "master" ]; then
+    echo "⚠️  You are on branch '$BRANCH'. Releases are usually made from 'main' or 'master'."
+    read -p "Do you want to continue? (y/n) " CONT
+    if [ "$CONT" != "y" ] && [ "$CONT" != "Y" ]; then
+        exit 1
+    fi
+fi
 
-# 1. Sync latest files
-echo "🔄 Syncing latest installer scripts..."
-cp install.sh install-termux.sh . 2>/dev/null || true
-echo -e "  ${GREEN}✓${RESET} Synced."
+# 📥 Fetch tags from remote to ensure we are up to date
+echo "📥 Fetching tags from origin..."
+git fetch --tags origin
 
-# 2. Git Status
-echo -e "\n${BOLD}Current changes:${RESET}"
-git status -s
+# 📌 Get current version based on tags
+CURRENT_VERSION=$(git describe --tags --always 2>/dev/null || echo "v0.0.0")
+echo "📌 Current Version: $CURRENT_VERSION"
 
-# 3. Commit Message
-echo -ne "\n${BOLD}Commit message${RESET} (Enter for 'update: release'): "
-read -r msg
-msg="${msg:-update: release}"
+# 🚀 Prompt for the new version
+read -p "🚀 Enter new version (e.g., v1.0.1): " NEW_VERSION
 
-# 4. Push to Remote
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-echo -e "\n🚀 Pushing to ${CURRENT_BRANCH}..."
-git add .
-git commit -m "$msg"
-git push origin "$CURRENT_BRANCH"
-echo -e "  ${GREEN}✓${RESET} Pushed to GitHub ${CURRENT_BRANCH}."
+if [ -z "$NEW_VERSION" ]; then
+  echo "❌ Version cannot be empty."
+  exit 1
+fi
 
-echo -e "\n${GREEN}${BOLD}✅ เสร็จสมบูรณ์!${RESET} โค้ดของคุณออนไลน์แล้วครับ 🐯🚀🛸"
+# 🛡️ Ensure tag doesn't already exist
+if git rev-parse "$NEW_VERSION" >/dev/null 2>&1; then
+  echo "❌ Tag '$NEW_VERSION' already exists locally."
+  exit 1
+fi
+
+# 🏷️ Create annotated tag
+echo "🏷️ Creating tag '$NEW_VERSION'..."
+git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
+
+# 📤 Push tag to remote
+echo "📤 Pushing tag to GitHub..."
+git push origin "$NEW_VERSION"
+
+echo "✅ Success! Tag '$NEW_VERSION' has been created and pushed."
