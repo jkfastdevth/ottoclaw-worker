@@ -111,7 +111,8 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	c.ctx, c.cancel = context.WithCancel(ctx)
 
 	agentName := os.Getenv("AGENT_NAME")
-	if os.Getenv("TELEGRAM_POLLING_DISABLED") == "true" || (os.Getenv("TELEGRAM_POLLING_DISABLED") == "" && agentName != "auric-spark" && agentName != "Auric") {
+	agentNameClean := strings.ToLower(strings.ReplaceAll(agentName, " ", "-"))
+	if os.Getenv("TELEGRAM_POLLING_DISABLED") == "true" || (os.Getenv("TELEGRAM_POLLING_DISABLED") == "" && agentNameClean != "auric-spark" && agentNameClean != "auric") {
 		logger.WarnC("telegram", "🚨 Telegram polling is disabled on this agent by default (Outbound Send only)")
 		c.SetRunning(true)
 		return nil
