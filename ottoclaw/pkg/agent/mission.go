@@ -112,6 +112,30 @@ func (m *MissionManager) Start(ctx context.Context) {
 	}
 }
 
+func isOlder(current, latest string) bool {
+	if current == "" || latest == "" {
+		return false
+	}
+	partsCurrent := strings.Split(strings.TrimPrefix(current, "v"), ".")
+	partsLatest := strings.Split(strings.TrimPrefix(latest, "v"), ".")
+
+	for i := 0; i < len(partsCurrent) && i < len(partsLatest); i++ {
+		var c, l int
+		pC := partsCurrent[i]
+		pL := partsLatest[i]
+
+		if idx := strings.Index(pC, "-"); idx != -1 { pC = pC[:idx] }
+		if idx := strings.Index(pL, "-"); idx != -1 { pL = pL[:idx] }
+
+		for _, r := range pC { if r >= '0' && r <= '9' { c = c*10 + int(r-'0') } }
+		for _, r := range pL { if r >= '0' && r <= '9' { l = l*10 + int(r-'0') } }
+
+		if c < l { return true }
+		if c > l { return false }
+	}
+	return len(partsCurrent) < len(partsLatest)
+}
+
 func (m *MissionManager) getVersion() string {
 	data, err := os.ReadFile("/etc/ottoclaw/version")
 	if err != nil {
@@ -143,12 +167,16 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 			cost = agent.Ledger.GetEstimatedCost()
 		}
 
+		upStatus, upErr := GetUpdateStatus()
+
 		payload := map[string]any{
 			"today_usage":      usage,
 			"today_cost":       cost,
 			"max_daily_tokens": agent.MaxDailyTokens,
 			"tools":            agent.Tools.List(),
 			"version":          m.getVersion(),
+			"update_status":    upStatus,
+			"update_error":     upErr,
 		}
 		body, _ := json.Marshal(payload)
 
@@ -166,12 +194,31 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 		resp, err := client.Do(req)
 		if err == nil {
 			var respData struct {
-				Status string `json:"status"`
+				Status        string `json:"status"`
+				LatestVersion string `json:"latest_version,omitempty"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&respData); err == nil {
 				if respData.Status == "limbo" {
 					logger.WarnCF("mission", "🚨 Agent is in LIMBO! Requesting master respawn...", map[string]any{"agent_id": agent.ID})
 					go m.requestRespawn(ctx, masterURL, apiKey, agent.ID)
+				}
+				
+				// 🚀 Auto update checking
+				currentVer := m.getVersion()
+				if respData.LatestVersion != "" && isOlder(currentVer, respData.LatestVersion) {
+					logger.InfoCF("mission", "🚀 Newer version found, triggering auto-update", map[string]any{
+						"current": currentVer,
+						"latest":  respData.LatestVersion,
+					})
+					inbound := bus.InboundMessage{
+						Channel: "mission",
+						Content: "ottoclaw update",
+						Peer:    bus.Peer{ID: "Master", Kind: "user"},
+					}
+					m.bus.PublishInbound(ctx, inbound)
+				} else {
+					// Clear status only if no trigger is raised and heartbeat was acknowledged
+					ClearUpdateStatus()
 				}
 			}
 			resp.Body.Close()
