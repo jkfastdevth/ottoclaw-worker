@@ -156,8 +156,43 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 
 		resp, err := client.Do(req)
 		if err == nil {
+			var respData struct {
+				Status string `json:"status"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&respData); err == nil {
+				if respData.Status == "limbo" {
+					logger.WarnCF("mission", "🚨 Agent is in LIMBO! Requesting master respawn...", map[string]any{"agent_id": agent.ID})
+					go m.requestRespawn(ctx, masterURL, apiKey, agent.ID)
+				}
+			}
 			resp.Body.Close()
 		}
+	}
+}
+
+func (m *MissionManager) requestRespawn(ctx context.Context, masterURL, apiKey, agentID string) {
+	url := fmt.Sprintf("%s/api/agent/v1/agents/%s/respawn", masterURL, agentID)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return
+	}
+
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.ErrorCF("mission", "Failed to Request Respawn", map[string]any{"agent_id": agentID, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		logger.InfoCF("mission", "Successfully requested Respawn from Master", map[string]any{"agent_id": agentID})
+	} else {
+		logger.WarnCF("mission", "Respawn request returned non-200", map[string]any{"agent_id": agentID, "status": resp.StatusCode})
 	}
 }
 
