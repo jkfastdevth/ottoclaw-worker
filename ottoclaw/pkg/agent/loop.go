@@ -2021,6 +2021,7 @@ func (al *AgentLoop) executeSelfUpdate() {
 	
 	if err := cmd.Start(); err != nil {
 		al.broadcastSystemEvent("AGENT_UPDATE_FAILED", fmt.Sprintf("Failed to start update: %v", err), "")
+		SetUpdateStatus("failed", err.Error())
 		return
 	}
 
@@ -2034,8 +2035,11 @@ func (al *AgentLoop) executeSelfUpdate() {
 
 	if err := cmd.Wait(); err != nil {
 		al.broadcastSystemEvent("AGENT_UPDATE_FAILED", fmt.Sprintf("Update command exited with error: %v", err), "")
+		SetUpdateStatus("failed", err.Error())
 		return
 	}
+	
+	SetUpdateStatus("idle", "")
 	
 	al.broadcastSystemEvent("AGENT_UPDATE_COMPLETED", "Agent update finished successfully. Worker may restart.", "")
 }
