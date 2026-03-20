@@ -874,6 +874,18 @@ func main() {
 					fmt.Println("✨ Waking up the vessel...")
 				} else if res.Action == "update" {
 					fmt.Println("📥 Status: Triggering Update...")
+				} else if strings.HasPrefix(res.Action, "auto_qa:") {
+					skill := strings.TrimPrefix(res.Action, "auto_qa:")
+					fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
+					go func(s string) {
+						cmd := exec.Command("python3", "/app/workspace/v2/auto_qa_skill.py", "--skill", s, "--force")
+						output, err := cmd.CombinedOutput()
+						if err != nil {
+							fmt.Printf("❌ [Auto QA] Failed for %s: %v\nOutput: %s\n", s, err, output)
+						} else {
+							fmt.Printf("✅ [Auto QA] Finished for %s\n", s)
+						}
+					}(skill)
 				}
 			}
 		}

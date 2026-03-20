@@ -261,7 +261,7 @@ func fetchAndRegisterCustomTools(cfg *config.Config, agent *AgentInstance) {
 		return
 	}
 
-	resp, err := http.Get(fmt.Sprintf("%s/api/agent/v1/forge/tools", masterURL))
+	resp, err := http.Get(fmt.Sprintf("%s/api/agent/v1/forge/tools?agent_id=%s", masterURL, agent.ID))
 	if err != nil {
 		logger.WarnCF("agent", "Failed to fetch custom tools", map[string]any{"error": err.Error()})
 		return
