@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.21.12
-// source: master.proto
+// source: proto/master.proto
 
 package proto
 
@@ -44,7 +44,7 @@ type NodeStatus struct {
 
 func (x *NodeStatus) Reset() {
 	*x = NodeStatus{}
-	mi := &file_master_proto_msgTypes[0]
+	mi := &file_proto_master_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -56,7 +56,7 @@ func (x *NodeStatus) String() string {
 func (*NodeStatus) ProtoMessage() {}
 
 func (x *NodeStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[0]
+	mi := &file_proto_master_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -69,7 +69,7 @@ func (x *NodeStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeStatus.ProtoReflect.Descriptor instead.
 func (*NodeStatus) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{0}
+	return file_proto_master_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *NodeStatus) GetNodeId() string {
@@ -175,13 +175,14 @@ type Ack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"` // 🔔 เพิ่มสำหรับส่งคำสั่ง เช่น "wakeup", "update"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_master_proto_msgTypes[1]
+	mi := &file_proto_master_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -193,7 +194,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[1]
+	mi := &file_proto_master_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -206,7 +207,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{1}
+	return file_proto_master_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Ack) GetSuccess() bool {
@@ -223,6 +224,13 @@ func (x *Ack) GetMessage() string {
 	return ""
 }
 
+func (x *Ack) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
 type ContainerAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -234,7 +242,7 @@ type ContainerAction struct {
 
 func (x *ContainerAction) Reset() {
 	*x = ContainerAction{}
-	mi := &file_master_proto_msgTypes[2]
+	mi := &file_proto_master_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -246,7 +254,7 @@ func (x *ContainerAction) String() string {
 func (*ContainerAction) ProtoMessage() {}
 
 func (x *ContainerAction) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[2]
+	mi := &file_proto_master_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -259,7 +267,7 @@ func (x *ContainerAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerAction.ProtoReflect.Descriptor instead.
 func (*ContainerAction) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{2}
+	return file_proto_master_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ContainerAction) GetNodeId() string {
@@ -294,7 +302,7 @@ type NodeIdentity struct {
 
 func (x *NodeIdentity) Reset() {
 	*x = NodeIdentity{}
-	mi := &file_master_proto_msgTypes[3]
+	mi := &file_proto_master_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -306,7 +314,7 @@ func (x *NodeIdentity) String() string {
 func (*NodeIdentity) ProtoMessage() {}
 
 func (x *NodeIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[3]
+	mi := &file_proto_master_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -319,7 +327,7 @@ func (x *NodeIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeIdentity.ProtoReflect.Descriptor instead.
 func (*NodeIdentity) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{3}
+	return file_proto_master_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *NodeIdentity) GetNodeId() string {
@@ -347,7 +355,7 @@ type ConfigResponse struct {
 
 func (x *ConfigResponse) Reset() {
 	*x = ConfigResponse{}
-	mi := &file_master_proto_msgTypes[4]
+	mi := &file_proto_master_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -359,7 +367,7 @@ func (x *ConfigResponse) String() string {
 func (*ConfigResponse) ProtoMessage() {}
 
 func (x *ConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[4]
+	mi := &file_proto_master_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -372,7 +380,7 @@ func (x *ConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigResponse.ProtoReflect.Descriptor instead.
 func (*ConfigResponse) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{4}
+	return file_proto_master_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ConfigResponse) GetApiKey() string {
@@ -401,7 +409,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_master_proto_msgTypes[5]
+	mi := &file_proto_master_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -413,7 +421,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[5]
+	mi := &file_proto_master_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -426,7 +434,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{5}
+	return file_proto_master_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Command) GetCommandId() string {
@@ -463,7 +471,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_master_proto_msgTypes[6]
+	mi := &file_proto_master_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +483,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_master_proto_msgTypes[6]
+	mi := &file_proto_master_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +496,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_master_proto_rawDescGZIP(), []int{6}
+	return file_proto_master_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CommandResult) GetCommandId() string {
@@ -519,11 +527,11 @@ func (x *CommandResult) GetOutput() string {
 	return ""
 }
 
-var File_master_proto protoreflect.FileDescriptor
+var File_proto_master_proto protoreflect.FileDescriptor
 
-const file_master_proto_rawDesc = "" +
+const file_proto_master_proto_rawDesc = "" +
 	"\n" +
-	"\fmaster.proto\x12\x05proto\"\x99\x03\n" +
+	"\x12proto/master.proto\x12\x05proto\"\x99\x03\n" +
 	"\n" +
 	"NodeStatus\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1b\n" +
@@ -545,10 +553,11 @@ const file_master_proto_rawDesc = "" +
 	"department\x12\x15\n" +
 	"\x06org_id\x18\f \x01(\tR\x05orgId\x12#\n" +
 	"\rbattery_level\x18\r \x01(\x02R\fbatteryLevel\x12 \n" +
-	"\vtemperature\x18\x0e \x01(\x02R\vtemperature\"9\n" +
+	"\vtemperature\x18\x0e \x01(\x02R\vtemperature\"Q\n" +
 	"\x03Ack\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"i\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\"i\n" +
 	"\x0fContainerAction\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12%\n" +
@@ -584,19 +593,19 @@ const file_master_proto_rawDesc = "" +
 	".proto.Ack\"\x00B\tZ\a./protob\x06proto3"
 
 var (
-	file_master_proto_rawDescOnce sync.Once
-	file_master_proto_rawDescData []byte
+	file_proto_master_proto_rawDescOnce sync.Once
+	file_proto_master_proto_rawDescData []byte
 )
 
-func file_master_proto_rawDescGZIP() []byte {
-	file_master_proto_rawDescOnce.Do(func() {
-		file_master_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_master_proto_rawDesc), len(file_master_proto_rawDesc)))
+func file_proto_master_proto_rawDescGZIP() []byte {
+	file_proto_master_proto_rawDescOnce.Do(func() {
+		file_proto_master_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_master_proto_rawDesc), len(file_proto_master_proto_rawDesc)))
 	})
-	return file_master_proto_rawDescData
+	return file_proto_master_proto_rawDescData
 }
 
-var file_master_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_master_proto_goTypes = []any{
+var file_proto_master_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_master_proto_goTypes = []any{
 	(*NodeStatus)(nil),      // 0: proto.NodeStatus
 	(*Ack)(nil),             // 1: proto.Ack
 	(*ContainerAction)(nil), // 2: proto.ContainerAction
@@ -605,7 +614,7 @@ var file_master_proto_goTypes = []any{
 	(*Command)(nil),         // 5: proto.Command
 	(*CommandResult)(nil),   // 6: proto.CommandResult
 }
-var file_master_proto_depIdxs = []int32{
+var file_proto_master_proto_depIdxs = []int32{
 	0, // 0: proto.MasterControl.ReportStatus:input_type -> proto.NodeStatus
 	3, // 1: proto.MasterControl.GetConfig:input_type -> proto.NodeIdentity
 	0, // 2: proto.MasterControl.GetCommand:input_type -> proto.NodeStatus
@@ -623,26 +632,26 @@ var file_master_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_master_proto_init() }
-func file_master_proto_init() {
-	if File_master_proto != nil {
+func init() { file_proto_master_proto_init() }
+func file_proto_master_proto_init() {
+	if File_proto_master_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_master_proto_rawDesc), len(file_master_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_master_proto_rawDesc), len(file_proto_master_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_master_proto_goTypes,
-		DependencyIndexes: file_master_proto_depIdxs,
-		MessageInfos:      file_master_proto_msgTypes,
+		GoTypes:           file_proto_master_proto_goTypes,
+		DependencyIndexes: file_proto_master_proto_depIdxs,
+		MessageInfos:      file_proto_master_proto_msgTypes,
 	}.Build()
-	File_master_proto = out.File
-	file_master_proto_goTypes = nil
-	file_master_proto_depIdxs = nil
+	File_proto_master_proto = out.File
+	file_proto_master_proto_goTypes = nil
+	file_proto_master_proto_depIdxs = nil
 }
