@@ -868,6 +868,14 @@ func main() {
 			fmt.Printf("⚠️ Error sending status: %v\n", err)
 		} else {
 			fmt.Printf("✅ Master Response: %s (CPU: %.1f%%)\n", res.Message, status.CpuUsage)
+			if res.Action != "" {
+				fmt.Printf("🔔 [Action] Received command from Master: %s\n", res.Action)
+				if res.Action == "wakeup" {
+					fmt.Println("✨ Waking up the vessel...")
+				} else if res.Action == "update" {
+					fmt.Println("📥 Status: Triggering Update...")
+				}
+			}
 		}
 
 		}()
