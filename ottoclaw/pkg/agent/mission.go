@@ -137,6 +137,17 @@ func isOlder(current, latest string) bool {
 }
 
 func (m *MissionManager) getVersion() string {
+	// 1. Try to get git commit hash first (more accurate for source updates)
+	repoDir := m.cfg.Workspace.Root
+	if repoDir == "" {
+		repoDir = "."
+	}
+	cmd := exec.Command("git", "-C", repoDir, "rev-parse", "--short", "HEAD")
+	if out, err := cmd.Output(); err == nil {
+		return strings.TrimSpace(string(out))
+	}
+
+	// 2. Fallback to etc version file
 	data, err := os.ReadFile("/etc/ottoclaw/version")
 	if err != nil {
 		return "latest"
