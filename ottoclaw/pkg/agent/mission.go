@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"os/exec"
 	"os/signal"
 	"syscall"
 
@@ -138,7 +139,7 @@ func isOlder(current, latest string) bool {
 
 func (m *MissionManager) getVersion() string {
 	// 1. Try to get git commit hash first (more accurate for source updates)
-	repoDir := m.cfg.Workspace.Root
+	repoDir := m.cfg.WorkspacePath()
 	if repoDir == "" {
 		repoDir = "."
 	}
