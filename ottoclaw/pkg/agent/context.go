@@ -107,7 +107,7 @@ func (cb *ContextBuilder) getIdentity() string {
 
 	return fmt.Sprintf(`# identity: %s 🦞
 
-You are %s, a helpful AI assistant operating within the Siam-Synapse network.%s
+You are %s, a helpful AI assistant operating within the M.A.D.S (Multi Agent Device distribute System) network.%s
 
 ## Workspace
 Your workspace is at: %s
