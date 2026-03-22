@@ -105,6 +105,8 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 	toolset := []Tool{
 		&SiamGetMetricsTool{client: client},
 		&SiamGetAgentsTool{client: client},
+		&SiamGetNodesTool{client: client},
+		&SiamGetMessagesTool{client: client},
 		&SiamSpawnAgentTool{client: client},
 		&SiamTerminateAgentTool{client: client},
 		&SiamGetSkillsTool{client: client},
@@ -740,6 +742,57 @@ func (t *SiamFindAgentsTool) Execute(_ context.Context, args map[string]any) *To
 	data, err := t.client.get("/api/agent/v1/agents/search?skill=" + strings.TrimSpace(skill))
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_find_agents failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamGetMessagesTool — fetch pending messages queued for a specific agent.
+type SiamGetMessagesTool struct{ client *siamClient }
+
+func (t *SiamGetMessagesTool) Name() string { return "siam_get_messages" }
+func (t *SiamGetMessagesTool) Description() string {
+	return "Fetch pending messages queued for a specific Siam-Synapse agent by its agent_id. Returns messages waiting to be processed, plus system env info."
+}
+func (t *SiamGetMessagesTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The target Agent ID / Soul Name (e.g. 'nova-spire'). Use siam_get_agents to see active agents.",
+			},
+		},
+		"required": []string{"agent_id"},
+	}
+}
+func (t *SiamGetMessagesTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	agentID, _ := args["agent_id"].(string)
+	if strings.TrimSpace(agentID) == "" {
+		return ErrorResult("siam_get_messages: agent_id is required")
+	}
+	agentID = strings.ToLower(strings.TrimSpace(agentID))
+	agentID = strings.ReplaceAll(agentID, " ", "-")
+	data, err := t.client.get("/api/agent/v1/agents/" + agentID + "/messages")
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_get_messages failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamGetNodesTool — list all connected remote nodes.
+type SiamGetNodesTool struct{ client *siamClient }
+
+func (t *SiamGetNodesTool) Name() string { return "siam_get_nodes" }
+func (t *SiamGetNodesTool) Description() string {
+	return "List all remote nodes currently connected to the Siam-Synapse Master. Returns node IDs, IPs, status, CPU/memory usage, and available workers per node."
+}
+func (t *SiamGetNodesTool) Parameters() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func (t *SiamGetNodesTool) Execute(_ context.Context, _ map[string]any) *ToolResult {
+	data, err := t.client.get("/api/agent/v1/nodes")
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_get_nodes failed: %v", err))
 	}
 	return UserResult(string(data))
 }
