@@ -486,20 +486,27 @@ func main() {
 			}
 		}()
 
-		streamAttempt := -1
+		streamAttempt := 0
 		for {
 			// ตรวจสอบ context ก่อนเริ่ม loop ใหม่
 			if workerCtx.Err() != nil { return }
 
-			// เปิด Stream รับคำสั่งจาก Master
-			stream, err := grpcClient.GetCommand(context.Background(), &proto.NodeStatus{NodeId: nodeID})
+			// เปิด Stream รับคำสั่งจาก Master (ผูก lifecycle กับ workerCtx)
+			stream, err := grpcClient.GetCommand(workerCtx, &proto.NodeStatus{NodeId: nodeID})
 			if err != nil {
-				log.Printf("❌ Failed to get command stream, retrying in 5s: %v", err)
-				time.Sleep(5 * time.Second)
+				if workerCtx.Err() != nil { return } // shutdown ระหว่าง dial
+				wait := backoffDuration(streamAttempt)
+				log.Printf("❌ Failed to open command stream (attempt %d), retrying in %v: %v", streamAttempt, wait, err)
+				streamAttempt++
+				select {
+				case <-time.After(wait):
+				case <-workerCtx.Done():
+					return
+				}
 				continue
 			}
 			log.Println("📡 Stream opened and listening for commands...")
-			streamAttempt = 0 // reset backoff on successful connect
+			streamAttempt = 0 // reset backoff on successful open
 
 			// สร้าง Context ย่อยสำหรับ lifecycle ของ stream นี้
 			streamCtx, streamCancel := context.WithCancel(workerCtx)
@@ -967,6 +974,7 @@ func main() {
 
 	// 5. Loop ส่ง Heartbeat ทุกๆ 5 วินาที
 	fmt.Println("🚀 Worker Node Started: Sending heartbeats to Master...")
+	statusFailures := 0 // consecutive ReportStatus failure counter
 	for {
 		func() {
 			defer func() {
@@ -1079,8 +1087,17 @@ func main() {
 
 		res, err := grpcClient.ReportStatus(ctx, status)
 		if err != nil {
-			fmt.Printf("⚠️ Error sending status: %v\n", err)
+			statusFailures++
+			if statusFailures >= 3 {
+				log.Printf("⚠️  [Heartbeat] %d consecutive failures — Master unreachable: %v", statusFailures, err)
+			} else {
+				fmt.Printf("⚠️ Error sending status: %v\n", err)
+			}
 		} else {
+			if statusFailures > 0 {
+				log.Printf("✅ [Heartbeat] Master reconnected after %d failures", statusFailures)
+				statusFailures = 0
+			}
 			fmt.Printf("✅ Master Response: %s (CPU: %.1f%%)\n", res.Message, status.CpuUsage)
 			if res.Action != "" {
 				fmt.Printf("🔔 [Action] Received command from Master: %s\n", res.Action)
@@ -1110,6 +1127,18 @@ func main() {
 
 		}()
 
-		time.Sleep(5 * time.Second)
+		// Scale heartbeat interval: 5s normally, up to 30s when master is unreachable
+		heartbeatInterval := 5 * time.Second
+		if statusFailures >= 3 {
+			scaled := 5 + statusFailures*5
+			if scaled > 30 { scaled = 30 }
+			heartbeatInterval = time.Duration(scaled) * time.Second
+		}
+		select {
+		case <-time.After(heartbeatInterval):
+		case <-workerCtx.Done():
+			return
+		}
 	}
 }
+
