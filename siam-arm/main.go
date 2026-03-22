@@ -512,7 +512,7 @@ func main() {
 					break
 				}
 
-				if cmd.CommandId == "SYSTEM_TERMINATE" {
+				if cmd.CommandId == "SYSTEM_TERMINATE" || cmd.Type == "SYSTEM_TERMINATE" {
 					log.Println("🛑 RECEIVED SYSTEM_TERMINATE SIGNAL from Master!")
 					streamCancel()
 					workerCancel() // ปิดทั้ง worker
@@ -760,6 +760,78 @@ func main() {
 						Success:   true,
 						Output:    fmt.Sprintf("File %s synced successfully. Hot reload triggered: %v", filename, isCritical),
 					})
+					continue
+				}
+
+				if cmd.Type == "SYSTEM_HOT_RELOAD" {
+					log.Printf("🔥 [Hot Reload] Received SYSTEM_HOT_RELOAD from Master")
+
+					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" {
+						log.Printf("🛡️ [Hot Reload] Skipped: Orchestrator identity is immutable")
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   true,
+							Output:    "Hot reload skipped: orchestrator is immutable",
+						})
+						continue
+					}
+
+					currentSoulMu.RLock()
+					identityName := currentSoul
+					currentSoulMu.RUnlock()
+
+					if identityName == "" {
+						log.Printf("⚠️  [Hot Reload] No active soul — nothing to reload")
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    "Hot reload skipped: no soul loaded",
+						})
+						continue
+					}
+
+					brainMutex.Lock()
+					if currentBrain != nil && currentBrain.Process != nil {
+						log.Printf("🛑 [Hot Reload] Terminating brain for reload...")
+						currentBrain.Process.Kill()
+						currentBrain.Wait()
+					}
+					go func(name string) {
+						defer brainMutex.Unlock()
+						execCmd := exec.CommandContext(workerCtx, func() string {
+							if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
+								return bin
+							}
+							return "/app/ottoclaw"
+						}(), "gateway", "--debug")
+						env := getSafeEnv()
+						env = append(env, fmt.Sprintf("AGENT_NAME=%s", name))
+						env = append(env, "AGENT_MISSION=Re-awakened via Hot Reload")
+						execCmd.Env = env
+						execCmd.Stdout = os.Stdout
+						execCmd.Stderr = os.Stderr
+						currentBrain = execCmd
+						if err := execCmd.Start(); err != nil {
+							log.Printf("❌ [Hot Reload] Failed to re-ignite brain: %v", err)
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: cmd.CommandId,
+								NodeId:    nodeID,
+								Success:   false,
+								Output:    fmt.Sprintf("Hot reload failed for %s: %v", name, err),
+							})
+							return
+						}
+						log.Printf("🚀 [Hot Reload] Brain re-ignited for '%s'", name)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   true,
+							Output:    fmt.Sprintf("Hot reload complete for %s", name),
+						})
+						execCmd.Wait()
+					}(identityName)
 					continue
 				}
 
