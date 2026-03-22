@@ -181,6 +181,58 @@ import (
 	"regexp"
 )
 
+// guardCommand blocks dangerous shell command patterns before execution.
+func guardCommand(cmd string) error {
+	lower := strings.ToLower(cmd)
+	blocked := []string{
+		"rm -rf /", "rm -rf /*", "rm -rf ~",
+		"> /dev/sda", "dd if=", "mkfs", "fdisk",
+		"shutdown", "reboot", "halt", "poweroff",
+		"eval ", "> /etc/passwd", "> /etc/shadow",
+		"chmod 777 /", "chmod -r /", "chown root /",
+		":(){ :|:& };:", // fork bomb
+	}
+	for _, pattern := range blocked {
+		if strings.Contains(lower, pattern) {
+			return fmt.Errorf("blocked dangerous pattern: %q", pattern)
+		}
+	}
+	if strings.Contains(cmd, "../../../") {
+		return fmt.Errorf("path traversal detected in command")
+	}
+	return nil
+}
+
+// sanitizeFilename ensures a workspace filename cannot escape the workspace directory.
+func sanitizeFilename(name string) error {
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("'..' not allowed in filename")
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("absolute path not allowed in filename")
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
+			return fmt.Errorf("unsafe character %q in filename", c)
+		}
+	}
+	return nil
+}
+
+// backoffDuration returns exponential backoff duration capped at 60s.
+// attempt=0 → 1s, 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s, 5+ → 60s
+func backoffDuration(attempt int) time.Duration {
+	if attempt > 5 {
+		attempt = 5
+	}
+	d := time.Duration(1<<uint(attempt)) * time.Second
+	if d > 60*time.Second {
+		d = 60 * time.Second
+	}
+	return d
+}
+
 func NormalizeID(id string) string {
 	trimmed := strings.TrimSpace(id)
 	if trimmed == "" {
@@ -259,10 +311,28 @@ func getBatteryAndTemp() (float32, float32) {
 	return battery, temp
 }
 
-// จำลองฟังก์ชัน restartContainer
+// restartContainer restarts a Docker container by name with a 30s timeout.
+// containerName is validated to prevent shell injection.
 func restartContainer(containerName string) error {
-	log.Printf("🐳 Executing: docker restart %s", containerName)
-	// ตรงนี้คือ logic สั่ง docker จริงๆ
+	if containerName == "" {
+		return fmt.Errorf("container name is empty")
+	}
+	// Validate: only alphanumeric, dash, underscore, dot allowed
+	for _, c := range containerName {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
+			return fmt.Errorf("invalid character %q in container name", c)
+		}
+	}
+	log.Printf("🐳 Restarting container: %s", containerName)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", "restart", containerName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker restart failed: %v — %s", err, string(output))
+	}
+	log.Printf("✅ Container %s restarted successfully", containerName)
 	return nil
 }
 
@@ -370,14 +440,15 @@ func main() {
 
 	// 2. เชื่อมต่อ gRPC ไปยัง Master พร้อมระบบ Retry
 	var conn *grpc.ClientConn
-	for {
+	for attempt := 0; ; attempt++ {
 		c, err := grpc.Dial(masterGrpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err == nil {
 			conn = c
 			break
 		}
-		log.Printf("⚠️  Could not connect to Master at %s: %v. Retrying in 5s...", masterGrpcURL, err)
-		time.Sleep(5 * time.Second)
+		wait := backoffDuration(attempt)
+		log.Printf("⚠️  Could not connect to Master at %s: %v. Retrying in %v...", masterGrpcURL, err, wait)
+		time.Sleep(wait)
 		if workerCtx.Err() != nil { return }
 	}
 	defer conn.Close()
@@ -392,6 +463,7 @@ func main() {
 			}
 		}()
 
+		streamAttempt := -1
 		for {
 			// ตรวจสอบ context ก่อนเริ่ม loop ใหม่
 			if workerCtx.Err() != nil { return }
@@ -404,6 +476,7 @@ func main() {
 				continue
 			}
 			log.Println("📡 Stream opened and listening for commands...")
+			streamAttempt = 0 // reset backoff on successful connect
 
 			// สร้าง Context ย่อยสำหรับ lifecycle ของ stream นี้
 			streamCtx, streamCancel := context.WithCancel(workerCtx)
@@ -560,6 +633,18 @@ func main() {
 					
 					filename := parts[0]
 					encodedContent := parts[1]
+
+					// 🛡️ Guard: prevent path traversal in synced filenames
+					if err := sanitizeFilename(filename); err != nil {
+						log.Printf("🛑 [Security] Path traversal blocked in sync [%s]: %v", cmd.CommandId, err)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    fmt.Sprintf("Filename rejected by security guard: %v", err),
+						})
+						continue
+					}
 					
 					decodedBytes, err := base64.StdEncoding.DecodeString(encodedContent)
 					if err != nil {
@@ -657,15 +742,44 @@ func main() {
 				fmt.Printf("📥 Received Command ID: %s, Type: %s\n", cmd.CommandId, cmd.Type)
 
 				if cmd.Type == "action" {
-					if cmd.Payload == "restart" {
-						err := restartContainer("sworker-ubuntu-01")
-						if err != nil {
-							log.Printf("❌ Failed to restart: %v", err)
+					if strings.HasPrefix(cmd.Payload, "restart") {
+						// Payload: "restart" (self) or "restart:<container_name>"
+						target := nodeID
+						if actionParts := strings.SplitN(cmd.Payload, ":", 2); len(actionParts) == 2 && actionParts[1] != "" {
+							target = actionParts[1]
+						}
+						if err := restartContainer(target); err != nil {
+							log.Printf("❌ Failed to restart container %s: %v", target, err)
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: cmd.CommandId,
+								NodeId:    nodeID,
+								Success:   false,
+								Output:    err.Error(),
+							})
+						} else {
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: cmd.CommandId,
+								NodeId:    nodeID,
+								Success:   true,
+								Output:    fmt.Sprintf("Container %s restarted successfully", target),
+							})
 						}
 					}
 				} else if cmd.Type == "shell" {
 					// 🤖 รันคำสั่ง Shell ที่ Agent ส่งมา (ทำเป็น Non-Blocking ให้อยู่เบื้องหลัง)
 					log.Printf("🤖 Starting Background Shell Payload: %s", cmd.Payload)
+
+					// 🛡️ Guard: block dangerous patterns before spawning shell
+					if err := guardCommand(cmd.Payload); err != nil {
+						log.Printf("🛑 [Security] Blocked command [%s]: %v", cmd.CommandId, err)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    fmt.Sprintf("Command blocked by security guard: %v", err),
+						})
+						continue
+					}
 
 					go func(commandId string, payload string, ctx context.Context) {
 						execCmd := exec.CommandContext(ctx, "sh", "-c", payload)
@@ -701,7 +815,10 @@ func main() {
 			}
 
 			// ถ้าหลุดมาถึงนี่แปลว่า Stream รับคำสั่งมีปัญหา ให้หน่วงเวลาก่อนต่อใหม่
-			time.Sleep(5 * time.Second)
+			streamAttempt++
+			wait := backoffDuration(streamAttempt)
+			log.Printf("⚙️  Stream reconnecting in %v (attempt %d)...", wait, streamAttempt)
+			time.Sleep(wait)
 		}
 	}()
 
