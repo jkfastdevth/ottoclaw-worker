@@ -1019,15 +1019,19 @@ func main() {
 				} else if strings.HasPrefix(res.Action, "auto_qa:") {
 					skill := strings.TrimPrefix(res.Action, "auto_qa:")
 					fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
-					go func(s string) {
-						cmd := exec.Command("python3", "/app/workspace/v2/auto_qa_skill.py", "--skill", s, "--force")
+					go func(s string, ctx context.Context) {
+						cmd := exec.CommandContext(ctx, "python3", "/app/workspace/v2/auto_qa_skill.py", "--skill", s, "--force")
 						output, err := cmd.CombinedOutput()
+						if ctx.Err() != nil {
+							fmt.Printf("🛑 [Auto QA] Cancelled for %s (worker shutdown)\n", s)
+							return
+						}
 						if err != nil {
 							fmt.Printf("❌ [Auto QA] Failed for %s: %v\nOutput: %s\n", s, err, output)
 						} else {
 							fmt.Printf("✅ [Auto QA] Finished for %s\n", s)
 						}
-					}(skill)
+					}(skill, workerCtx)
 				}
 			}
 		}
