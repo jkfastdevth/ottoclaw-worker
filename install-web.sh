@@ -16,10 +16,15 @@ echo "🚀 Starting Siam-Synapse Web Installer..."
 echo "📂 Path: ${SCRIPT_DIR}/cmd/setup-web"
 
 if ! command -v go &>/dev/null; then
-    echo "⏳ Go not found. Installing temporary Go environment..."
-    # Reuse logic from install.sh or assume user has it
-    # For now, just warn
-    echo "❌ Go is required to run the web installer. Please install Go first."
+    echo "❌ Go is required to run the web installer."
+    echo ""
+    echo "  Install Go on Linux/Debian:"
+    echo "    sudo apt-get install -y golang-go"
+    echo ""
+    echo "  Or download from: https://go.dev/dl/"
+    echo "    curl -OL https://go.dev/dl/go1.22.linux-amd64.tar.gz"
+    echo "    sudo tar -C /usr/local -xzf go1.22.linux-amd64.tar.gz"
+    echo "    export PATH=\$PATH:/usr/local/go/bin"
     exit 1
 fi
 
