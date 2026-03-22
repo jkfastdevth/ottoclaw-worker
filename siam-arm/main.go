@@ -255,19 +255,42 @@ var (
 	currentSoulMu   sync.RWMutex
 )
 
-// getSafeEnv returns a filtered environment slice for the brain process
+// getSafeEnv returns an allowlisted environment for the brain process.
+// Only explicitly permitted variables are passed to prevent leaking infrastructure
+// credentials (gRPC keys, DB URLs, etc.) into user-controlled brain processes.
 func getSafeEnv() []string {
-	env := os.Environ()
-	safeEnv := make([]string, 0, len(env))
-	
 	isOrchestrator := (os.Getenv("OTTOCLAW_MODE") == "orchestrator")
-	
-	for _, e := range env {
-		safeEnv = append(safeEnv, e)
+
+	// Allowlist of env var prefixes/names safe to pass to the brain
+	allowPrefixes := []string{
+		"OTTOCLAW_",
+		"AGENT_",
+		"LLM_",
+		"ANTHROPIC_",
+		"OPENAI_",
+		"OLLAMA_",
+		"HOME",
+		"PATH",
+		"TERM",
+		"LANG",
+		"TZ",
+		"NODE_ID",
+		"ORCHESTRATOR_TELEGRAM_TOKEN",
+		"TELEGRAM_",
+		"LINE_CHANNEL_ACCESS_TOKEN",
+	}
+
+	safeEnv := make([]string, 0, 32)
+	for _, e := range os.Environ() {
+		for _, prefix := range allowPrefixes {
+			if strings.HasPrefix(e, prefix) {
+				safeEnv = append(safeEnv, e)
+				break
+			}
+		}
 	}
 
 	// 🛡️ Disable Telegram Polling for workers to prevent 409 Conflict
-	// However, we KEEP the tokens in safeEnv so tools (like siam_send_message) can still broadcast.
 	if !isOrchestrator {
 		safeEnv = append(safeEnv, "OTTOCLAW_CHANNELS_TELEGRAM_ENABLED=false")
 	}
@@ -405,7 +428,7 @@ func main() {
 			brainMutex.Lock()
 			defer brainMutex.Unlock()
 			
-			execCmd := exec.Command(func() string {
+			execCmd := exec.CommandContext(workerCtx, func() string {
 				if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
 					return bin
 				}
@@ -545,6 +568,7 @@ func main() {
 					// Also save the soul name for recovery
 					if err := os.WriteFile(soulIDPath, []byte(soulName), 0644); err != nil {
 						log.Printf("⚠️  Failed to persist soul name: %v", err)
+						continue
 					}
 					log.Printf("✨ [Awakening] Soul '%s' bound to %s", soulName, soulPath)
 					
@@ -810,7 +834,7 @@ func main() {
 						} else {
 							log.Printf("✅ Master Acked Result [%s]: %v", commandId, ack.Success)
 						}
-					}(cmd.CommandId, cmd.Payload, streamCtx)
+					}(cmd.CommandId, cmd.Payload, workerCtx)
 				}
 			}
 
@@ -841,10 +865,11 @@ func main() {
 
 		conn, err := net.Dial("udp", masterHost+":50051")
 		if err == nil {
-			localAddr := conn.LocalAddr().(*net.UDPAddr)
-			ipAddr = localAddr.IP.String()
+			if udpAddr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+				ipAddr = udpAddr.IP.String()
+				log.Printf("📡 [Detection] Detected preferred outbound IP: %s", ipAddr)
+			}
 			conn.Close()
-			log.Printf("📡 [Detection] Detected preferred outbound IP: %s", ipAddr)
 		}
 
 		// Fallback to traditional interface scan if UDP dial failed
