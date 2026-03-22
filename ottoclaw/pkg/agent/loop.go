@@ -1005,10 +1005,17 @@ func (al *AgentLoop) runAgentLoop(
 
 	// 7. Optional: send response via bus
 	if opts.SendResponse {
+		// Strip any hallucinated <siam_*> XML tool call tags from the final response
+		// before sending to users (these should be tool calls, not plain text)
+		siamTagReg := regexp.MustCompile(`(?s)<siam_\w+[^>]*/?>`)
+		sendContent := strings.TrimSpace(siamTagReg.ReplaceAllString(finalContent, ""))
+		if sendContent == "" {
+			sendContent = finalContent // fallback: send original if stripping wiped everything
+		}
 		al.bus.PublishOutbound(ctx, bus.OutboundMessage{
 			Channel: opts.Channel,
 			ChatID:  opts.ChatID,
-			Content: finalContent,
+			Content: sendContent,
 		})
 	}
 
@@ -1259,13 +1266,7 @@ func (al *AgentLoop) runLLMIteration(
 					},
 				)
 
-				if retry == 0 && !constants.IsInternalChannel(opts.Channel) {
-					al.bus.PublishOutbound(ctx, bus.OutboundMessage{
-						Channel: opts.Channel,
-						ChatID:  opts.ChatID,
-						Content: "Context window exceeded. Compressing history and retrying...",
-					})
-				}
+				// Suppress context window retry messages from reaching end users
 
 				al.forceCompression(agent, opts.SessionKey)
 				newHistory := agent.Sessions.GetHistory(opts.SessionKey)
