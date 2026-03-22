@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,14 +15,25 @@ import (
 )
 
 type ToolRegistry struct {
-	tools   map[string]Tool
-	Auditor AuditLogger // 🛡️ Transparency & Action Vault
-	mu      sync.RWMutex
+	tools     map[string]Tool
+	normIndex map[string]string // normalized name → canonical name
+	Auditor   AuditLogger       // 🛡️ Transparency & Action Vault
+	mu        sync.RWMutex
+}
+
+// normalizeToolName strips underscores/hyphens and lowercases for fuzzy matching.
+// This lets LLMs that hallucinate "siamsendmessage" still resolve "siam_send_message".
+func normalizeToolName(name string) string {
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, "_", "")
+	name = strings.ReplaceAll(name, "-", "")
+	return name
 }
 
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
-		tools: make(map[string]Tool),
+		tools:     make(map[string]Tool),
+		normIndex: make(map[string]string),
 	}
 }
 
@@ -34,13 +46,23 @@ func (r *ToolRegistry) Register(tool Tool) {
 			map[string]any{"name": name})
 	}
 	r.tools[name] = tool
+	r.normIndex[normalizeToolName(name)] = name
 }
 
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	tool, ok := r.tools[name]
-	return tool, ok
+	// Exact match first
+	if tool, ok := r.tools[name]; ok {
+		return tool, true
+	}
+	// Fallback: normalized match (handles LLM hallucinations like "siamsendmessage")
+	if canonical, ok := r.normIndex[normalizeToolName(name)]; ok {
+		logger.WarnCF("tools", "Tool name resolved via normalization",
+			map[string]any{"requested": name, "resolved": canonical})
+		return r.tools[canonical], true
+	}
+	return nil, false
 }
 
 func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string]any) *ToolResult {
