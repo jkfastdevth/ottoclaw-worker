@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -208,13 +209,27 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 			var respData struct {
 				Status        string `json:"status"`
 				LatestVersion string `json:"latest_version,omitempty"`
+				NodeSecret    string `json:"node_secret,omitempty"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&respData); err == nil {
 				if respData.Status == "limbo" {
 					logger.WarnCF("mission", "🚨 Agent is in LIMBO! Requesting master respawn...", map[string]any{"agent_id": agent.ID})
 					go m.requestRespawn(ctx, masterURL, apiKey, agent.ID)
 				}
-				
+
+				// 🔐 Apply node_secret from master if not already set in config
+				if respData.NodeSecret != "" && m.cfg.Channels.SiamSync.NodeSecret != respData.NodeSecret {
+					m.cfg.Channels.SiamSync.NodeSecret = respData.NodeSecret
+					if home, herr := os.UserHomeDir(); herr == nil {
+						cfgPath := filepath.Join(home, ".ottoclaw", "config.json")
+						if serr := config.SaveConfig(cfgPath, m.cfg); serr != nil {
+							logger.WarnCF("mission", "Failed to persist node_secret to config", map[string]any{"error": serr.Error()})
+						} else {
+							logger.InfoC("mission", "✅ Config patched: node_secret updated from master")
+						}
+					}
+				}
+
 				// 🚀 Auto update checking
 				currentVer := m.getVersion()
 				if respData.LatestVersion != "" && isOlder(currentVer, respData.LatestVersion) {
