@@ -170,6 +170,7 @@ import (
 	"net"
 	"runtime"
 
+	"encoding/json"
 	"os/exec"
 
 	"github.com/jkfastdevth/Siam-Synapse/proto" // เปลี่ยนเป็น path โปรเจคของคุณ
@@ -266,9 +267,40 @@ func restartContainer(containerName string) error {
 	return nil
 }
 
+// siamArmConfig is a minimal config struct used to read node_secret from ~/.ottoclaw/config.json.
+type siamArmConfig struct {
+	Channels struct {
+		SiamSync struct {
+			NodeSecret string `json:"node_secret"`
+			APIKey     string `json:"api_key"`
+		} `json:"siam_sync"`
+	} `json:"channels"`
+}
+
+// loadNodeSecretFromConfig reads node_secret from ~/.ottoclaw/config.json.
+func loadNodeSecretFromConfig() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".ottoclaw", "config.json"))
+	if err != nil {
+		return ""
+	}
+	var cfg siamArmConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	return cfg.Channels.SiamSync.NodeSecret
+}
+
 func main() {
 	// 🔐 gRPC Auth secret — must match Master NODE_SECRET
+	// Priority: env NODE_SECRET > config.json node_secret > env MASTER_API_KEY
 	nodeSecret := os.Getenv("NODE_SECRET")
+	if nodeSecret == "" {
+		nodeSecret = loadNodeSecretFromConfig()
+	}
 	if nodeSecret == "" {
 		nodeSecret = os.Getenv("MASTER_API_KEY") // fallback
 	}
