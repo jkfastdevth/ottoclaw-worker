@@ -294,22 +294,27 @@ func loadNodeSecretFromConfig() string {
 	return cfg.Channels.SiamSync.NodeSecret
 }
 
+// resolveNodeSecret returns the current node secret, re-reading config.json on every call
+// so that updates pushed by the brain (via heartbeat config_patch) take effect without restart.
+func resolveNodeSecret() string {
+	if s := os.Getenv("NODE_SECRET"); s != "" {
+		return s
+	}
+	if s := loadNodeSecretFromConfig(); s != "" {
+		return s
+	}
+	return os.Getenv("MASTER_API_KEY")
+}
+
 func main() {
-	// 🔐 gRPC Auth secret — must match Master NODE_SECRET
-	// Priority: env NODE_SECRET > config.json node_secret > env MASTER_API_KEY
-	nodeSecret := os.Getenv("NODE_SECRET")
-	if nodeSecret == "" {
-		nodeSecret = loadNodeSecretFromConfig()
-	}
-	if nodeSecret == "" {
-		nodeSecret = os.Getenv("MASTER_API_KEY") // fallback
-	}
-	// newGRPCCtx returns a context with auth metadata attached
+	// newGRPCCtx returns a context with auth metadata attached.
+	// Calls resolveNodeSecret() each time so config.json changes take effect immediately.
 	newGRPCCtx := func() context.Context {
-		if nodeSecret == "" {
+		secret := resolveNodeSecret()
+		if secret == "" {
 			return context.Background()
 		}
-		return metadata.AppendToOutgoingContext(context.Background(), "x-node-secret", nodeSecret)
+		return metadata.AppendToOutgoingContext(context.Background(), "x-node-secret", secret)
 	}
 
 	// 1. จำลอง Node ID จาก ENV หรือสร้างจาก Hostname (Dynamic Identity)
