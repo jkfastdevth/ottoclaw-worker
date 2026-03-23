@@ -174,6 +174,12 @@ func registerSharedTools(
 		// Specialized IoT Toolbox for high-level hardware control
 		agent.Tools.Register(tools.NewIoTToolbox())
 
+		// Termux Rich — beautiful terminal output via Python's rich library
+		agent.Tools.Register(tools.NewTermuxRichTool())
+
+		// Android rish — control Android device via Shizuku shell
+		agent.Tools.Register(tools.NewRishTool())
+
 		// Message tool
 		if cfg.Tools.IsToolEnabled("message") {
 			messageTool := tools.NewMessageTool()
