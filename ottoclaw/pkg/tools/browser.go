@@ -11,7 +11,7 @@ import (
 
 // BrowserLaunchTool opens a URL in a browser on the local machine.
 // Requires a GUI environment (DISPLAY must be set on Linux).
-// Supports any installed browser: xdg-open (default), kaidos, chromium, firefox, etc.
+// Supports any installed browser: xdg-open (default), chromium, firefox, brave-browser, etc.
 type BrowserLaunchTool struct {
 	defaultBrowser  string   // binary name or path, empty = xdg-open
 	allowedBrowsers []string // whitelist; empty = allow any
@@ -29,7 +29,7 @@ func (t *BrowserLaunchTool) Name() string { return "open_browser" }
 func (t *BrowserLaunchTool) Description() string {
 	return "Open a URL in a browser on the local machine. " +
 		"Requires a GUI display (Linux: DISPLAY must be set, e.g. Zorin OS / Ubuntu Desktop). " +
-		"Supported browsers: kaidos, chromium, google-chrome, firefox, brave-browser, or system default."
+		"Supported browsers: chromium, google-chrome, firefox, brave-browser, or system default (xdg-open)."
 }
 
 func (t *BrowserLaunchTool) Parameters() map[string]any {
@@ -42,7 +42,7 @@ func (t *BrowserLaunchTool) Parameters() map[string]any {
 			},
 			"browser": map[string]any{
 				"type":        "string",
-				"description": "Browser binary to use: kaidos, chromium, google-chrome, firefox, brave-browser, or leave empty to use the system default.",
+				"description": "Browser binary to use: chromium, google-chrome, firefox, brave-browser, or leave empty to use the system default (xdg-open).",
 			},
 		},
 		"required": []string{"url"},
@@ -183,7 +183,6 @@ func defaultLauncherName() string {
 // installHint returns an install suggestion for known browsers.
 func installHint(name string) string {
 	hints := map[string]string{
-		"kaidos":        " — install from https://kaido.sh or your distro's package manager",
 		"chromium":      " — install with: sudo apt install chromium-browser",
 		"google-chrome": " — download from https://www.google.com/chrome",
 		"firefox":       " — install with: sudo apt install firefox",
