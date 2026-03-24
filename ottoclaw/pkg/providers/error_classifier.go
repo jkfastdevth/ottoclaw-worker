@@ -27,6 +27,7 @@ var (
 	rateLimitPatterns = []errorPattern{
 		rxp(`rate[_ ]limit`),
 		substr("too many requests"),
+		substr("toomanyrequests"), // Cerebras: "toomanyrequestserror"
 		substr("429"),
 		substr("exceeded your current quota"),
 		rxp(`exceeded.*quota`),
@@ -34,7 +35,10 @@ var (
 		rxp(`resource.*exhausted`),
 		substr("resource_exhausted"),
 		substr("quota exceeded"),
+		substr("queueexceeded"), // Cerebras: code "queueexceeded"
 		substr("usage limit"),
+		substr("high traffic"),  // Cerebras: "We're experiencing high traffic"
+		substr("please try again soon"),
 	}
 
 	overloadedPatterns = []errorPattern{
