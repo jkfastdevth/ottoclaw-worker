@@ -448,6 +448,10 @@ func DefaultConfig() *Config {
 			WriteFile: ToolConfig{
 				Enabled: true,
 			},
+			BrowserLaunch: BrowserLaunchConfig{
+				ToolConfig:     ToolConfig{Enabled: false},
+				DefaultBrowser: "",
+			},
 		},
 		Heartbeat: HeartbeatConfig{
 			Enabled:  true,

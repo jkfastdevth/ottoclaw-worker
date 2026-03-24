@@ -163,6 +163,15 @@ func registerSharedTools(
 			}
 		}
 
+		// Browser launch tool — opens URLs in a GUI browser (requires DISPLAY)
+		if cfg.Tools.IsToolEnabled("browser_launch") {
+			browserTool := tools.NewBrowserLaunchTool(
+				cfg.Tools.BrowserLaunch.DefaultBrowser,
+				cfg.Tools.BrowserLaunch.AllowedBrowsers,
+			)
+			agent.Tools.Register(browserTool)
+		}
+
 		// Hardware tools (I2C, SPI) - Linux only, returns error on other platforms
 		if cfg.Tools.IsToolEnabled("i2c") {
 			agent.Tools.Register(tools.NewI2CTool())

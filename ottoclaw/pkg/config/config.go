@@ -549,6 +549,13 @@ type ToolConfig struct {
 	Enabled bool `json:"enabled" env:"ENABLED"`
 }
 
+// BrowserLaunchConfig configures the open_browser tool for GUI environments.
+type BrowserLaunchConfig struct {
+	ToolConfig      `envPrefix:"OTTOCLAW_TOOLS_BROWSER_LAUNCH_"`
+	DefaultBrowser  string   `json:"default_browser"  env:"OTTOCLAW_TOOLS_BROWSER_LAUNCH_DEFAULT_BROWSER"`
+	AllowedBrowsers []string `json:"allowed_browsers" env:"OTTOCLAW_TOOLS_BROWSER_LAUNCH_ALLOWED_BROWSERS"`
+}
+
 type BraveConfig struct {
 	Enabled    bool   `json:"enabled"     env:"OTTOCLAW_TOOLS_WEB_BRAVE_ENABLED"`
 	APIKey     string `json:"api_key"     env:"OTTOCLAW_TOOLS_WEB_BRAVE_API_KEY"`
@@ -644,6 +651,7 @@ type ToolsConfig struct {
 	Swarm           ToolConfig         `json:"swarm"                                                    envPrefix:"OTTOCLAW_TOOLS_SWARM_"`
 	WebFetch        ToolConfig         `json:"web_fetch"                                                envPrefix:"OTTOCLAW_TOOLS_WEB_FETCH_"`
 	WriteFile       ToolConfig         `json:"write_file"                                               envPrefix:"OTTOCLAW_TOOLS_WRITE_FILE_"`
+	BrowserLaunch  BrowserLaunchConfig `json:"browser_launch"                                           envPrefix:"OTTOCLAW_TOOLS_BROWSER_LAUNCH_"`
 }
 
 type SearchCacheConfig struct {
@@ -914,6 +922,8 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.WebFetch.Enabled
 	case "write_file":
 		return t.WriteFile.Enabled
+	case "browser_launch":
+		return t.BrowserLaunch.Enabled
 	case "mcp":
 		return t.MCP.Enabled
 	default:
