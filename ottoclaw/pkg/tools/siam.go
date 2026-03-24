@@ -123,6 +123,7 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamGetMissionTool{client: client},
 		&SiamPromoteAgentTool{client: client},
 		&SiamPromotionRitualTool{client: client},
+		&SiamOpenBrowserTool{client: client},
 		&SiamSendEmailTool{},
 		&SiamListCalendarTool{},
 		&SiamCreateCalendarEventTool{},
@@ -889,6 +890,57 @@ func (t *SiamPromotionRitualTool) Execute(_ context.Context, args map[string]any
 	data, err := t.client.post("/api/agent/v1/broadcast", payload)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_promotion_ritual failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamOpenBrowserTool — command a remote Worker node to open a URL in its browser.
+type SiamOpenBrowserTool struct{ client *siamClient }
+
+func (t *SiamOpenBrowserTool) Name() string { return "siam_open_browser" }
+func (t *SiamOpenBrowserTool) Description() string {
+	return "Command a remote Worker node to open a URL in its local browser. The node must have a GUI environment (DISPLAY set). Useful for triggering browser sessions on headful worker machines."
+}
+func (t *SiamOpenBrowserTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"node_id": map[string]any{
+				"type":        "string",
+				"description": "The Node ID of the Worker to open the browser on. Use siam_get_nodes to list connected nodes.",
+			},
+			"url": map[string]any{
+				"type":        "string",
+				"description": "The URL to open (must start with http://, https://, or file://).",
+			},
+			"browser": map[string]any{
+				"type":        "string",
+				"description": "Optional browser binary: chromium, google-chrome, firefox, brave-browser, or leave empty for the system default.",
+			},
+		},
+		"required": []string{"node_id", "url"},
+	}
+}
+func (t *SiamOpenBrowserTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	nodeID, _ := args["node_id"].(string)
+	url, _ := args["url"].(string)
+	browser, _ := args["browser"].(string)
+
+	if strings.TrimSpace(nodeID) == "" {
+		return ErrorResult("siam_open_browser: node_id is required")
+	}
+	if strings.TrimSpace(url) == "" {
+		return ErrorResult("siam_open_browser: url is required")
+	}
+
+	payload := map[string]any{"url": url}
+	if browser != "" {
+		payload["browser"] = browser
+	}
+
+	data, err := t.client.post("/api/agent/v1/nodes/"+strings.TrimSpace(nodeID)+"/browser", payload)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_open_browser failed: %v", err))
 	}
 	return UserResult(string(data))
 }

@@ -108,6 +108,11 @@ Execute a shell command on a specific remote node.
 **Parameters:** `node_id` (string), `command` (string)
 **Use when:** running maintenance scripts, checking logs, or testing node health directly.
 
+### `siam_open_browser`
+Command a remote Worker node to open a URL in its local browser.
+**Parameters:** `node_id` (string, required), `url` (string, required), `browser` (optional: chromium, google-chrome, firefox, brave-browser, or empty for system default)
+**Use when:** triggering a browser session on a headful worker machine (requires DISPLAY on Linux).
+
 ---
 
 ## Organization & Rituals

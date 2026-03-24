@@ -966,6 +966,69 @@ func main() {
 							log.Printf("✅ Master Acked Result [%s]: %v", commandId, ack.Success)
 						}
 					}(cmd.CommandId, cmd.Payload, workerCtx)
+				} else if cmd.Type == "BROWSER_OPEN" {
+					// สั่งเปิด browser บน Worker node นี้
+					// Payload format: "<url>" หรือ "<url>|<browser>"
+					parts := strings.SplitN(cmd.Payload, "|", 2)
+					url := strings.TrimSpace(parts[0])
+					browserBin := ""
+					if len(parts) == 2 {
+						browserBin = strings.TrimSpace(parts[1])
+					}
+
+					go func(commandId, urlStr, bin string) {
+						var execCmd *exec.Cmd
+
+						switch runtime.GOOS {
+						case "linux":
+							display := os.Getenv("DISPLAY")
+							wayland := os.Getenv("WAYLAND_DISPLAY")
+							if display == "" && wayland == "" {
+								grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+									CommandId: commandId, NodeId: nodeID, Success: false,
+									Output: "BROWSER_OPEN failed: no GUI display (DISPLAY/WAYLAND_DISPLAY not set)",
+								})
+								return
+							}
+							if bin == "" || bin == "default" {
+								execCmd = exec.Command("xdg-open", urlStr)
+							} else {
+								execCmd = exec.Command(bin, urlStr)
+							}
+						case "darwin":
+							if bin == "" || bin == "default" {
+								execCmd = exec.Command("open", urlStr)
+							} else {
+								execCmd = exec.Command(bin, urlStr)
+							}
+						case "windows":
+							if bin == "" || bin == "default" {
+								execCmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr)
+							} else {
+								execCmd = exec.Command(bin, urlStr)
+							}
+						default:
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: commandId, NodeId: nodeID, Success: false,
+								Output: "BROWSER_OPEN failed: unsupported platform " + runtime.GOOS,
+							})
+							return
+						}
+
+						if err := execCmd.Start(); err != nil {
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: commandId, NodeId: nodeID, Success: false,
+								Output: fmt.Sprintf("BROWSER_OPEN failed to launch: %v", err),
+							})
+							return
+						}
+						go func() { _ = execCmd.Wait() }()
+						log.Printf("🌐 [Browser] Opened %s (PID %d)", urlStr, execCmd.Process.Pid)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: commandId, NodeId: nodeID, Success: true,
+							Output: fmt.Sprintf("Opened %s (PID %d)", urlStr, execCmd.Process.Pid),
+						})
+					}(cmd.CommandId, url, browserBin)
 				}
 			}
 
