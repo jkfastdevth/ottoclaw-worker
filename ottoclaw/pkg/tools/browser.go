@@ -102,6 +102,9 @@ func (t *BrowserLaunchTool) Execute(ctx context.Context, args map[string]any) *T
 		return ErrorResult(fmt.Sprintf("failed to launch browser: %v", err))
 	}
 
+	// Capture PID before goroutine may call Wait() and release process resources
+	pid := cmd.Process.Pid
+
 	// Don't wait — browser is a GUI app, release it immediately
 	go func() { _ = cmd.Wait() }()
 
@@ -110,7 +113,7 @@ func (t *BrowserLaunchTool) Execute(ctx context.Context, args map[string]any) *T
 		used = defaultLauncherName()
 	}
 
-	return SuccessResult(fmt.Sprintf("Opened %s in %s (PID %d)", url, used, cmd.Process.Pid))
+	return NewToolResult(fmt.Sprintf("Opened %s in %s (PID %d)", url, used, pid))
 }
 
 // buildLaunchCmd constructs the OS command for opening the URL in a browser.
