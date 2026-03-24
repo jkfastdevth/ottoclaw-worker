@@ -182,14 +182,18 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 
 		upStatus, upErr := GetUpdateStatus()
 
+		// request node_secret only when it's missing from config (avoids broadcasting on every heartbeat)
+		needNodeSecret := m.cfg.Channels.SiamSync.NodeSecret == "" && os.Getenv("NODE_SECRET") == ""
+
 		payload := map[string]any{
-			"today_usage":      usage,
-			"today_cost":       cost,
-			"max_daily_tokens": agent.MaxDailyTokens,
-			"tools":            agent.Tools.List(),
-			"version":          m.getVersion(),
-			"update_status":    upStatus,
-			"update_error":     upErr,
+			"today_usage":       usage,
+			"today_cost":        cost,
+			"max_daily_tokens":  agent.MaxDailyTokens,
+			"tools":             agent.Tools.List(),
+			"version":           m.getVersion(),
+			"update_status":     upStatus,
+			"update_error":      upErr,
+			"need_node_secret":  needNodeSecret,
 		}
 		body, _ := json.Marshal(payload)
 
