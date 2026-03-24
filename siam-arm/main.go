@@ -472,6 +472,10 @@ func main() {
 	activeIdentity := currentSoul
 	currentSoulMu.RUnlock()
 
+	// สร้าง Context หลักของ Worker (ก่อน auto-start brain)
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+
 	if activeIdentity != "" && os.Getenv("OTTOCLAW_MODE") != "orchestrator" {
 		log.Printf("⚡ [Soul Recovery] Auto-igniting the brain for '%s'...", activeIdentity)
 		go func(identityName string) {
@@ -502,9 +506,6 @@ func main() {
 		}(activeIdentity)
 	}
 
-	// 2. สร้าง Context หลักของ Worker
-	workerCtx, workerCancel := context.WithCancel(context.Background())
-	defer workerCancel()
 
 	masterGrpcURL := os.Getenv("MASTER_GRPC_URL")
 	if masterGrpcURL == "" {
@@ -543,8 +544,6 @@ func main() {
 
 			// เปิด Stream รับคำสั่งจาก Master (ผูก lifecycle กับ workerCtx)
 			stream, err := grpcClient.GetCommand(workerCtx, &proto.NodeStatus{NodeId: nodeID})
-			// เปิด Stream รับคำสั่งจาก Master
-			stream, err := grpcClient.GetCommand(newGRPCCtx(), &proto.NodeStatus{NodeId: nodeID})
 			if err != nil {
 				if workerCtx.Err() != nil { return } // shutdown ระหว่าง dial
 				wait := backoffDuration(streamAttempt)
@@ -561,7 +560,7 @@ func main() {
 			streamAttempt = 0 // reset backoff on successful open
 
 			// สร้าง Context ย่อยสำหรับ lifecycle ของ stream นี้
-			streamCtx, streamCancel := context.WithCancel(workerCtx)
+			_, streamCancel := context.WithCancel(workerCtx)
 
 			for {
 				cmd, err := stream.Recv()
