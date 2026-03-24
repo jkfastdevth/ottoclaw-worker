@@ -262,7 +262,18 @@ func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentD
 	}
 	home, _ := os.UserHomeDir()
 	id := routing.NormalizeAgentID(agentCfg.ID)
-	return filepath.Join(home, ".ottoclaw", "workspace-"+id)
+	appHome := filepath.Join(home, ".picoclaw")
+	if h := os.Getenv("PICOCLAW_HOME"); h != "" {
+		appHome = h
+	} else if h := os.Getenv("OTTOCLAW_HOME"); h != "" {
+		appHome = h
+	} else if _, err := os.Stat(appHome); err != nil {
+		otto := filepath.Join(home, ".ottoclaw")
+		if _, e := os.Stat(otto); e == nil {
+			appHome = otto
+		}
+	}
+	return filepath.Join(appHome, "workspace-"+id)
 }
 
 // resolveAgentModel resolves the primary model for an agent.

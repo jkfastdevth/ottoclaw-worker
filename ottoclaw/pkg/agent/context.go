@@ -54,11 +54,25 @@ type ContextBuilder struct {
 }
 
 func getGlobalConfigDir() string {
+	if h := os.Getenv("PICOCLAW_HOME"); h != "" {
+		return h
+	}
+	if h := os.Getenv("OTTOCLAW_HOME"); h != "" {
+		return h
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".ottoclaw")
+	picoPath := filepath.Join(home, ".picoclaw")
+	if _, err := os.Stat(picoPath); err == nil {
+		return picoPath
+	}
+	ottoPath := filepath.Join(home, ".ottoclaw")
+	if _, err := os.Stat(ottoPath); err == nil {
+		return ottoPath
+	}
+	return picoPath
 }
 
 func NewContextBuilder(workspace string) *ContextBuilder {

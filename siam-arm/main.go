@@ -182,6 +182,58 @@ import (
 	"regexp"
 )
 
+// guardCommand blocks dangerous shell command patterns before execution.
+func guardCommand(cmd string) error {
+	lower := strings.ToLower(cmd)
+	blocked := []string{
+		"rm -rf /", "rm -rf /*", "rm -rf ~",
+		"> /dev/sda", "dd if=", "mkfs", "fdisk",
+		"shutdown", "reboot", "halt", "poweroff",
+		"eval ", "> /etc/passwd", "> /etc/shadow",
+		"chmod 777 /", "chmod -r /", "chown root /",
+		":(){ :|:& };:", // fork bomb
+	}
+	for _, pattern := range blocked {
+		if strings.Contains(lower, pattern) {
+			return fmt.Errorf("blocked dangerous pattern: %q", pattern)
+		}
+	}
+	if strings.Contains(cmd, "../../../") {
+		return fmt.Errorf("path traversal detected in command")
+	}
+	return nil
+}
+
+// sanitizeFilename ensures a workspace filename cannot escape the workspace directory.
+func sanitizeFilename(name string) error {
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("'..' not allowed in filename")
+	}
+	if filepath.IsAbs(name) {
+		return fmt.Errorf("absolute path not allowed in filename")
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
+			return fmt.Errorf("unsafe character %q in filename", c)
+		}
+	}
+	return nil
+}
+
+// backoffDuration returns exponential backoff duration capped at 60s.
+// attempt=0 → 1s, 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s, 5+ → 60s
+func backoffDuration(attempt int) time.Duration {
+	if attempt > 5 {
+		attempt = 5
+	}
+	d := time.Duration(1<<uint(attempt)) * time.Second
+	if d > 60*time.Second {
+		d = 60 * time.Second
+	}
+	return d
+}
+
 func NormalizeID(id string) string {
 	trimmed := strings.TrimSpace(id)
 	if trimmed == "" {
@@ -204,19 +256,42 @@ var (
 	currentSoulMu   sync.RWMutex
 )
 
-// getSafeEnv returns a filtered environment slice for the brain process
+// getSafeEnv returns an allowlisted environment for the brain process.
+// Only explicitly permitted variables are passed to prevent leaking infrastructure
+// credentials (gRPC keys, DB URLs, etc.) into user-controlled brain processes.
 func getSafeEnv() []string {
-	env := os.Environ()
-	safeEnv := make([]string, 0, len(env))
-	
 	isOrchestrator := (os.Getenv("OTTOCLAW_MODE") == "orchestrator")
-	
-	for _, e := range env {
-		safeEnv = append(safeEnv, e)
+
+	// Allowlist of env var prefixes/names safe to pass to the brain
+	allowPrefixes := []string{
+		"OTTOCLAW_",
+		"AGENT_",
+		"LLM_",
+		"ANTHROPIC_",
+		"OPENAI_",
+		"OLLAMA_",
+		"HOME",
+		"PATH",
+		"TERM",
+		"LANG",
+		"TZ",
+		"NODE_ID",
+		"ORCHESTRATOR_TELEGRAM_TOKEN",
+		"TELEGRAM_",
+		"LINE_CHANNEL_ACCESS_TOKEN",
+	}
+
+	safeEnv := make([]string, 0, 32)
+	for _, e := range os.Environ() {
+		for _, prefix := range allowPrefixes {
+			if strings.HasPrefix(e, prefix) {
+				safeEnv = append(safeEnv, e)
+				break
+			}
+		}
 	}
 
 	// 🛡️ Disable Telegram Polling for workers to prevent 409 Conflict
-	// However, we KEEP the tokens in safeEnv so tools (like siam_send_message) can still broadcast.
 	if !isOrchestrator {
 		safeEnv = append(safeEnv, "OTTOCLAW_CHANNELS_TELEGRAM_ENABLED=false")
 	}
@@ -260,10 +335,28 @@ func getBatteryAndTemp() (float32, float32) {
 	return battery, temp
 }
 
-// จำลองฟังก์ชัน restartContainer
+// restartContainer restarts a Docker container by name with a 30s timeout.
+// containerName is validated to prevent shell injection.
 func restartContainer(containerName string) error {
-	log.Printf("🐳 Executing: docker restart %s", containerName)
-	// ตรงนี้คือ logic สั่ง docker จริงๆ
+	if containerName == "" {
+		return fmt.Errorf("container name is empty")
+	}
+	// Validate: only alphanumeric, dash, underscore, dot allowed
+	for _, c := range containerName {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
+			return fmt.Errorf("invalid character %q in container name", c)
+		}
+	}
+	log.Printf("🐳 Restarting container: %s", containerName)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", "restart", containerName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker restart failed: %v — %s", err, string(output))
+	}
+	log.Printf("✅ Container %s restarted successfully", containerName)
 	return nil
 }
 
@@ -385,7 +478,7 @@ func main() {
 			brainMutex.Lock()
 			defer brainMutex.Unlock()
 			
-			execCmd := exec.Command(func() string {
+			execCmd := exec.CommandContext(workerCtx, func() string {
 				if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
 					return bin
 				}
@@ -420,14 +513,15 @@ func main() {
 
 	// 2. เชื่อมต่อ gRPC ไปยัง Master พร้อมระบบ Retry
 	var conn *grpc.ClientConn
-	for {
+	for attempt := 0; ; attempt++ {
 		c, err := grpc.Dial(masterGrpcURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err == nil {
 			conn = c
 			break
 		}
-		log.Printf("⚠️  Could not connect to Master at %s: %v. Retrying in 5s...", masterGrpcURL, err)
-		time.Sleep(5 * time.Second)
+		wait := backoffDuration(attempt)
+		log.Printf("⚠️  Could not connect to Master at %s: %v. Retrying in %v...", masterGrpcURL, err, wait)
+		time.Sleep(wait)
 		if workerCtx.Err() != nil { return }
 	}
 	defer conn.Close()
@@ -442,18 +536,29 @@ func main() {
 			}
 		}()
 
+		streamAttempt := 0
 		for {
 			// ตรวจสอบ context ก่อนเริ่ม loop ใหม่
 			if workerCtx.Err() != nil { return }
 
+			// เปิด Stream รับคำสั่งจาก Master (ผูก lifecycle กับ workerCtx)
+			stream, err := grpcClient.GetCommand(workerCtx, &proto.NodeStatus{NodeId: nodeID})
 			// เปิด Stream รับคำสั่งจาก Master
 			stream, err := grpcClient.GetCommand(newGRPCCtx(), &proto.NodeStatus{NodeId: nodeID})
 			if err != nil {
-				log.Printf("❌ Failed to get command stream, retrying in 5s: %v", err)
-				time.Sleep(5 * time.Second)
+				if workerCtx.Err() != nil { return } // shutdown ระหว่าง dial
+				wait := backoffDuration(streamAttempt)
+				log.Printf("❌ Failed to open command stream (attempt %d), retrying in %v: %v", streamAttempt, wait, err)
+				streamAttempt++
+				select {
+				case <-time.After(wait):
+				case <-workerCtx.Done():
+					return
+				}
 				continue
 			}
 			log.Println("📡 Stream opened and listening for commands...")
+			streamAttempt = 0 // reset backoff on successful open
 
 			// สร้าง Context ย่อยสำหรับ lifecycle ของ stream นี้
 			streamCtx, streamCancel := context.WithCancel(workerCtx)
@@ -466,7 +571,7 @@ func main() {
 					break
 				}
 
-				if cmd.CommandId == "SYSTEM_TERMINATE" {
+				if cmd.CommandId == "SYSTEM_TERMINATE" || cmd.Type == "SYSTEM_TERMINATE" {
 					log.Println("🛑 RECEIVED SYSTEM_TERMINATE SIGNAL from Master!")
 					streamCancel()
 					workerCancel() // ปิดทั้ง worker
@@ -522,6 +627,7 @@ func main() {
 					// Also save the soul name for recovery
 					if err := os.WriteFile(soulIDPath, []byte(soulName), 0644); err != nil {
 						log.Printf("⚠️  Failed to persist soul name: %v", err)
+						continue
 					}
 					log.Printf("✨ [Awakening] Soul '%s' bound to %s", soulName, soulPath)
 					
@@ -610,6 +716,18 @@ func main() {
 					
 					filename := parts[0]
 					encodedContent := parts[1]
+
+					// 🛡️ Guard: prevent path traversal in synced filenames
+					if err := sanitizeFilename(filename); err != nil {
+						log.Printf("🛑 [Security] Path traversal blocked in sync [%s]: %v", cmd.CommandId, err)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    fmt.Sprintf("Filename rejected by security guard: %v", err),
+						})
+						continue
+					}
 					
 					decodedBytes, err := base64.StdEncoding.DecodeString(encodedContent)
 					if err != nil {
@@ -704,18 +822,119 @@ func main() {
 					continue
 				}
 
+				if cmd.Type == "SYSTEM_HOT_RELOAD" {
+					log.Printf("🔥 [Hot Reload] Received SYSTEM_HOT_RELOAD from Master")
+
+					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" {
+						log.Printf("🛡️ [Hot Reload] Skipped: Orchestrator identity is immutable")
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   true,
+							Output:    "Hot reload skipped: orchestrator is immutable",
+						})
+						continue
+					}
+
+					currentSoulMu.RLock()
+					identityName := currentSoul
+					currentSoulMu.RUnlock()
+
+					if identityName == "" {
+						log.Printf("⚠️  [Hot Reload] No active soul — nothing to reload")
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    "Hot reload skipped: no soul loaded",
+						})
+						continue
+					}
+
+					brainMutex.Lock()
+					if currentBrain != nil && currentBrain.Process != nil {
+						log.Printf("🛑 [Hot Reload] Terminating brain for reload...")
+						currentBrain.Process.Kill()
+						currentBrain.Wait()
+					}
+					go func(name string) {
+						defer brainMutex.Unlock()
+						execCmd := exec.CommandContext(workerCtx, func() string {
+							if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
+								return bin
+							}
+							return "/app/ottoclaw"
+						}(), "gateway", "--debug")
+						env := getSafeEnv()
+						env = append(env, fmt.Sprintf("AGENT_NAME=%s", name))
+						env = append(env, "AGENT_MISSION=Re-awakened via Hot Reload")
+						execCmd.Env = env
+						execCmd.Stdout = os.Stdout
+						execCmd.Stderr = os.Stderr
+						currentBrain = execCmd
+						if err := execCmd.Start(); err != nil {
+							log.Printf("❌ [Hot Reload] Failed to re-ignite brain: %v", err)
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: cmd.CommandId,
+								NodeId:    nodeID,
+								Success:   false,
+								Output:    fmt.Sprintf("Hot reload failed for %s: %v", name, err),
+							})
+							return
+						}
+						log.Printf("🚀 [Hot Reload] Brain re-ignited for '%s'", name)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   true,
+							Output:    fmt.Sprintf("Hot reload complete for %s", name),
+						})
+						execCmd.Wait()
+					}(identityName)
+					continue
+				}
+
 				fmt.Printf("📥 Received Command ID: %s, Type: %s\n", cmd.CommandId, cmd.Type)
 
 				if cmd.Type == "action" {
-					if cmd.Payload == "restart" {
-						err := restartContainer("sworker-ubuntu-01")
-						if err != nil {
-							log.Printf("❌ Failed to restart: %v", err)
+					if strings.HasPrefix(cmd.Payload, "restart") {
+						// Payload: "restart" (self) or "restart:<container_name>"
+						target := nodeID
+						if actionParts := strings.SplitN(cmd.Payload, ":", 2); len(actionParts) == 2 && actionParts[1] != "" {
+							target = actionParts[1]
+						}
+						if err := restartContainer(target); err != nil {
+							log.Printf("❌ Failed to restart container %s: %v", target, err)
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: cmd.CommandId,
+								NodeId:    nodeID,
+								Success:   false,
+								Output:    err.Error(),
+							})
+						} else {
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: cmd.CommandId,
+								NodeId:    nodeID,
+								Success:   true,
+								Output:    fmt.Sprintf("Container %s restarted successfully", target),
+							})
 						}
 					}
 				} else if cmd.Type == "shell" {
 					// 🤖 รันคำสั่ง Shell ที่ Agent ส่งมา (ทำเป็น Non-Blocking ให้อยู่เบื้องหลัง)
 					log.Printf("🤖 Starting Background Shell Payload: %s", cmd.Payload)
+
+					// 🛡️ Guard: block dangerous patterns before spawning shell
+					if err := guardCommand(cmd.Payload); err != nil {
+						log.Printf("🛑 [Security] Blocked command [%s]: %v", cmd.CommandId, err)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    fmt.Sprintf("Command blocked by security guard: %v", err),
+						})
+						continue
+					}
 
 					go func(commandId string, payload string, ctx context.Context) {
 						execCmd := exec.CommandContext(ctx, "sh", "-c", payload)
@@ -746,12 +965,78 @@ func main() {
 						} else {
 							log.Printf("✅ Master Acked Result [%s]: %v", commandId, ack.Success)
 						}
-					}(cmd.CommandId, cmd.Payload, streamCtx)
+					}(cmd.CommandId, cmd.Payload, workerCtx)
+				} else if cmd.Type == "BROWSER_OPEN" {
+					// สั่งเปิด browser บน Worker node นี้
+					// Payload format: "<url>" หรือ "<url>|<browser>"
+					parts := strings.SplitN(cmd.Payload, "|", 2)
+					url := strings.TrimSpace(parts[0])
+					browserBin := ""
+					if len(parts) == 2 {
+						browserBin = strings.TrimSpace(parts[1])
+					}
+
+					go func(commandId, urlStr, bin string) {
+						var execCmd *exec.Cmd
+
+						switch runtime.GOOS {
+						case "linux":
+							display := os.Getenv("DISPLAY")
+							wayland := os.Getenv("WAYLAND_DISPLAY")
+							if display == "" && wayland == "" {
+								grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+									CommandId: commandId, NodeId: nodeID, Success: false,
+									Output: "BROWSER_OPEN failed: no GUI display (DISPLAY/WAYLAND_DISPLAY not set)",
+								})
+								return
+							}
+							if bin == "" || bin == "default" {
+								execCmd = exec.Command("xdg-open", urlStr)
+							} else {
+								execCmd = exec.Command(bin, urlStr)
+							}
+						case "darwin":
+							if bin == "" || bin == "default" {
+								execCmd = exec.Command("open", urlStr)
+							} else {
+								execCmd = exec.Command(bin, urlStr)
+							}
+						case "windows":
+							if bin == "" || bin == "default" {
+								execCmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr)
+							} else {
+								execCmd = exec.Command(bin, urlStr)
+							}
+						default:
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: commandId, NodeId: nodeID, Success: false,
+								Output: "BROWSER_OPEN failed: unsupported platform " + runtime.GOOS,
+							})
+							return
+						}
+
+						if err := execCmd.Start(); err != nil {
+							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								CommandId: commandId, NodeId: nodeID, Success: false,
+								Output: fmt.Sprintf("BROWSER_OPEN failed to launch: %v", err),
+							})
+							return
+						}
+						go func() { _ = execCmd.Wait() }()
+						log.Printf("🌐 [Browser] Opened %s (PID %d)", urlStr, execCmd.Process.Pid)
+						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							CommandId: commandId, NodeId: nodeID, Success: true,
+							Output: fmt.Sprintf("Opened %s (PID %d)", urlStr, execCmd.Process.Pid),
+						})
+					}(cmd.CommandId, url, browserBin)
 				}
 			}
 
 			// ถ้าหลุดมาถึงนี่แปลว่า Stream รับคำสั่งมีปัญหา ให้หน่วงเวลาก่อนต่อใหม่
-			time.Sleep(5 * time.Second)
+			streamAttempt++
+			wait := backoffDuration(streamAttempt)
+			log.Printf("⚙️  Stream reconnecting in %v (attempt %d)...", wait, streamAttempt)
+			time.Sleep(wait)
 		}
 	}()
 
@@ -774,10 +1059,11 @@ func main() {
 
 		conn, err := net.Dial("udp", masterHost+":50051")
 		if err == nil {
-			localAddr := conn.LocalAddr().(*net.UDPAddr)
-			ipAddr = localAddr.IP.String()
+			if udpAddr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+				ipAddr = udpAddr.IP.String()
+				log.Printf("📡 [Detection] Detected preferred outbound IP: %s", ipAddr)
+			}
 			conn.Close()
-			log.Printf("📡 [Detection] Detected preferred outbound IP: %s", ipAddr)
 		}
 
 		// Fallback to traditional interface scan if UDP dial failed
@@ -803,6 +1089,7 @@ func main() {
 
 	// 5. Loop ส่ง Heartbeat ทุกๆ 5 วินาที
 	fmt.Println("🚀 Worker Node Started: Sending heartbeats to Master...")
+	statusFailures := 0 // consecutive ReportStatus failure counter
 	for {
 		func() {
 			defer func() {
@@ -915,8 +1202,17 @@ func main() {
 
 		res, err := grpcClient.ReportStatus(ctx, status)
 		if err != nil {
-			fmt.Printf("⚠️ Error sending status: %v\n", err)
+			statusFailures++
+			if statusFailures >= 3 {
+				log.Printf("⚠️  [Heartbeat] %d consecutive failures — Master unreachable: %v", statusFailures, err)
+			} else {
+				fmt.Printf("⚠️ Error sending status: %v\n", err)
+			}
 		} else {
+			if statusFailures > 0 {
+				log.Printf("✅ [Heartbeat] Master reconnected after %d failures", statusFailures)
+				statusFailures = 0
+			}
 			fmt.Printf("✅ Master Response: %s (CPU: %.1f%%)\n", res.Message, status.CpuUsage)
 			if res.Action != "" {
 				fmt.Printf("🔔 [Action] Received command from Master: %s\n", res.Action)
@@ -927,21 +1223,37 @@ func main() {
 				} else if strings.HasPrefix(res.Action, "auto_qa:") {
 					skill := strings.TrimPrefix(res.Action, "auto_qa:")
 					fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
-					go func(s string) {
-						cmd := exec.Command("python3", "/app/workspace/v2/auto_qa_skill.py", "--skill", s, "--force")
+					go func(s string, ctx context.Context) {
+						cmd := exec.CommandContext(ctx, "python3", "/app/workspace/v2/auto_qa_skill.py", "--skill", s, "--force")
 						output, err := cmd.CombinedOutput()
+						if ctx.Err() != nil {
+							fmt.Printf("🛑 [Auto QA] Cancelled for %s (worker shutdown)\n", s)
+							return
+						}
 						if err != nil {
 							fmt.Printf("❌ [Auto QA] Failed for %s: %v\nOutput: %s\n", s, err, output)
 						} else {
 							fmt.Printf("✅ [Auto QA] Finished for %s\n", s)
 						}
-					}(skill)
+					}(skill, workerCtx)
 				}
 			}
 		}
 
 		}()
 
-		time.Sleep(5 * time.Second)
+		// Scale heartbeat interval: 5s normally, up to 30s when master is unreachable
+		heartbeatInterval := 5 * time.Second
+		if statusFailures >= 3 {
+			scaled := 5 + statusFailures*5
+			if scaled > 30 { scaled = 30 }
+			heartbeatInterval = time.Duration(scaled) * time.Second
+		}
+		select {
+		case <-time.After(heartbeatInterval):
+		case <-workerCtx.Done():
+			return
+		}
 	}
 }
+

@@ -19,7 +19,18 @@ func getDriveService(ctx context.Context) (*drive.Service, error) {
 	// 1. Try agent-specific workspace env for the JSON content or path
 	if agentID != "" && agentID != "main" {
 		home, _ := os.UserHomeDir()
-		agentDir := filepath.Join(home, ".ottoclaw", "workspace-"+agentID)
+		appHome := filepath.Join(home, ".picoclaw")
+		if h := os.Getenv("PICOCLAW_HOME"); h != "" {
+			appHome = h
+		} else if h := os.Getenv("OTTOCLAW_HOME"); h != "" {
+			appHome = h
+		} else if _, err := os.Stat(appHome); err != nil {
+			otto := filepath.Join(home, ".ottoclaw")
+			if _, e := os.Stat(otto); e == nil {
+				appHome = otto
+			}
+		}
+		agentDir := filepath.Join(appHome, "workspace-"+agentID)
 		jsonPath := filepath.Join(agentDir, "google-drive-key.json")
 		if _, err := os.Stat(jsonPath); err == nil {
 			return drive.NewService(ctx, option.WithCredentialsFile(jsonPath))

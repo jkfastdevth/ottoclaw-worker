@@ -71,6 +71,16 @@ get_local_ip() {
     echo -n "$local_ip"
 }
 
+# ── Locate Source ─────────────────────────────────────────────────────────────
+# Handle curl | bash (unbound BASH_SOURCE) vs direct execution
+SCRIPT_DIR="$(pwd)"
+if [[ -n "${BASH_SOURCE+x}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+elif [[ -n "$0" && -f "$0" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+fi
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
+
 # ── Detect Termux ─────────────────────────────────────────────────────────────
 if [[ -d "/data/data/com.termux" ]] || [[ -n "${TERMUX_VERSION:-}" ]]; then
     banner "Termux Detected"
@@ -95,7 +105,7 @@ SUFFIX=""
 case "$ARCH" in
     x86_64)  GO_ARCH="amd64"; SUFFIX="linux-amd64" ;;
     aarch64) GO_ARCH="arm64"; SUFFIX="linux-arm64" ;;
-    armv7l)  GO_ARCH="arm"   ;;
+    armv7l)  GO_ARCH="arm"; warn "No pre-built binary for armv7l — will compile from source." ;;
     *)       error "Unsupported architecture: $ARCH" ;;
 esac
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -104,16 +114,6 @@ OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 VERSION="latest"
 REPO="jkfastdevth/ottoclaw-worker"
 BINARY_URL="https://github.com/${REPO}/releases/latest/download/ottoclaw-worker-${SUFFIX}.tar.gz"
-
-# ── Locate Source ─────────────────────────────────────────────────────────────
-# Handle curl | bash (unbound BASH_SOURCE) vs direct execution
-SCRIPT_DIR="$(pwd)"
-if [[ -n "${BASH_SOURCE+x}" ]]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
-elif [[ -n "$0" && -f "$0" ]]; then
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
-fi
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd 2>/dev/null || echo "$SCRIPT_DIR")"
 
 # ── Auto-load Credentials from .env ───────────────────────────────
 if [[ -f "${REPO_ROOT}/.env" ]]; then
@@ -310,42 +310,42 @@ write_env_file() {
 # ═══════════════════════════════════════════════════════════════
 
 # ── Agent Identity (auto from hostname / config) ───────────
-NODE_ID=${NODE_ID}
-AGENT_NAME=${AGENT_NAME}
-ORCHESTRATOR_NICKNAMES=${ORCHESTRATOR_NICKNAMES}
-OTTOCLAW_MODE=${OTTOCLAW_MODE}
+NODE_ID="${NODE_ID}"
+AGENT_NAME="${AGENT_NAME}"
+ORCHESTRATOR_NICKNAMES="${ORCHESTRATOR_NICKNAMES}"
+OTTOCLAW_MODE="${OTTOCLAW_MODE}"
 
 # ── Master Connection ─────────────────────────────────────────
-MASTER_URL=${MASTER_URL}
-MASTER_GRPC_URL=${MASTER_GRPC_URL}
-MASTER_API_URL=${MASTER_API_URL}
-MASTER_API_KEY=${MASTER_API_KEY}
-SIAM_MASTER_URL=${SIAM_MASTER_URL}
-SIAM_API_KEY=${SIAM_API_KEY}
-NODE_SECRET=${NODE_SECRET}
+MASTER_URL="${MASTER_URL}"
+MASTER_GRPC_URL="${MASTER_GRPC_URL}"
+MASTER_API_URL="${MASTER_API_URL}"
+MASTER_API_KEY="${MASTER_API_KEY}"
+SIAM_MASTER_URL="${SIAM_MASTER_URL}"
+SIAM_API_KEY="${SIAM_API_KEY}"
+NODE_SECRET="${NODE_SECRET}"
 
 # ── LLM (via Master Proxy — auto-derived) ────────────────────
-OTTOCLAW_API_BASE=${OTTOCLAW_API_BASE}
-OTTOCLAW_API_KEY=${OTTOCLAW_API_KEY}
-OTTOCLAW_MODEL_ID=${OTTOCLAW_MODEL_ID}
-OTTOCLAW_MODEL_NAME=${OTTOCLAW_MODEL_NAME}
+OTTOCLAW_API_BASE="${OTTOCLAW_API_BASE}"
+OTTOCLAW_API_KEY="${OTTOCLAW_API_KEY}"
+OTTOCLAW_MODEL_ID="${OTTOCLAW_MODEL_ID}"
+OTTOCLAW_MODEL_NAME="${OTTOCLAW_MODEL_NAME}"
 
 # ── Telegram Channel ──────────────────────────────────────────
-ORCHESTRATOR_TELEGRAM_TOKEN=${ORCHESTRATOR_TELEGRAM_TOKEN}
-TELEGRAM_BOT_TOKEN=${ORCHESTRATOR_TELEGRAM_TOKEN}
-TELEGRAM_ALLOW_FROM=${TELEGRAM_ALLOW_FROM}
-TELEGRAM_BRIDGE_CHAT_ID=${TELEGRAM_BRIDGE_CHAT_ID}
-TELEGRAM_ORCHESTRATION_ENABLED=${TELEGRAM_ORCHESTRATION_ENABLED}
-ORCHESTRATOR_NICKNAMES=${ORCHESTRATOR_NICKNAMES}
+ORCHESTRATOR_TELEGRAM_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN}"
+TELEGRAM_BOT_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN}"
+TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM}"
+TELEGRAM_BRIDGE_CHAT_ID="${TELEGRAM_BRIDGE_CHAT_ID}"
+TELEGRAM_ORCHESTRATION_ENABLED="${TELEGRAM_ORCHESTRATION_ENABLED}"
+ORCHESTRATOR_NICKNAMES="${ORCHESTRATOR_NICKNAMES}"
 
 # ── Google Skill Access (Optional) ──────────────────────────
-GOOGLE_EMAIL=${GOOGLE_EMAIL}
-GOOGLE_APP_PASSWORD=${GOOGLE_APP_PASSWORD}
+GOOGLE_EMAIL="${GOOGLE_EMAIL}"
+GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD}"
 
 # ── Paths ──────────────────────────────────────────────────────
-OTTOCLAW_HOME=${OTTOCLAW_HOME}
-OTTOCLAW_WORKSPACE=${OTTOCLAW_WORKSPACE}/v2
-OTTOCLAW_CONFIG=${OTTOCLAW_HOME}/config.json
+OTTOCLAW_HOME="${OTTOCLAW_HOME}"
+OTTOCLAW_WORKSPACE="${OTTOCLAW_WORKSPACE}/v2"
+OTTOCLAW_CONFIG="${OTTOCLAW_HOME}/config.json"
 
 # ── Native Binary Path (for siam-worker to find brain) ───────
 OTTOCLAW_BIN=/usr/local/bin/ottoclaw-brain

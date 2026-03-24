@@ -6,6 +6,11 @@
 #   (default) — persistent worker agent
 set -e
 
+# ── JSON string escaper (prevents injection via env vars) ─────────────────────
+json_esc() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
 echo "🚀 Starting Siam-Synapse OttoClaw Worker (Brain & Arm)"
 echo "  NODE_ID: ${NODE_ID:-unknown}"
 echo "  MASTER_GRPC_URL: ${MASTER_GRPC_URL:-not set}"
@@ -34,20 +39,38 @@ export OTTOCLAW_AGENTS_DEFAULTS_WORKSPACE="$WORKSPACE_DIR"
 mkdir -p "$OTTOCLAW_HOME_DIR" "$WORKSPACE_DIR"
 
 # ── Channels JSON fragment (SiamSync + Optional Telegram) ──────────────────
-SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${MASTER_URL}\", \"api_key\": \"${MASTER_API_KEY}\" }"
+# Pre-escape values embedded in JSON to prevent injection
+_J_MASTER_URL=$(json_esc "${MASTER_URL:-}")
+_J_MASTER_API_KEY=$(json_esc "${MASTER_API_KEY:-}")
+SIAM_SYNC_FRAG="\"siam_sync\": { \"enabled\": true, \"interval\": 5, \"master_url\": \"${_J_MASTER_URL}\", \"api_key\": \"${_J_MASTER_API_KEY}\" }"
 TG_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN:-}"
 TG_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
 TG_FRAG=""
 if [ -n "$TG_TOKEN" ]; then
+  _J_TG_TOKEN=$(json_esc "$TG_TOKEN")
   ALLOW_FRAGMENT=""
   if [ -n "$TG_ALLOW_FROM" ]; then
-    ALLOW_FRAGMENT=", \"allow_from\": [$(echo "$TG_ALLOW_FROM" | sed 's/,/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/')]"
+    # Build JSON array safely: split on comma, escape each element individually
+    _allow_arr=""
+    _orig_IFS="$IFS"
+    IFS=","
+    for _item in $TG_ALLOW_FROM; do
+      _esc=$(json_esc "$_item")
+      if [ -z "$_allow_arr" ]; then
+        _allow_arr="\"${_esc}\""
+      else
+        _allow_arr="${_allow_arr},\"${_esc}\""
+      fi
+    done
+    IFS="$_orig_IFS"
+    ALLOW_FRAGMENT=", \"allow_from\": [${_allow_arr}]"
   fi
   ORCH_FRAG=""
   if [ "${TELEGRAM_ORCHESTRATION_ENABLED:-false}" = "true" ] && [ -n "${TELEGRAM_BRIDGE_CHAT_ID:-}" ]; then
-    ORCH_FRAG=", \"orchestration_enabled\": true, \"bridge_chat_id\": \"${TELEGRAM_BRIDGE_CHAT_ID}\""
+    _J_BRIDGE=$(json_esc "${TELEGRAM_BRIDGE_CHAT_ID}")
+    ORCH_FRAG=", \"orchestration_enabled\": true, \"bridge_chat_id\": \"${_J_BRIDGE}\""
   fi
-  TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${TG_TOKEN}\"${ALLOW_FRAGMENT}${ORCH_FRAG}, \"typing\": {\"enabled\": true} }"
+  TG_FRAG=", \"telegram\": { \"enabled\": true, \"token\": \"${_J_TG_TOKEN}\"${ALLOW_FRAGMENT}${ORCH_FRAG}, \"typing\": {\"enabled\": true} }"
   echo "📱 Telegram channel: enabled"
 fi
 CHANNELS_JSON=", \"channels\": { ${SIAM_SYNC_FRAG}${TG_FRAG} }"

@@ -13,13 +13,23 @@ import (
 // DefaultConfig returns the default configuration for OttoClaw.
 func DefaultConfig() *Config {
 	// Determine the base path for the workspace.
-	// Priority: $OTTOCLAW_HOME > ~/.ottoclaw
+	// Priority: $PICOCLAW_HOME > $OTTOCLAW_HOME > ~/.picoclaw > ~/.ottoclaw (migration fallback)
 	var homePath string
-	if ottoclawHome := os.Getenv("OTTOCLAW_HOME"); ottoclawHome != "" {
-		homePath = ottoclawHome
+	if h := os.Getenv("PICOCLAW_HOME"); h != "" {
+		homePath = h
+	} else if h := os.Getenv("OTTOCLAW_HOME"); h != "" {
+		homePath = h
 	} else {
 		userHome, _ := os.UserHomeDir()
-		homePath = filepath.Join(userHome, ".ottoclaw")
+		picoPath := filepath.Join(userHome, ".picoclaw")
+		ottoPath := filepath.Join(userHome, ".ottoclaw")
+		if _, err := os.Stat(picoPath); err == nil {
+			homePath = picoPath
+		} else if _, err := os.Stat(ottoPath); err == nil {
+			homePath = ottoPath
+		} else {
+			homePath = picoPath // default to new name
+		}
 	}
 	workspacePath := filepath.Join(homePath, "workspace")
 
@@ -447,6 +457,10 @@ func DefaultConfig() *Config {
 			},
 			WriteFile: ToolConfig{
 				Enabled: true,
+			},
+			BrowserLaunch: BrowserLaunchConfig{
+				ToolConfig:     ToolConfig{Enabled: false},
+				DefaultBrowser: "",
 			},
 		},
 		Heartbeat: HeartbeatConfig{
