@@ -19,11 +19,22 @@ var (
 )
 
 func GetConfigPath() string {
+	if configPath := os.Getenv("PICOCLAW_CONFIG"); configPath != "" {
+		return configPath
+	}
 	if configPath := os.Getenv("OTTOCLAW_CONFIG"); configPath != "" {
 		return configPath
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".ottoclaw", "config.json")
+	picoConfig := filepath.Join(home, ".picoclaw", "config.json")
+	if _, err := os.Stat(picoConfig); err == nil {
+		return picoConfig
+	}
+	ottoConfig := filepath.Join(home, ".ottoclaw", "config.json")
+	if _, err := os.Stat(ottoConfig); err == nil {
+		return ottoConfig
+	}
+	return picoConfig // default to new name
 }
 
 func LoadConfig() (*config.Config, error) {
