@@ -108,6 +108,7 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamGetNodesTool{client: client},
 		&SiamGetMessagesTool{client: client},
 		&SiamSpawnAgentTool{client: client},
+		&SiamCatalogAgentTool{client: client},
 		&SiamTerminateAgentTool{client: client},
 		&SiamGetSkillsTool{client: client},
 		&SiamFindAgentsTool{client: client},
@@ -125,6 +126,9 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamPromotionRitualTool{client: client},
 		&SiamBroadcastUpdateTool{client: client},
 		&SiamOpenBrowserTool{client: client},
+		&SiamForgeTool{client: client},
+		&SiamRitualTool{client: client},
+		&SiamSelfImproveTool{client: client},
 		&SiamSendEmailTool{},
 		&SiamListCalendarTool{},
 		&SiamCreateCalendarEventTool{},
@@ -398,6 +402,104 @@ func (t *SiamSpawnAgentTool) Execute(_ context.Context, args map[string]any) *To
 		return ErrorResult(fmt.Sprintf("siam_spawn_agent: %v", err))
 	}
 	return UserResult(string(data))
+}
+
+// SiamCatalogAgentTool — list/activate/register agents in the catalog.
+type SiamCatalogAgentTool struct{ client *siamClient }
+
+func (t *SiamCatalogAgentTool) Name() string { return "siam_catalog_agent" }
+func (t *SiamCatalogAgentTool) Description() string {
+	return "Manage the Agent Catalog — list blueprints, activate a limbo agent (limbo→running), deactivate a running agent (running→limbo), or register a new blueprint. " +
+		"ALWAYS check this catalog before using siam_spawn_agent — if a matching blueprint already exists in limbo, activate it instead of spawning from scratch. " +
+		"This preserves the agent's soul, domain knowledge, and learned memory across tasks."
+}
+func (t *SiamCatalogAgentTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"enum":        []string{"list", "activate", "deactivate", "register"},
+				"description": "list=show all blueprints, activate=start a limbo agent, deactivate=return running agent to limbo, register=save a new blueprint",
+			},
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "Agent ID for activate/deactivate/register actions",
+			},
+			"name": map[string]any{
+				"type":        "string",
+				"description": "Display name for the agent (register only)",
+			},
+			"domain": map[string]any{
+				"type":        "string",
+				"enum":        []string{"trading", "accounting", "developer", "marketing", "customer_service", "research", "general"},
+				"description": "Business domain for the agent (register only)",
+			},
+			"soul_id": map[string]any{
+				"type":        "string",
+				"description": "Base soul template ID e.g. kaidos, jarvis, sonmi (register only)",
+			},
+			"mission": map[string]any{
+				"type":        "string",
+				"description": "Agent mission description (register only)",
+			},
+		},
+		"required": []string{"action"},
+	}
+}
+func (t *SiamCatalogAgentTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	action, _ := args["action"].(string)
+	agentID, _ := args["agent_id"].(string)
+
+	switch action {
+	case "list":
+		data, err := t.client.get("/api/agent/v1/agent-catalog")
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_catalog_agent list: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "activate":
+		if strings.TrimSpace(agentID) == "" {
+			return ErrorResult("siam_catalog_agent activate: agent_id is required")
+		}
+		data, err := t.client.post("/api/agent/v1/agent-catalog/"+strings.TrimSpace(agentID)+"/activate", nil)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_catalog_agent activate: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "deactivate":
+		if strings.TrimSpace(agentID) == "" {
+			return ErrorResult("siam_catalog_agent deactivate: agent_id is required")
+		}
+		data, err := t.client.post("/api/agent/v1/agent-catalog/"+strings.TrimSpace(agentID)+"/deactivate", nil)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_catalog_agent deactivate: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "register":
+		if strings.TrimSpace(agentID) == "" {
+			return ErrorResult("siam_catalog_agent register: agent_id is required")
+		}
+		payload := map[string]any{
+			"id":      strings.TrimSpace(agentID),
+			"name":    args["name"],
+			"domain":  args["domain"],
+			"soul_id": args["soul_id"],
+			"mission": args["mission"],
+			"status":  "limbo",
+		}
+		data, err := t.client.post("/api/agent/v1/agent-catalog", payload)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_catalog_agent register: %v", err))
+		}
+		return UserResult(string(data))
+
+	default:
+		return ErrorResult("siam_catalog_agent: action must be list, activate, deactivate, or register")
+	}
 }
 
 // SiamTerminateAgentTool — stop and remove a running agent.
@@ -962,4 +1064,271 @@ func (t *SiamOpenBrowserTool) Execute(_ context.Context, args map[string]any) *T
 		return ErrorResult(fmt.Sprintf("siam_open_browser failed: %v", err))
 	}
 	return UserResult(string(data))
+}
+
+// ── Self-Improvement Tools ────────────────────────────────────────────────────
+
+// SiamForgeTool — interact with Artisan's Forge (custom tools + A/B testing).
+type SiamForgeTool struct{ client *siamClient }
+
+func (t *SiamForgeTool) Name() string { return "siam_forge" }
+func (t *SiamForgeTool) Description() string {
+	return "Interact with Artisan's Forge — the custom tool workshop. " +
+		"Use to: list existing tools (action=list), create/upgrade a tool with Python code (action=create), " +
+		"run a tool in sandbox (action=execute), check A/B performance stats (action=stats), " +
+		"graduate v2→v1 when v2 is proven better (action=graduate). " +
+		"This is the primary self-improvement mechanism: write better tools, test them, promote them."
+}
+func (t *SiamForgeTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type": "string",
+				"enum": []string{"list", "create", "execute", "stats", "graduate", "delete"},
+				"description": "list=show all tools, create=create/update a tool, execute=run tool in sandbox, stats=view A/B performance, graduate=promote v2 to v1, delete=remove tool",
+			},
+			"name": map[string]any{
+				"type":        "string",
+				"description": "Tool name (snake_case, required for create/execute/stats/graduate/delete)",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "Tool description (create only)",
+			},
+			"code": map[string]any{
+				"type":        "string",
+				"description": "Python code for the tool (create only). Must define a function named after the tool.",
+			},
+			"input": map[string]any{
+				"type":        "string",
+				"description": "JSON string of input parameters to pass when executing the tool (execute only)",
+			},
+		},
+		"required": []string{"action"},
+	}
+}
+func (t *SiamForgeTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	action, _ := args["action"].(string)
+	name, _ := args["name"].(string)
+
+	switch action {
+	case "list":
+		data, err := t.client.get("/api/agent/v1/forge/tools")
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_forge list: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "create":
+		if strings.TrimSpace(name) == "" {
+			return ErrorResult("siam_forge create: name is required")
+		}
+		payload := map[string]any{
+			"name":        name,
+			"description": args["description"],
+			"code":        args["code"],
+		}
+		data, err := t.client.post("/api/agent/v1/forge/tools", payload)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_forge create: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "execute":
+		if strings.TrimSpace(name) == "" {
+			return ErrorResult("siam_forge execute: name is required")
+		}
+		var inputPayload map[string]any
+		if raw, _ := args["input"].(string); raw != "" {
+			_ = json.Unmarshal([]byte(raw), &inputPayload)
+		}
+		if inputPayload == nil {
+			inputPayload = map[string]any{}
+		}
+		data, err := t.client.post("/api/agent/v1/forge/tools/"+strings.TrimSpace(name)+"/execute", inputPayload)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_forge execute: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "stats":
+		if strings.TrimSpace(name) == "" {
+			return ErrorResult("siam_forge stats: name is required")
+		}
+		data, err := t.client.get("/api/agent/v1/forge/ab/stats/" + strings.TrimSpace(name))
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_forge stats: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "graduate":
+		if strings.TrimSpace(name) == "" {
+			return ErrorResult("siam_forge graduate: name is required")
+		}
+		data, err := t.client.post("/api/agent/v1/forge/tools/"+strings.TrimSpace(name)+"/graduate", nil)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_forge graduate: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "delete":
+		if strings.TrimSpace(name) == "" {
+			return ErrorResult("siam_forge delete: name is required")
+		}
+		data, err := t.client.delete("/api/agent/v1/forge/tools/" + strings.TrimSpace(name))
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_forge delete: %v", err))
+		}
+		return UserResult(string(data))
+
+	default:
+		return ErrorResult("siam_forge: action must be list, create, execute, stats, graduate, or delete")
+	}
+}
+
+// SiamRitualTool — manage scheduled rituals (cron missions).
+type SiamRitualTool struct{ client *siamClient }
+
+func (t *SiamRitualTool) Name() string { return "siam_ritual" }
+func (t *SiamRitualTool) Description() string {
+	return "Manage scheduled rituals — recurring cron missions dispatched to agents automatically. " +
+		"Use to: list existing rituals (action=list), create a new scheduled ritual (action=create), " +
+		"delete a ritual (action=delete). " +
+		"Rituals are ideal for recurring self-improvement tasks like daily QA checks, weekly performance reviews, or nightly skill optimizations."
+}
+func (t *SiamRitualTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"enum":        []string{"list", "create", "delete"},
+				"description": "list=show all rituals, create=schedule new ritual, delete=remove ritual",
+			},
+			"ritual_id": map[string]any{
+				"type":        "string",
+				"description": "Ritual ID (delete only)",
+			},
+			"name": map[string]any{
+				"type":        "string",
+				"description": "Ritual name (create only)",
+			},
+			"description": map[string]any{
+				"type":        "string",
+				"description": "The mission/task that will be dispatched on schedule (create only)",
+			},
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "Target agent ID that will receive this recurring mission (create only)",
+			},
+			"cron": map[string]any{
+				"type":        "string",
+				"description": "Cron expression e.g. '0 9 * * *' = daily at 9am, '0 */6 * * *' = every 6 hours (create only)",
+			},
+		},
+		"required": []string{"action"},
+	}
+}
+func (t *SiamRitualTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	action, _ := args["action"].(string)
+
+	switch action {
+	case "list":
+		data, err := t.client.get("/api/agent/v1/rituals")
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_ritual list: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "create":
+		name, _ := args["name"].(string)
+		description, _ := args["description"].(string)
+		agentID, _ := args["agent_id"].(string)
+		cronExpr, _ := args["cron"].(string)
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(agentID) == "" || strings.TrimSpace(cronExpr) == "" {
+			return ErrorResult("siam_ritual create: name, agent_id, and cron are required")
+		}
+		payload := map[string]any{
+			"name":            name,
+			"description":     description,
+			"agent_id":        agentID,
+			"cron_expression": cronExpr,
+		}
+		data, err := t.client.post("/api/agent/v1/rituals", payload)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_ritual create: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "delete":
+		id, _ := args["ritual_id"].(string)
+		if strings.TrimSpace(id) == "" {
+			return ErrorResult("siam_ritual delete: ritual_id is required")
+		}
+		data, err := t.client.delete("/api/agent/v1/rituals/" + strings.TrimSpace(id))
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_ritual delete: %v", err))
+		}
+		return UserResult(string(data))
+
+	default:
+		return ErrorResult("siam_ritual: action must be list, create, or delete")
+	}
+}
+
+// SiamSelfImproveTool — view self-improvement analytics and trigger QA.
+type SiamSelfImproveTool struct{ client *siamClient }
+
+func (t *SiamSelfImproveTool) Name() string { return "siam_self_improve" }
+func (t *SiamSelfImproveTool) Description() string {
+	return "View self-improvement analytics and trigger Auto-QA on skills. " +
+		"Use action=stats to see A/B improvement results across all skills. " +
+		"Use action=run_qa to trigger an automated quality check and improvement cycle on a specific skill — " +
+		"this runs pytest, measures success rate, and can auto-refactor underperforming code."
+}
+func (t *SiamSelfImproveTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"enum":        []string{"stats", "run_qa"},
+				"description": "stats=view improvement metrics for all skills, run_qa=trigger QA cycle on a specific skill",
+			},
+			"skill": map[string]any{
+				"type":        "string",
+				"description": "Skill name to run QA on (run_qa only)",
+			},
+		},
+		"required": []string{"action"},
+	}
+}
+func (t *SiamSelfImproveTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	action, _ := args["action"].(string)
+
+	switch action {
+	case "stats":
+		data, err := t.client.get("/api/agent/v1/analytics/self_improve")
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_self_improve stats: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "run_qa":
+		skill, _ := args["skill"].(string)
+		if strings.TrimSpace(skill) == "" {
+			return ErrorResult("siam_self_improve run_qa: skill is required")
+		}
+		// Trigger via broadcast update — master will dispatch auto_qa:<skill> to the node
+		payload := map[string]any{"action": "auto_qa:" + strings.TrimSpace(skill)}
+		data, err := t.client.post("/api/agent/v1/agents/broadcast/update", payload)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_self_improve run_qa: %v", err))
+		}
+		return UserResult(fmt.Sprintf("Auto-QA triggered for skill '%s': %s", skill, string(data)))
+
+	default:
+		return ErrorResult("siam_self_improve: action must be stats or run_qa")
+	}
 }
