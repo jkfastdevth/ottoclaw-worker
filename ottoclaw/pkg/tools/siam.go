@@ -123,6 +123,7 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamGetMissionTool{client: client},
 		&SiamPromoteAgentTool{client: client},
 		&SiamPromotionRitualTool{client: client},
+		&SiamBroadcastUpdateTool{client: client},
 		&SiamOpenBrowserTool{client: client},
 		&SiamSendEmailTool{},
 		&SiamListCalendarTool{},
@@ -890,6 +891,24 @@ func (t *SiamPromotionRitualTool) Execute(_ context.Context, args map[string]any
 	data, err := t.client.post("/api/agent/v1/broadcast", payload)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_promotion_ritual failed: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamBroadcastUpdateTool — trigger a self-update on every connected agent and gRPC worker.
+type SiamBroadcastUpdateTool struct{ client *siamClient }
+
+func (t *SiamBroadcastUpdateTool) Name() string { return "siam_broadcast_update" }
+func (t *SiamBroadcastUpdateTool) Description() string {
+	return "Trigger a self-update on ALL connected agents and gRPC worker nodes simultaneously. HTTP-polling agents will pull and reinstall the latest ottoclaw binary; gRPC workers will hot-reload their brain process."
+}
+func (t *SiamBroadcastUpdateTool) Parameters() map[string]any {
+	return map[string]any{"type": "object", "properties": map[string]any{}}
+}
+func (t *SiamBroadcastUpdateTool) Execute(_ context.Context, _ map[string]any) *ToolResult {
+	data, err := t.client.post("/api/agent/v1/agents/broadcast/update", nil)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_broadcast_update failed: %v", err))
 	}
 	return UserResult(string(data))
 }

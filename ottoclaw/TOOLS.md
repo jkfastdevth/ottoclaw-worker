@@ -41,6 +41,11 @@ Terminates a running agent by its ID.
 **Parameters:** `agent_id` (string, required)
 **Use when:** shutting down idle workers, cleaning up failed agents.
 
+### `siam_broadcast_update`
+Trigger a self-update on ALL connected agents and gRPC worker nodes simultaneously.
+**Parameters:** none
+**Use when:** deploying a new version of ottoclaw across the entire fleet in one command. HTTP-polling agents pull and reinstall the latest binary; gRPC workers hot-reload their brain process.
+
 ### `siam_scale`
 Scale the worker pool up or down by a delta.
 **Parameters:** `delta` (int, required) — positive to scale up, negative to scale down
