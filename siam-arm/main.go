@@ -543,7 +543,11 @@ func main() {
 			if workerCtx.Err() != nil { return }
 
 			// เปิด Stream รับคำสั่งจาก Master (ผูก lifecycle กับ workerCtx)
-			stream, err := grpcClient.GetCommand(workerCtx, &proto.NodeStatus{NodeId: nodeID})
+			streamCtx := workerCtx
+			if secret := resolveNodeSecret(); secret != "" {
+				streamCtx = metadata.AppendToOutgoingContext(workerCtx, "x-node-secret", secret)
+			}
+			stream, err := grpcClient.GetCommand(streamCtx, &proto.NodeStatus{NodeId: nodeID})
 			if err != nil {
 				if workerCtx.Err() != nil { return } // shutdown ระหว่าง dial
 				wait := backoffDuration(streamAttempt)
