@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -84,7 +83,7 @@ func (t *RishTool) Parameters() map[string]any {
 			// type_text
 			"text": map[string]any{
 				"type":        "string",
-				"description": "Text to type (spaces must be underscores or use %s format). Avoid special chars.",
+				"description": "Text to type. Supports email addresses (user@example.com), passwords with special chars (!@#$%), and spaces. Pass raw text as-is.",
 			},
 			// screencap
 			"path": map[string]any{
@@ -238,16 +237,19 @@ func (t *RishTool) typeText(ctx context.Context, args map[string]any) *ToolResul
 	if !ok || text == "" {
 		return ErrorResult("text is required")
 	}
-	// rish input text requires spaces as %s and no special shell chars
-	// Safe: only allow alphanumeric + underscore + dash + dot
-	safe := regexp.MustCompile(`[^a-zA-Z0-9._\-]`)
-	safed := safe.ReplaceAllString(text, "_")
-	cmd := fmt.Sprintf("input text '%s'", safed)
+	// Android `input text` rules:
+	//   - spaces must be encoded as %s
+	//   - single quotes break shell quoting → escape with '\''
+	// All other printable chars (@ . _ - ! # $ @ etc.) are safe inside single quotes.
+	processed := strings.ReplaceAll(text, "'", `'\''`) // escape single quotes first
+	processed = strings.ReplaceAll(processed, " ", "%s") // spaces → Android %s
+	cmd := fmt.Sprintf("input text '%s'", processed)
 	_, err := t.rish(ctx, cmd, 5*time.Second)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("type_text failed: %v", err))
 	}
-	return UserResult(fmt.Sprintf("✅ Typed: %s", safed))
+	// Don't echo text content (may be password)
+	return UserResult(fmt.Sprintf("✅ Typed %d characters", len(text)))
 }
 
 func (t *RishTool) screencap(ctx context.Context, args map[string]any) *ToolResult {
