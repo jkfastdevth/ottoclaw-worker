@@ -28,7 +28,18 @@ func getCredentials(ctx context.Context) (string, string) {
 	if agentID != "" && agentID != "main" {
 		home, _ := os.UserHomeDir()
 		// Logic matching instance.go resolveAgentWorkspace
-		agentDir := filepath.Join(home, ".ottoclaw", "workspace-"+agentID)
+		appHome := filepath.Join(home, ".picoclaw")
+		if h := os.Getenv("PICOCLAW_HOME"); h != "" {
+			appHome = h
+		} else if h := os.Getenv("OTTOCLAW_HOME"); h != "" {
+			appHome = h
+		} else if _, err := os.Stat(appHome); err != nil {
+			otto := filepath.Join(home, ".ottoclaw")
+			if _, e := os.Stat(otto); e == nil {
+				appHome = otto
+			}
+		}
+		agentDir := filepath.Join(appHome, "workspace-"+agentID)
 		envPath := filepath.Join(agentDir, "env") // Native worker uses 'env' file
 		if _, err := os.Stat(envPath); err == nil {
 			if file, err := os.Open(envPath); err == nil {
