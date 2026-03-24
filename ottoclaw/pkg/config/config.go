@@ -229,11 +229,12 @@ type ChannelsConfig struct {
 }
 
 type SiamSyncConfig struct {
-	Enabled   bool                `json:"enabled"    env:"OTTOCLAW_CHANNELS_SIAM_SYNC_ENABLED"`
-	Interval  int                 `json:"interval"   env:"OTTOCLAW_CHANNELS_SIAM_SYNC_INTERVAL"` // Polling interval in seconds
-	MasterURL string              `json:"master_url" env:"MASTER_API_URL"`
-	APIKey    string              `json:"api_key"    env:"MASTER_API_KEY"`
-	AllowFrom FlexibleStringSlice `json:"allow_from" env:"OTTOCLAW_CHANNELS_SIAM_SYNC_ALLOW_FROM"`
+	Enabled    bool                `json:"enabled"     env:"OTTOCLAW_CHANNELS_SIAM_SYNC_ENABLED"`
+	Interval   int                 `json:"interval"    env:"OTTOCLAW_CHANNELS_SIAM_SYNC_INTERVAL"` // Polling interval in seconds
+	MasterURL  string              `json:"master_url"  env:"MASTER_API_URL"`
+	APIKey     string              `json:"api_key"     env:"MASTER_API_KEY"`
+	NodeSecret string              `json:"node_secret" env:"NODE_SECRET"` // gRPC auth secret — must match Master NODE_SECRET
+	AllowFrom  FlexibleStringSlice `json:"allow_from"  env:"OTTOCLAW_CHANNELS_SIAM_SYNC_ALLOW_FROM"`
 }
 
 // GroupTriggerConfig controls when the bot responds in group chats.

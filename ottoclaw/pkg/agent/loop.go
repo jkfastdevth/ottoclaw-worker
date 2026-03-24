@@ -183,6 +183,15 @@ func registerSharedTools(
 		// Specialized IoT Toolbox for high-level hardware control
 		agent.Tools.Register(tools.NewIoTToolbox())
 
+		// Termux Rich — beautiful terminal output via Python's rich library
+		agent.Tools.Register(tools.NewTermuxRichTool())
+
+		// Android rish — control Android device via Shizuku shell
+		agent.Tools.Register(tools.NewRishTool())
+
+		// Desktop browser — control real Chromium via Playwright (Linux/Mac/Windows GUI)
+		agent.Tools.Register(tools.NewDesktopBrowserTool())
+
 		// Message tool
 		if cfg.Tools.IsToolEnabled("message") {
 			messageTool := tools.NewMessageTool()
@@ -1217,7 +1226,7 @@ func (al *AgentLoop) runLLMIteration(
 			return agent.Provider.Chat(ctx, messages, providerToolDefs, agent.Model, llmOpts)
 		}
 
-		// Retry loop for context/token errors
+		// Retry loop for context/token/rate-limit errors
 		maxRetries := 2
 		for retry := 0; retry <= maxRetries; retry++ {
 			response, err = callLLM()
@@ -1254,9 +1263,31 @@ func (al *AgentLoop) runLLMIteration(
 				strings.Contains(errMsg, "prompt is too long") ||
 				strings.Contains(errMsg, "request too large"))
 
+			// Detect rate limit / overload errors (429, queue exceeded, high traffic).
+			isRateLimitError := !isTimeoutError && !isContextError &&
+				(strings.Contains(errMsg, "429") ||
+					strings.Contains(errMsg, "rate limit") ||
+					strings.Contains(errMsg, "toomanyrequests") ||
+					strings.Contains(errMsg, "too many requests") ||
+					strings.Contains(errMsg, "queueexceeded") ||
+					strings.Contains(errMsg, "high traffic") ||
+					strings.Contains(errMsg, "please try again soon") ||
+					strings.Contains(errMsg, "overloaded"))
+
 			if isTimeoutError && retry < maxRetries {
 				backoff := time.Duration(retry+1) * 5 * time.Second
 				logger.WarnCF("agent", "Timeout error, retrying after backoff", map[string]any{
+					"error":   err.Error(),
+					"retry":   retry,
+					"backoff": backoff.String(),
+				})
+				time.Sleep(backoff)
+				continue
+			}
+
+			if isRateLimitError && retry < maxRetries {
+				backoff := time.Duration(retry+1) * 15 * time.Second // 15s, 30s backoff
+				logger.WarnCF("agent", "Rate limit / overload error, retrying after backoff", map[string]any{
 					"error":   err.Error(),
 					"retry":   retry,
 					"backoff": backoff.String(),

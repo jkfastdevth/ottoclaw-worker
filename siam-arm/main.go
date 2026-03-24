@@ -99,7 +99,7 @@
 // 	}
 // 	// 3. --- เพิ่มส่วนนี้ ---
 // 	// คอยฟังคำสั่ง (Stream)
-// 	stream, err := grpcClient.GetCommand(context.Background(), &proto.NodeStatus{NodeId: nodeID})
+// 	stream, err := grpcClient.GetCommand(newGRPCCtx(), &proto.NodeStatus{NodeId: nodeID})
 // 	if err != nil {
 // 		log.Fatalf("could not get command: %v", err)
 // 	}
@@ -170,6 +170,7 @@ import (
 	"net"
 	"runtime"
 
+	"encoding/json"
 	"os/exec"
 
 	"github.com/jkfastdevth/Siam-Synapse/proto" // เปลี่ยนเป็น path โปรเจคของคุณ
@@ -359,7 +360,56 @@ func restartContainer(containerName string) error {
 	return nil
 }
 
+// siamArmConfig is a minimal config struct used to read node_secret from ~/.ottoclaw/config.json.
+type siamArmConfig struct {
+	Channels struct {
+		SiamSync struct {
+			NodeSecret string `json:"node_secret"`
+			APIKey     string `json:"api_key"`
+		} `json:"siam_sync"`
+	} `json:"channels"`
+}
+
+// loadNodeSecretFromConfig reads node_secret from ~/.ottoclaw/config.json.
+func loadNodeSecretFromConfig() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".ottoclaw", "config.json"))
+	if err != nil {
+		return ""
+	}
+	var cfg siamArmConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return ""
+	}
+	return cfg.Channels.SiamSync.NodeSecret
+}
+
+// resolveNodeSecret returns the current node secret, re-reading config.json on every call
+// so that updates pushed by the brain (via heartbeat config_patch) take effect without restart.
+func resolveNodeSecret() string {
+	if s := os.Getenv("NODE_SECRET"); s != "" {
+		return s
+	}
+	if s := loadNodeSecretFromConfig(); s != "" {
+		return s
+	}
+	return os.Getenv("MASTER_API_KEY")
+}
+
 func main() {
+	// newGRPCCtx returns a context with auth metadata attached.
+	// Calls resolveNodeSecret() each time so config.json changes take effect immediately.
+	newGRPCCtx := func() context.Context {
+		secret := resolveNodeSecret()
+		if secret == "" {
+			return context.Background()
+		}
+		return metadata.AppendToOutgoingContext(context.Background(), "x-node-secret", secret)
+	}
+
 	// 1. จำลอง Node ID จาก ENV หรือสร้างจาก Hostname (Dynamic Identity)
 	workspaceDir := os.Getenv("OTTOCLAW_WORKSPACE")
 	if workspaceDir == "" {
@@ -493,6 +543,8 @@ func main() {
 
 			// เปิด Stream รับคำสั่งจาก Master (ผูก lifecycle กับ workerCtx)
 			stream, err := grpcClient.GetCommand(workerCtx, &proto.NodeStatus{NodeId: nodeID})
+			// เปิด Stream รับคำสั่งจาก Master
+			stream, err := grpcClient.GetCommand(newGRPCCtx(), &proto.NodeStatus{NodeId: nodeID})
 			if err != nil {
 				if workerCtx.Err() != nil { return } // shutdown ระหว่าง dial
 				wait := backoffDuration(streamAttempt)
@@ -534,7 +586,7 @@ func main() {
 				if cmd.Type == "SYSTEM_SOUL_TRANSFER" {
 					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" {
 						log.Printf("🛡️ [Security] Reincarnation blocked for Orchestrator node.")
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   false,
@@ -628,7 +680,7 @@ func main() {
 						if err := execCmd.Start(); err != nil {
 							log.Printf("❌ [Awakening] Failed to ignite the spark: %v", err)
 							// Report failure
-							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: cmd.CommandId,
 								NodeId:    nodeID,
 								Success:   false,
@@ -639,7 +691,7 @@ func main() {
 						log.Printf("🚀 [Awakening] Spark ignited for '%s'. Brain is now active.", identityName)
 
 						// Report success
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   true,
@@ -689,7 +741,7 @@ func main() {
 					// 🛡️ Security Guard: Don't let Master syncs overwrite eternal Orchestrator identity
 					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" && (filename == "SOUL.md" || filename == "SOUL_ID" || filename == "AGENTS.md") {
 						log.Printf("🛡️ [Security] Ignored sync of %s for Orchestrator identity.", filename)
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   true,
@@ -700,7 +752,7 @@ func main() {
 
 					if err := os.WriteFile(filePath, decodedBytes, 0644); err != nil {
 						log.Printf("❌ Failed to write sync file %s: %v", filename, err)
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   false,
@@ -761,7 +813,7 @@ func main() {
 						}
 					}
 					
-					grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 						CommandId: cmd.CommandId,
 						NodeId:    nodeID,
 						Success:   true,
@@ -901,7 +953,7 @@ func main() {
 						}
 
 						// ทยอยตอบกลับไปยัง Master -> Agent
-						ack, resultErr := grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						ack, resultErr := grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: commandId,
 							NodeId:    nodeID,
 							Success:   success,
@@ -1072,12 +1124,12 @@ func main() {
 			Temperature:  cpuTemp,
 		}
 
-		// 🛡️ Add Soul Metadata Header (X-API implementation)
+		// 🛡️ Add Soul + Auth Metadata
 		currentSoulMu.RLock()
 		soulID := currentSoul
 		currentSoulMu.RUnlock()
-		
-		ctx := context.Background()
+
+		ctx := newGRPCCtx()
 		if soulID != "" {
 			normalizedSoulID := NormalizeID(soulID)
 			if normalizedSoulID != "" {
