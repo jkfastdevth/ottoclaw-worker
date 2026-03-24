@@ -180,6 +180,9 @@ func registerSharedTools(
 		// Android rish — control Android device via Shizuku shell
 		agent.Tools.Register(tools.NewRishTool())
 
+		// Desktop browser — control real Chromium via Playwright (Linux/Mac/Windows GUI)
+		agent.Tools.Register(tools.NewDesktopBrowserTool())
+
 		// Message tool
 		if cfg.Tools.IsToolEnabled("message") {
 			messageTool := tools.NewMessageTool()
