@@ -111,6 +111,7 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamCatalogAgentTool{client: client},
 		&SiamTerminateAgentTool{client: client},
 		&SiamGetSkillsTool{client: client},
+		&SiamGetAgentSkillsTool{client: client},
 		&SiamFindAgentsTool{client: client},
 		&SiamScaleTool{client: client},
 		&SiamGetJobsTool{client: client},
@@ -560,6 +561,42 @@ func (t *SiamGetSkillsTool) Execute(_ context.Context, _ map[string]any) *ToolRe
 	data, err := t.client.get("/api/agent/v1/skills")
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_get_skills: %v", err))
+	}
+	return UserResult(string(data))
+}
+
+// SiamGetAgentSkillsTool — query skills of a specific agent.
+type SiamGetAgentSkillsTool struct{ client *siamClient }
+
+func (t *SiamGetAgentSkillsTool) Name() string { return "siam_get_agent_skills" }
+func (t *SiamGetAgentSkillsTool) Description() string {
+	return "Get the list of skills and proven patterns learned by a specific agent (e.g., 'hermes'). Useful for discovering what another agent is capable of before delegating a mission, or for adopting their proven techniques."
+}
+func (t *SiamGetAgentSkillsTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The ID or name of the agent to query (e.g., 'hermes' or 'ottoclaw').",
+			},
+		},
+		"required": []string{"agent_id"},
+	}
+}
+func (t *SiamGetAgentSkillsTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	agentID, _ := args["agent_id"].(string)
+	if strings.TrimSpace(agentID) == "" {
+		return ErrorResult("siam_get_agent_skills: agent_id is required")
+	}
+
+	// Normalize target ID
+	agentID = strings.ToLower(strings.TrimSpace(agentID))
+	agentID = strings.ReplaceAll(agentID, " ", "-")
+
+	data, err := t.client.get("/api/agent/v1/agents/" + agentID + "/skills")
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("siam_get_agent_skills: %v", err))
 	}
 	return UserResult(string(data))
 }
