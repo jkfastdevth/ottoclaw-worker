@@ -279,6 +279,9 @@ func getSafeEnv() []string {
 		"ORCHESTRATOR_TELEGRAM_TOKEN",
 		"TELEGRAM_",
 		"LINE_CHANNEL_ACCESS_TOKEN",
+		"GOOGLE_",
+		"SIAM_",
+		"MASTER_API_",
 	}
 
 	safeEnv := make([]string, 0, 32)

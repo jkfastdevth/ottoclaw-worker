@@ -220,6 +220,7 @@ func DefaultConfig() *Config {
 				Model:     "gemini/gemini-2.0-flash-exp",
 				APIBase:   "https://generativelanguage.googleapis.com/v1beta",
 				APIKey:    "",
+				Disabled:  true,
 			},
 
 			// Qwen (通义千问) - https://dashscope.console.aliyun.com/apiKey
@@ -297,6 +298,7 @@ func DefaultConfig() *Config {
 				ModelName:  "gemini-flash",
 				Model:      "antigravity/gemini-3-flash",
 				AuthMethod: "oauth",
+				Disabled:   true,
 			},
 
 			// GitHub Copilot - https://github.com/settings/tokens

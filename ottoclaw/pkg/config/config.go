@@ -528,6 +528,10 @@ type ModelConfig struct {
 	RequestTimeout int    `json:"request_timeout,omitempty"`
 	ThinkingLevel  string `json:"thinking_level,omitempty"`  // Extended thinking: off|low|medium|high|xhigh|adaptive
 	TokenPricePer1K float64 `json:"token_price_per_1k,omitempty"` // Price per 1,000 tokens for reporting
+
+	// Disabled excludes this model from routing. Set to true to prevent the model
+	// from being selected by the router without removing it from the config.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // Validate checks if the ModelConfig has all required fields.
@@ -857,11 +861,12 @@ func (c *Config) GetModelConfig(modelName string) (*ModelConfig, error) {
 	return &matches[idx], nil
 }
 
-// findMatches finds all ModelConfig entries with the given model_name.
+// findMatches finds all ModelConfig entries with the given model_name,
+// excluding entries where Disabled is true.
 func (c *Config) findMatches(modelName string) []ModelConfig {
 	var matches []ModelConfig
 	for i := range c.ModelList {
-		if c.ModelList[i].ModelName == modelName {
+		if c.ModelList[i].ModelName == modelName && !c.ModelList[i].Disabled {
 			matches = append(matches, c.ModelList[i])
 		}
 	}
