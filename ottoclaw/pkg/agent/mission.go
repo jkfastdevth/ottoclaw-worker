@@ -21,15 +21,16 @@ import (
 )
 
 type Mission struct {
-	ID          string    `json:"id"`
-	AgentID     string    `json:"agent_id"`
-	Description string    `json:"description"`
-	ParentID    string    `json:"parent_id"`
-	Status      string    `json:"status"`
-	Result      string    `json:"result"`
-	Checkpoint  string    `json:"checkpoint"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	AgentID      string    `json:"agent_id"`
+	Description  string    `json:"description"`
+	ParentID     string    `json:"parent_id"`
+	Status       string    `json:"status"`
+	Result       string    `json:"result"`
+	Checkpoint   string    `json:"checkpoint"`
+	NotifyTarget string    `json:"notify_target"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type MissionManager struct {
@@ -342,10 +343,11 @@ func (m *MissionManager) injectMission(ctx context.Context, mission Mission) {
 		MessageID:  mission.ID, // Use Mission ID as Message ID
 		SessionKey: "mission-" + mission.ID,
 		Metadata: map[string]string{
-			"mission_id": mission.ID,
-			"parent_id":  mission.ParentID,
-			"checkpoint": mission.Checkpoint,
-			"type":       "mission",
+			"mission_id":    mission.ID,
+			"parent_id":     mission.ParentID,
+			"checkpoint":    mission.Checkpoint,
+			"type":          "mission",
+			"notify_target": mission.NotifyTarget,
 		},
 	}
 
@@ -354,7 +356,7 @@ func (m *MissionManager) injectMission(ctx context.Context, mission Mission) {
 	}
 }
 
-func (m *MissionManager) ReportResult(ctx context.Context, missionID string, success bool, output string) error {
+func (m *MissionManager) ReportResult(ctx context.Context, missionID string, success bool, output string, notifyTarget ...string) error {
 	masterURL := m.cfg.Channels.SiamSync.MasterURL
 	if masterURL == "" {
 		masterURL = os.Getenv("MASTER_API_URL")
@@ -380,6 +382,9 @@ func (m *MissionManager) ReportResult(ctx context.Context, missionID string, suc
 	}
 	if !success {
 		payload["error"] = output
+	}
+	if len(notifyTarget) > 0 && notifyTarget[0] != "" {
+		payload["notify_target"] = notifyTarget[0]
 	}
 	body, _ := json.Marshal(payload)
 

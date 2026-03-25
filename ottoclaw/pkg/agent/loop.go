@@ -986,23 +986,7 @@ func (al *AgentLoop) runAgentLoop(
 	maxMediaSize := al.cfg.Agents.Defaults.GetMaxMediaSize()
 	messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize)
 
-	// 2. Extract [ReplyTo:...] from UserMessage if present (Master routing metadata)
-	replyTo := ""
-	if strings.HasPrefix(opts.UserMessage, "[") {
-		if relayIdx := strings.Index(opts.UserMessage, "[ReplyTo:"); relayIdx >= 0 {
-			endIdx := strings.Index(opts.UserMessage[relayIdx:], "]")
-			if endIdx > 0 {
-				replyTo = opts.UserMessage[relayIdx+9 : relayIdx+endIdx]
-				if opts.Metadata == nil {
-					opts.Metadata = make(map[string]string)
-				}
-				opts.Metadata["reply_to"] = replyTo
-				logger.InfoCF("agent", "Extracted ReplyTo from header", map[string]any{"reply_to": replyTo})
-			}
-		}
-	}
-
-	// 3. Save user message to session
+	// 2. Save user message to session
 	agent.Sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
 
 	// 3. Run LLM iteration loop
@@ -1010,9 +994,10 @@ func (al *AgentLoop) runAgentLoop(
 	if err != nil {
 		// 🛡️ Report mission failure if applicable
 		if missionID, ok := opts.Metadata["mission_id"]; ok && missionID != "" {
+			notifyTarget := opts.Metadata["notify_target"]
 			logger.ErrorCF("agent", "Mission failed during execution", map[string]any{"mission_id": missionID, "error": err.Error()})
 			go func() {
-				if rErr := al.missionManager.ReportResult(context.Background(), missionID, false, "Execution Error: "+err.Error()); rErr != nil {
+				if rErr := al.missionManager.ReportResult(context.Background(), missionID, false, "Execution Error: "+err.Error(), notifyTarget); rErr != nil {
 					logger.ErrorCF("agent", "Failed to report mission failure", map[string]any{"error": rErr.Error(), "mission_id": missionID})
 				}
 			}()
@@ -1066,7 +1051,8 @@ func (al *AgentLoop) runAgentLoop(
 	// 9. Report Mission Result if applicable
 	if missionID, ok := opts.Metadata["mission_id"]; ok && missionID != "" {
 		logger.InfoCF("agent", "Reporting mission result", map[string]any{"mission_id": missionID})
-		
+		notifyTarget := opts.Metadata["notify_target"]
+
 		// Strip <think>...</think> tags which might clutter the mission result output
 		cleanedContent := finalContent
 		thinkReg := regexp.MustCompile(`(?s)<think>.*?</think>`)
@@ -1074,7 +1060,7 @@ func (al *AgentLoop) runAgentLoop(
 		cleanedContent = strings.TrimSpace(cleanedContent)
 
 		go func() {
-			if err := al.missionManager.ReportResult(context.Background(), missionID, true, cleanedContent); err != nil {
+			if err := al.missionManager.ReportResult(context.Background(), missionID, true, cleanedContent, notifyTarget); err != nil {
 				logger.ErrorCF("agent", "Failed to report mission result", map[string]any{"error": err.Error(), "mission_id": missionID})
 			}
 		}()
@@ -1518,7 +1504,6 @@ func (al *AgentLoop) runLLMIteration(
 					opts.Channel,
 					opts.ChatID,
 					agent.ID,
-					opts.Metadata["reply_to"],
 					asyncCallback,
 				)
 				agentResults[idx].result = toolResult
