@@ -33,7 +33,7 @@ func (t *SiamRequestApprovalTool) Parameters() map[string]any {
 	}
 }
 
-func (t *SiamRequestApprovalTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+func (t *SiamRequestApprovalTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	agentIDRaw, _ := args["agent_id"].(string)
 	description, _ := args["description"].(string)
 
@@ -48,6 +48,7 @@ func (t *SiamRequestApprovalTool) Execute(_ context.Context, args map[string]any
 		"agent_id":          agentID,
 		"description":       description,
 		"requires_approval": true,
+		"notify_target":     ToolReplyTo(ctx),
 	}
 
 	data, err := t.client.post("/api/agent/v1/missions", payload)
