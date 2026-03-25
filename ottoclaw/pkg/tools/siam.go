@@ -198,6 +198,16 @@ func (t *SiamDelegateMissionTool) Execute(_ context.Context, args map[string]any
 		payload["requires_approval"] = true
 	}
 
+	// Auto-set notify_target so master queues result back to this agent's inbox
+	// when the sub-mission completes or fails.
+	selfID := os.Getenv("NODE_ID")
+	if selfID == "" {
+		selfID = os.Getenv("AGENT_NAME")
+	}
+	if selfID != "" {
+		payload["notify_target"] = "agent:" + strings.ToLower(strings.ReplaceAll(selfID, " ", "-"))
+	}
+
 	data, err := t.client.post("/api/agent/v1/missions", payload)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("siam_delegate_mission failed: %v", err))
