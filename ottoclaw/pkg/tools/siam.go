@@ -137,6 +137,8 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamDriveDownloadTool{},
 		&SiamReadEmailsTool{},
 		&SiamClaudeCodeTool{},
+		&SiamBIReportTool{},
+		&SiamDailyRitualTool{},
 	}
 	return toolset, client
 }
