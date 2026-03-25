@@ -986,7 +986,23 @@ func (al *AgentLoop) runAgentLoop(
 	maxMediaSize := al.cfg.Agents.Defaults.GetMaxMediaSize()
 	messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize)
 
-	// 2. Save user message to session
+	// 2. Extract [ReplyTo:...] from UserMessage if present (Master routing metadata)
+	replyTo := ""
+	if strings.HasPrefix(opts.UserMessage, "[") {
+		if relayIdx := strings.Index(opts.UserMessage, "[ReplyTo:"); relayIdx >= 0 {
+			endIdx := strings.Index(opts.UserMessage[relayIdx:], "]")
+			if endIdx > 0 {
+				replyTo = opts.UserMessage[relayIdx+9 : relayIdx+endIdx]
+				if opts.Metadata == nil {
+					opts.Metadata = make(map[string]string)
+				}
+				opts.Metadata["reply_to"] = replyTo
+				logger.InfoCF("agent", "Extracted ReplyTo from header", map[string]any{"reply_to": replyTo})
+			}
+		}
+	}
+
+	// 3. Save user message to session
 	agent.Sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
 
 	// 3. Run LLM iteration loop
@@ -1502,6 +1518,7 @@ func (al *AgentLoop) runLLMIteration(
 					opts.Channel,
 					opts.ChatID,
 					agent.ID,
+					opts.Metadata["reply_to"],
 					asyncCallback,
 				)
 				agentResults[idx].result = toolResult
