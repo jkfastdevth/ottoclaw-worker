@@ -31,8 +31,11 @@ RUN go mod download && \
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3: Final Image (Ultra-Lightweight)
 # ─────────────────────────────────────────────────────────────────────────────
-FROM alpine:3.20
-RUN apk add --no-cache ca-certificates curl bash
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y ca-certificates curl bash && \
+    pip install --no-cache-dir playwright && \
+    playwright install --with-deps chromium && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

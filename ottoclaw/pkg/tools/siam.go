@@ -140,6 +140,7 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamClaudeCodeTool{},
 		&SiamBIReportTool{},
 		&SiamDailyRitualTool{},
+		NewDesktopBrowserTool(),
 	}
 	return toolset, client
 }
