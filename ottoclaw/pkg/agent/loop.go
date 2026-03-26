@@ -446,7 +446,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 						}
 					}
 
-					if !alreadySent {
+					if !alreadySent && msg.Channel != "mission" {
 						al.bus.PublishOutbound(ctx, bus.OutboundMessage{
 							Channel: msg.Channel,
 							ChatID:  msg.ChatID,
@@ -683,7 +683,7 @@ func (al *AgentLoop) ProcessHeartbeat(
 func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
 	// 1. 🕵️ Deduplication: Check if we already processed this MessageID
 	if msg.MessageID != "" {
-		if _, seen := al.processedMessages.Load(msg.MessageID); seen {
+		if _, seen := al.processedMessages.Load(msg.MessageID); seen && msg.Channel != "mission" {
 			logger.DebugCF("agent", "Duplicate message skipped", map[string]any{"message_id": msg.MessageID})
 			return "DUPLICATE_SKIPPED", nil
 		}
