@@ -429,7 +429,22 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 				response, err := al.processMessage(ctx, msg)
 				if err != nil {
-					response = fmt.Sprintf("Error processing message: %v", err)
+					// 🛡️ Format user-friendly error for Telegram
+					errStr := err.Error()
+					
+					// If it's a candidate failure, simplify it for the UI
+					if strings.Contains(strings.ToLower(errStr), "llm candidates failed") {
+						// Extract last error if exists for better context
+						if idx := strings.LastIndex(errStr, "failed:"); idx > 0 {
+							errStr = "⚠️ **LLM Gateway Timeout/Error**\n" + strings.TrimSpace(errStr[idx+7:])
+						} else {
+							errStr = "⚠️ **Service Temporarily Unavailable**\nAll AI candidates failed to respond. Please try again in a moment."
+						}
+					} else {
+						errStr = "❌ **Error processing message**\n" + errStr
+					}
+					
+					response = errStr
 				}
 
 				if response != "" {
