@@ -161,14 +161,14 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"strconv"
-	"net"
-	"runtime"
 
 	"encoding/json"
 	"os/exec"
@@ -250,10 +250,10 @@ func NormalizeID(id string) string {
 
 var (
 	// 🛡️ Brain & Soul Management
-	brainMutex      sync.Mutex
-	currentBrain    *exec.Cmd
-	currentSoul     string
-	currentSoulMu   sync.RWMutex
+	brainMutex    sync.Mutex
+	currentBrain  *exec.Cmd
+	currentSoul   string
+	currentSoulMu sync.RWMutex
 )
 
 // getSafeEnv returns an allowlisted environment for the brain process.
@@ -424,7 +424,7 @@ func main() {
 
 	nodeIDPath := filepath.Join(workspaceDir, "NODE_ID")
 	nodeID := os.Getenv("NODE_ID")
-	
+
 	if nodeID == "" {
 		// Try to load from disk first
 		savedID, err := os.ReadFile(nodeIDPath)
@@ -440,7 +440,7 @@ func main() {
 			suffix := time.Now().Unix() % 10000
 			nodeID = fmt.Sprintf("%s-%04d", hostname, suffix)
 			log.Printf("🆔 [Identity] Generated new dynamic identity: %s", nodeID)
-			
+
 			// Save to disk for next time
 			if err := os.WriteFile(nodeIDPath, []byte(nodeID), 0644); err != nil {
 				log.Printf("⚠️  Failed to persist NODE_ID: %v", err)
@@ -448,7 +448,7 @@ func main() {
 		}
 	}
 
-	// 🛡️ Soul Identity Loading: 
+	// 🛡️ Soul Identity Loading:
 	// 1. Prioritize AGENT_NAME env (Force Pinning e.g. for Orchestrator)
 	// 2. Fallback to Soul Recovery from disk (Persistence for BareMetal nodes)
 	initialSoul := os.Getenv("AGENT_NAME")
@@ -484,31 +484,30 @@ func main() {
 		go func(identityName string) {
 			brainMutex.Lock()
 			defer brainMutex.Unlock()
-			
+
 			execCmd := exec.CommandContext(workerCtx, func() string {
 				if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
 					return bin
 				}
 				return "/app/ottoclaw"
 			}(), "gateway", "--debug")
-			
+
 			env := getSafeEnv()
 			env = append(env, fmt.Sprintf("AGENT_NAME=%s", identityName))
 			env = append(env, "AGENT_MISSION=Recovered from stasis")
-			
+
 			execCmd.Env = env
 			execCmd.Stdout = os.Stdout
 			execCmd.Stderr = os.Stderr
-			
-			currentBrain = execCmd
+
 			if err := execCmd.Start(); err != nil {
 				log.Printf("❌ [Soul Recovery] Failed to ignite brain: %v", err)
 				return
 			}
+			currentBrain = execCmd
 			execCmd.Wait()
 		}(activeIdentity)
 	}
-
 
 	masterGrpcURL := os.Getenv("MASTER_GRPC_URL")
 	if masterGrpcURL == "" {
@@ -526,7 +525,9 @@ func main() {
 		wait := backoffDuration(attempt)
 		log.Printf("⚠️  Could not connect to Master at %s: %v. Retrying in %v...", masterGrpcURL, err, wait)
 		time.Sleep(wait)
-		if workerCtx.Err() != nil { return }
+		if workerCtx.Err() != nil {
+			return
+		}
 	}
 	defer conn.Close()
 
@@ -543,7 +544,9 @@ func main() {
 		streamAttempt := 0
 		for {
 			// ตรวจสอบ context ก่อนเริ่ม loop ใหม่
-			if workerCtx.Err() != nil { return }
+			if workerCtx.Err() != nil {
+				return
+			}
 
 			// เปิด Stream รับคำสั่งจาก Master (ผูก lifecycle กับ workerCtx)
 			streamCtx := workerCtx
@@ -552,7 +555,9 @@ func main() {
 			}
 			stream, err := grpcClient.GetCommand(streamCtx, &proto.NodeStatus{NodeId: nodeID})
 			if err != nil {
-				if workerCtx.Err() != nil { return } // shutdown ระหว่าง dial
+				if workerCtx.Err() != nil {
+					return
+				} // shutdown ระหว่าง dial
 				wait := backoffDuration(streamAttempt)
 				log.Printf("❌ Failed to open command stream (attempt %d), retrying in %v: %v", streamAttempt, wait, err)
 				streamAttempt++
@@ -588,7 +593,7 @@ func main() {
 					log.Println("👋 Worker Terminal Exited.")
 					os.Exit(0)
 				}
-				
+
 				if cmd.Type == "SYSTEM_SOUL_TRANSFER" {
 					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" {
 						log.Printf("🛡️ [Security] Reincarnation blocked for Orchestrator node.")
@@ -601,28 +606,28 @@ func main() {
 						continue
 					}
 					log.Printf("🔥 [Awakening] Received a new Soul from The Creator!")
-					
+
 					// Payload format is: Name:Base64EncodedMarkdown
 					parts := strings.SplitN(cmd.Payload, ":", 2)
 					if len(parts) != 2 {
 						log.Printf("❌ Invalid soul transfer payload")
 						continue
 					}
-					
+
 					soulName := parts[0]
 					encodedSoul := parts[1]
-					
+
 					decodedBytes, err := base64.StdEncoding.DecodeString(encodedSoul)
 					if err != nil {
 						log.Printf("❌ Failed to decode soul payload: %v", err)
 						continue
 					}
-					
+
 					// Ensure workspace directory exists
 					if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 						log.Printf("❌ Failed to create workspace dir: %v", err)
 					}
-					
+
 					// Save the identity
 					soulPath := filepath.Join(workspaceDir, "SOUL.md")
 					soulIDPath := filepath.Join(workspaceDir, "SOUL_ID")
@@ -636,7 +641,7 @@ func main() {
 						continue
 					}
 					log.Printf("✨ [Awakening] Soul '%s' bound to %s", soulName, soulPath)
-					
+
 					// Spawn the container using the newly bound soul
 					// Usually handled by spawning the `siam-synapse-ottoclaw` image
 					// We mount the workspace/v2 directory so it can read its SOUL.md
@@ -665,24 +670,23 @@ func main() {
 					// Spawn the brain process
 					go func(identityName string) {
 						defer brainMutex.Unlock() // Unlock when this goroutine finishes its critical section
-						
+
 						execCmd := exec.CommandContext(workerCtx, func() string {
-						if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
-							return bin
-						}
-						return "/app/ottoclaw"
-					}(), "gateway", "--debug")
-						
+							if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
+								return bin
+							}
+							return "/app/ottoclaw"
+						}(), "gateway", "--debug")
+
 						// Inherit current environment but override required identity variables
 						env := getSafeEnv()
 						env = append(env, fmt.Sprintf("AGENT_NAME=%s", identityName))
 						env = append(env, "AGENT_MISSION=Awaiting commands from The Creator")
-						
+
 						execCmd.Env = env
 						execCmd.Stdout = os.Stdout
 						execCmd.Stderr = os.Stderr
-						
-						currentBrain = execCmd // Assign the new command to currentBrain
+
 						if err := execCmd.Start(); err != nil {
 							log.Printf("❌ [Awakening] Failed to ignite the spark: %v", err)
 							// Report failure
@@ -694,6 +698,7 @@ func main() {
 							})
 							return
 						}
+						currentBrain = execCmd // Assign the new command to currentBrain
 						log.Printf("🚀 [Awakening] Spark ignited for '%s'. Brain is now active.", identityName)
 
 						// Report success
@@ -707,26 +712,26 @@ func main() {
 						execCmd.Wait() // Wait for the brain process to complete
 						log.Printf("💀 [Awakening] Brain for '%s' has ceased.", identityName)
 					}(soulName)
-					
+
 					continue
 				}
 				if cmd.Type == "SYSTEM_WORKSPACE_SYNC" {
 					log.Printf("📥 [Workspace Sync] Received file update: %s", cmd.Payload)
-					
+
 					// Format: filename:base64Content
 					parts := strings.SplitN(cmd.Payload, ":", 2)
 					if len(parts) != 2 {
 						log.Printf("❌ Invalid sync payload")
 						continue
 					}
-					
+
 					filename := parts[0]
 					encodedContent := parts[1]
 
 					// 🛡️ Guard: prevent path traversal in synced filenames
 					if err := sanitizeFilename(filename); err != nil {
 						log.Printf("🛑 [Security] Path traversal blocked in sync [%s]: %v", cmd.CommandId, err)
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   false,
@@ -734,16 +739,15 @@ func main() {
 						})
 						continue
 					}
-					
+
 					decodedBytes, err := base64.StdEncoding.DecodeString(encodedContent)
 					if err != nil {
 						log.Printf("❌ Failed to decode sync payload: %v", err)
 						continue
 					}
-					
-					workspaceDir := "/app/workspace/v2"
+
 					filePath := filepath.Join(workspaceDir, filename)
-					
+
 					// 🛡️ Security Guard: Don't let Master syncs overwrite eternal Orchestrator identity
 					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" && (filename == "SOUL.md" || filename == "SOUL_ID" || filename == "AGENTS.md") {
 						log.Printf("🛡️ [Security] Ignored sync of %s for Orchestrator identity.", filename)
@@ -766,19 +770,19 @@ func main() {
 						})
 						continue
 					}
-					
+
 					log.Printf("✅ [Workspace Sync] File %s updated successfully.", filename)
-					
+
 					// 🔥 Trigger Hot Reload if it's a critical file
 					isCritical := (filename == "SOUL.md" || filename == "AGENTS.md" || filename == "ROLE")
-					
+
 					if isCritical && os.Getenv("OTTOCLAW_MODE") != "orchestrator" {
 						log.Printf("🔥 [Hot Reload] Critical file %s changed. Restarting brain...", filename)
-						
+
 						currentSoulMu.RLock()
 						identityName := currentSoul
 						currentSoulMu.RUnlock()
-						
+
 						if identityName != "" {
 							brainMutex.Lock()
 							if currentBrain != nil && currentBrain.Process != nil {
@@ -786,26 +790,26 @@ func main() {
 								currentBrain.Process.Kill()
 								currentBrain.Wait()
 							}
-							
+
 							// Spawn new brain (Reuse logic from SOUL_TRANSFER)
 							go func(name string) {
 								defer brainMutex.Unlock()
-								
+
 								execCmd := exec.CommandContext(workerCtx, func() string {
 									if bin := os.Getenv("OTTOCLAW_BIN"); bin != "" {
 										return bin
 									}
 									return "/app/ottoclaw"
 								}(), "gateway", "--debug")
-								
+
 								env := getSafeEnv()
 								env = append(env, fmt.Sprintf("AGENT_NAME=%s", name))
 								env = append(env, "AGENT_MISSION=Re-awakened via Hot Reload")
-								
+
 								execCmd.Env = env
 								execCmd.Stdout = os.Stdout
 								execCmd.Stderr = os.Stderr
-								
+
 								currentBrain = execCmd
 								if err := execCmd.Start(); err != nil {
 									log.Printf("❌ [Hot Reload] Failed to re-ignite brain: %v", err)
@@ -818,7 +822,7 @@ func main() {
 							brainMutex.Unlock()
 						}
 					}
-					
+
 					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 						CommandId: cmd.CommandId,
 						NodeId:    nodeID,
@@ -833,7 +837,7 @@ func main() {
 
 					if os.Getenv("OTTOCLAW_MODE") == "orchestrator" {
 						log.Printf("🛡️ [Hot Reload] Skipped: Orchestrator identity is immutable")
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   true,
@@ -848,7 +852,7 @@ func main() {
 
 					if identityName == "" {
 						log.Printf("⚠️  [Hot Reload] No active soul — nothing to reload")
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   false,
@@ -880,7 +884,7 @@ func main() {
 						currentBrain = execCmd
 						if err := execCmd.Start(); err != nil {
 							log.Printf("❌ [Hot Reload] Failed to re-ignite brain: %v", err)
-							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: cmd.CommandId,
 								NodeId:    nodeID,
 								Success:   false,
@@ -889,7 +893,7 @@ func main() {
 							return
 						}
 						log.Printf("🚀 [Hot Reload] Brain re-ignited for '%s'", name)
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   true,
@@ -911,14 +915,14 @@ func main() {
 						}
 						if err := restartContainer(target); err != nil {
 							log.Printf("❌ Failed to restart container %s: %v", target, err)
-							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: cmd.CommandId,
 								NodeId:    nodeID,
 								Success:   false,
 								Output:    err.Error(),
 							})
 						} else {
-							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: cmd.CommandId,
 								NodeId:    nodeID,
 								Success:   true,
@@ -933,7 +937,7 @@ func main() {
 					// 🛡️ Guard: block dangerous patterns before spawning shell
 					if err := guardCommand(cmd.Payload); err != nil {
 						log.Printf("🛑 [Security] Blocked command [%s]: %v", cmd.CommandId, err)
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmd.CommandId,
 							NodeId:    nodeID,
 							Success:   false,
@@ -990,7 +994,7 @@ func main() {
 							display := os.Getenv("DISPLAY")
 							wayland := os.Getenv("WAYLAND_DISPLAY")
 							if display == "" && wayland == "" {
-								grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+								grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 									CommandId: commandId, NodeId: nodeID, Success: false,
 									Output: "BROWSER_OPEN failed: no GUI display (DISPLAY/WAYLAND_DISPLAY not set)",
 								})
@@ -1014,7 +1018,7 @@ func main() {
 								execCmd = exec.Command(bin, urlStr)
 							}
 						default:
-							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: commandId, NodeId: nodeID, Success: false,
 								Output: "BROWSER_OPEN failed: unsupported platform " + runtime.GOOS,
 							})
@@ -1022,7 +1026,7 @@ func main() {
 						}
 
 						if err := execCmd.Start(); err != nil {
-							grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: commandId, NodeId: nodeID, Success: false,
 								Output: fmt.Sprintf("BROWSER_OPEN failed to launch: %v", err),
 							})
@@ -1030,7 +1034,7 @@ func main() {
 						}
 						go func() { _ = execCmd.Wait() }()
 						log.Printf("🌐 [Browser] Opened %s (PID %d)", urlStr, execCmd.Process.Pid)
-						grpcClient.ReportCommandResult(context.Background(), &proto.CommandResult{
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: commandId, NodeId: nodeID, Success: true,
 							Output: fmt.Sprintf("Opened %s (PID %d)", urlStr, execCmd.Process.Pid),
 						})
@@ -1104,147 +1108,149 @@ func main() {
 				}
 			}()
 
-			if workerCtx.Err() != nil { return }
-		c, err := cpu.Percent(0, false)
-		cpuUsage := float32(0)
-		if err == nil && len(c) > 0 {
-			cpuUsage = float32(c[0])
-		}
+			if workerCtx.Err() != nil {
+				return
+			}
+			c, err := cpu.Percent(0, false)
+			cpuUsage := float32(0)
+			if err == nil && len(c) > 0 {
+				cpuUsage = float32(c[0])
+			}
 
-		m, err := mem.VirtualMemory()
-		ramUsage := float32(0)
-		totalRamGB := float64(0)
-		if err == nil && m != nil {
-			ramUsage = float32(m.UsedPercent)
-			totalRamGB = float64(m.Total) / (1024 * 1024 * 1024)
-		}
+			m, err := mem.VirtualMemory()
+			ramUsage := float32(0)
+			totalRamGB := float64(0)
+			if err == nil && m != nil {
+				ramUsage = float32(m.UsedPercent)
+				totalRamGB = float64(m.Total) / (1024 * 1024 * 1024)
+			}
 
-		// Read actual CPU hardware model from /proc/cpuinfo (works on Android/Linux)
-		cpuModel := ""
-		if b, err := os.ReadFile("/proc/cpuinfo"); err == nil {
-			for _, line := range strings.Split(string(b), "\n") {
-				if strings.HasPrefix(line, "Hardware\t") || strings.HasPrefix(line, "model name") {
-					parts := strings.SplitN(line, ":", 2)
-					if len(parts) == 2 {
-						cpuModel = strings.TrimSpace(parts[1])
-						break
+			// Read actual CPU hardware model from /proc/cpuinfo (works on Android/Linux)
+			cpuModel := ""
+			if b, err := os.ReadFile("/proc/cpuinfo"); err == nil {
+				for _, line := range strings.Split(string(b), "\n") {
+					if strings.HasPrefix(line, "Hardware\t") || strings.HasPrefix(line, "model name") {
+						parts := strings.SplitN(line, ":", 2)
+						if len(parts) == 2 {
+							cpuModel = strings.TrimSpace(parts[1])
+							break
+						}
 					}
 				}
 			}
-		}
-		sysSpec := fmt.Sprintf("%d Cores CPU, %.1fGB RAM", runtime.NumCPU(), totalRamGB)
-		if cpuModel != "" {
-			sysSpec = fmt.Sprintf("%s (%d Cores, %.1fGB RAM)", cpuModel, runtime.NumCPU(), totalRamGB)
-		}
-		
-		// 🔍 [Phase 2] Read tool list exported by the ottoclaw brain
-		var reportedTools []string
-		toolsFilePath := filepath.Join(workspaceDir, "TOOLS")
-		if toolsBytes, err := os.ReadFile(toolsFilePath); err == nil {
-			for _, line := range strings.Split(strings.TrimSpace(string(toolsBytes)), "\n") {
-				if t := strings.TrimSpace(line); t != "" {
-					reportedTools = append(reportedTools, t)
+			sysSpec := fmt.Sprintf("%d Cores CPU, %.1fGB RAM", runtime.NumCPU(), totalRamGB)
+			if cpuModel != "" {
+				sysSpec = fmt.Sprintf("%s (%d Cores, %.1fGB RAM)", cpuModel, runtime.NumCPU(), totalRamGB)
+			}
+
+			// 🔍 [Phase 2] Read tool list exported by the ottoclaw brain
+			var reportedTools []string
+			toolsFilePath := filepath.Join(workspaceDir, "TOOLS")
+			if toolsBytes, err := os.ReadFile(toolsFilePath); err == nil {
+				for _, line := range strings.Split(strings.TrimSpace(string(toolsBytes)), "\n") {
+					if t := strings.TrimSpace(line); t != "" {
+						reportedTools = append(reportedTools, t)
+					}
 				}
 			}
-		}
 
-		// 🔍 [Phase 5] Read role exported by the brain
-		reportedRole := os.Getenv("AGENT_ROLE")
-		if reportedRole == "" {
-			reportedRole = "guest" // Default
-			roleFilePath := filepath.Join(workspaceDir, "ROLE")
-			if roleBytes, err := os.ReadFile(roleFilePath); err == nil {
-				reportedRole = strings.TrimSpace(string(roleBytes))
+			// 🔍 [Phase 5] Read role exported by the brain
+			reportedRole := os.Getenv("AGENT_ROLE")
+			if reportedRole == "" {
+				reportedRole = "guest" // Default
+				roleFilePath := filepath.Join(workspaceDir, "ROLE")
+				if roleBytes, err := os.ReadFile(roleFilePath); err == nil {
+					reportedRole = strings.TrimSpace(string(roleBytes))
+				}
 			}
-		}
 
-		reportedDepartment := os.Getenv("AGENT_DEPARTMENT")
-		if reportedDepartment == "" {
-			deptFilePath := filepath.Join(workspaceDir, "DEPARTMENT")
-			if deptBytes, err := os.ReadFile(deptFilePath); err == nil {
-				reportedDepartment = strings.TrimSpace(string(deptBytes))
+			reportedDepartment := os.Getenv("AGENT_DEPARTMENT")
+			if reportedDepartment == "" {
+				deptFilePath := filepath.Join(workspaceDir, "DEPARTMENT")
+				if deptBytes, err := os.ReadFile(deptFilePath); err == nil {
+					reportedDepartment = strings.TrimSpace(string(deptBytes))
+				}
 			}
-		}
 
-		reportedOrgID := os.Getenv("AGENT_ORG_ID")
-		if reportedOrgID == "" {
-			orgFilePath := filepath.Join(workspaceDir, "ORG_ID")
-			if orgBytes, err := os.ReadFile(orgFilePath); err == nil {
-				reportedOrgID = strings.TrimSpace(string(orgBytes))
+			reportedOrgID := os.Getenv("AGENT_ORG_ID")
+			if reportedOrgID == "" {
+				orgFilePath := filepath.Join(workspaceDir, "ORG_ID")
+				if orgBytes, err := os.ReadFile(orgFilePath); err == nil {
+					reportedOrgID = strings.TrimSpace(string(orgBytes))
+				}
 			}
-		}
 
-		batLevel, cpuTemp := getBatteryAndTemp()
+			batLevel, cpuTemp := getBatteryAndTemp()
 
-		status := &proto.NodeStatus{
-			NodeId:     nodeID,
-			CpuUsage:   cpuUsage,
-			RamUsage:   ramUsage,
-			Status:     "Online",
-			VesselType: vesselType,
-			IpAddress:  ipAddr,
-			OsInfo:     osInfo,
-			SystemSpec: sysSpec,
-			Tools:      reportedTools,
-			Role:       reportedRole,
-			Department: reportedDepartment,
-			OrgId:      reportedOrgID,
-			BatteryLevel: batLevel,
-			Temperature:  cpuTemp,
-		}
-
-		// 🛡️ Add Soul + Auth Metadata
-		currentSoulMu.RLock()
-		soulID := currentSoul
-		currentSoulMu.RUnlock()
-
-		ctx := newGRPCCtx()
-		if soulID != "" {
-			normalizedSoulID := NormalizeID(soulID)
-			if normalizedSoulID != "" {
-				ctx = metadata.AppendToOutgoingContext(ctx, "x-soul-id", normalizedSoulID)
+			status := &proto.NodeStatus{
+				NodeId:       nodeID,
+				CpuUsage:     cpuUsage,
+				RamUsage:     ramUsage,
+				Status:       "Online",
+				VesselType:   vesselType,
+				IpAddress:    ipAddr,
+				OsInfo:       osInfo,
+				SystemSpec:   sysSpec,
+				Tools:        reportedTools,
+				Role:         reportedRole,
+				Department:   reportedDepartment,
+				OrgId:        reportedOrgID,
+				BatteryLevel: batLevel,
+				Temperature:  cpuTemp,
 			}
-		}
 
-		res, err := grpcClient.ReportStatus(ctx, status)
-		if err != nil {
-			statusFailures++
-			if statusFailures >= 3 {
-				log.Printf("⚠️  [Heartbeat] %d consecutive failures — Master unreachable: %v", statusFailures, err)
+			// 🛡️ Add Soul + Auth Metadata
+			currentSoulMu.RLock()
+			soulID := currentSoul
+			currentSoulMu.RUnlock()
+
+			ctx := newGRPCCtx()
+			if soulID != "" {
+				normalizedSoulID := NormalizeID(soulID)
+				if normalizedSoulID != "" {
+					ctx = metadata.AppendToOutgoingContext(ctx, "x-soul-id", normalizedSoulID)
+				}
+			}
+
+			res, err := grpcClient.ReportStatus(ctx, status)
+			if err != nil {
+				statusFailures++
+				if statusFailures >= 3 {
+					log.Printf("⚠️  [Heartbeat] %d consecutive failures — Master unreachable: %v", statusFailures, err)
+				} else {
+					fmt.Printf("⚠️ Error sending status: %v\n", err)
+				}
 			} else {
-				fmt.Printf("⚠️ Error sending status: %v\n", err)
-			}
-		} else {
-			if statusFailures > 0 {
-				log.Printf("✅ [Heartbeat] Master reconnected after %d failures", statusFailures)
-				statusFailures = 0
-			}
-			fmt.Printf("✅ Master Response: %s (CPU: %.1f%%)\n", res.Message, status.CpuUsage)
-			if res.Action != "" {
-				fmt.Printf("🔔 [Action] Received command from Master: %s\n", res.Action)
-				if res.Action == "wakeup" {
-					fmt.Println("✨ Waking up the vessel...")
-				} else if res.Action == "update" {
-					fmt.Println("📥 Status: Triggering Update...")
-				} else if strings.HasPrefix(res.Action, "auto_qa:") {
-					skill := strings.TrimPrefix(res.Action, "auto_qa:")
-					fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
-					go func(s string, ctx context.Context) {
-						cmd := exec.CommandContext(ctx, "python3", "/app/workspace/v2/auto_qa_skill.py", "--skill", s, "--force")
-						output, err := cmd.CombinedOutput()
-						if ctx.Err() != nil {
-							fmt.Printf("🛑 [Auto QA] Cancelled for %s (worker shutdown)\n", s)
-							return
-						}
-						if err != nil {
-							fmt.Printf("❌ [Auto QA] Failed for %s: %v\nOutput: %s\n", s, err, output)
-						} else {
-							fmt.Printf("✅ [Auto QA] Finished for %s\n", s)
-						}
-					}(skill, workerCtx)
+				if statusFailures > 0 {
+					log.Printf("✅ [Heartbeat] Master reconnected after %d failures", statusFailures)
+					statusFailures = 0
+				}
+				fmt.Printf("✅ Master Response: %s (CPU: %.1f%%)\n", res.Message, status.CpuUsage)
+				if res.Action != "" {
+					fmt.Printf("🔔 [Action] Received command from Master: %s\n", res.Action)
+					if res.Action == "wakeup" {
+						fmt.Println("✨ Waking up the vessel...")
+					} else if res.Action == "update" {
+						fmt.Println("📥 Status: Triggering Update...")
+					} else if strings.HasPrefix(res.Action, "auto_qa:") {
+						skill := strings.TrimPrefix(res.Action, "auto_qa:")
+						fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
+						go func(s string, ctx context.Context) {
+							cmd := exec.CommandContext(ctx, "python3", filepath.Join(workspaceDir, "auto_qa_skill.py"), "--skill", s, "--force")
+							output, err := cmd.CombinedOutput()
+							if ctx.Err() != nil {
+								fmt.Printf("🛑 [Auto QA] Cancelled for %s (worker shutdown)\n", s)
+								return
+							}
+							if err != nil {
+								fmt.Printf("❌ [Auto QA] Failed for %s: %v\nOutput: %s\n", s, err, output)
+							} else {
+								fmt.Printf("✅ [Auto QA] Finished for %s\n", s)
+							}
+						}(skill, workerCtx)
+					}
 				}
 			}
-		}
 
 		}()
 
@@ -1252,7 +1258,9 @@ func main() {
 		heartbeatInterval := 5 * time.Second
 		if statusFailures >= 3 {
 			scaled := 5 + statusFailures*5
-			if scaled > 30 { scaled = 30 }
+			if scaled > 30 {
+				scaled = 30
+			}
 			heartbeatInterval = time.Duration(scaled) * time.Second
 		}
 		select {
@@ -1262,4 +1270,3 @@ func main() {
 		}
 	}
 }
-
