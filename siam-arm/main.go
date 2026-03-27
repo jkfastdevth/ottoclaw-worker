@@ -638,7 +638,7 @@ func main() {
 						continue
 					}
 					// Also save the soul name for recovery
-					if err := os.WriteFile(soulIDPath, []byte(soulName), 0644); err != nil {
+					if err := os.WriteFile(soulIDPath, []byte(strings.ToLower(soulName)), 0644); err != nil {
 						log.Printf("⚠️  Failed to persist soul name: %v", err)
 						continue
 					}

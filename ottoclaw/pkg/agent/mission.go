@@ -52,6 +52,7 @@ func NewMissionManager(cfg *config.Config, b *bus.MessageBus, r *AgentRegistry) 
 		soulIDPath := filepath.Join(workspaceDir, "SOUL_ID")
 		if data, err := os.ReadFile(soulIDPath); err == nil && len(data) > 0 {
 			agentID = strings.TrimSpace(string(data))
+			agentID = strings.ToLower(agentID)
 		}
 	}
 	if agentID == "" {
