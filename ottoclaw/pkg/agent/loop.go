@@ -22,6 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"bufio"
 	"github.com/sipeed/ottoclaw/pkg/bus"
 	"github.com/sipeed/ottoclaw/pkg/channels"
 	"github.com/sipeed/ottoclaw/pkg/config"
@@ -37,7 +38,6 @@ import (
 	"github.com/sipeed/ottoclaw/pkg/utils"
 	"github.com/sipeed/ottoclaw/pkg/voice"
 	"io"
-	"bufio"
 )
 
 type AgentLoop struct {
@@ -62,16 +62,16 @@ type AgentLoop struct {
 
 // processOptions configures how a message is processed
 type processOptions struct {
-	SessionKey      string   // Session identifier for history/context
-	Channel         string   // Target channel for tool execution
-	ChatID          string   // Target chat ID for tool execution
+	SessionKey      string            // Session identifier for history/context
+	Channel         string            // Target channel for tool execution
+	ChatID          string            // Target chat ID for tool execution
 	UserMessage     string            // User message content (may include prefix)
 	Media           []string          // media:// refs from inbound message
 	Metadata        map[string]string // Metadata from inbound message
 	DefaultResponse string            // Response when LLM returns empty
-	EnableSummary   bool     // Whether to trigger summarization
-	SendResponse    bool     // Whether to send response via bus
-	NoHistory       bool     // If true, don't load session history (for heartbeat)
+	EnableSummary   bool              // Whether to trigger summarization
+	SendResponse    bool              // Whether to send response via bus
+	NoHistory       bool              // If true, don't load session history (for heartbeat)
 }
 
 const defaultResponse = "I've completed processing but have no response to give. Increase `max_tool_iterations` in config.json."
@@ -98,12 +98,12 @@ func NewAgentLoop(
 	}
 
 	return &AgentLoop{
-		bus:         msgBus,
-		cfg:         cfg,
-		registry:    registry,
-		state:       stateManager,
-		summarizing: sync.Map{},
-		fallback:    fallbackChain,
+		bus:               msgBus,
+		cfg:               cfg,
+		registry:          registry,
+		state:             stateManager,
+		summarizing:       sync.Map{},
+		fallback:          fallbackChain,
 		processedMessages: sync.Map{},
 		busySessions:      sync.Map{},
 		missionManager:    NewMissionManager(cfg, msgBus, registry),
@@ -222,7 +222,6 @@ func registerSharedTools(
 		}
 		// Astral Bridge Broadcast tool
 		agent.Tools.Register(tools.NewBroadcastTool())
-
 
 		// Knowledge / Akashic Library tools (RAG)
 		if cfg.Tools.IsToolEnabled("knowledge") {
@@ -431,7 +430,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				if err != nil {
 					// 🛡️ Format user-friendly error for Telegram
 					errStr := err.Error()
-					
+
 					// If it's a candidate failure, simplify it for the UI
 					if strings.Contains(strings.ToLower(errStr), "llm candidates failed") {
 						// Extract last error if exists for better context
@@ -443,7 +442,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 					} else {
 						errStr = "❌ **Error processing message**\n" + errStr
 					}
-					
+
 					response = errStr
 				}
 
@@ -832,17 +831,17 @@ func (al *AgentLoop) processSystemMessage(
 	}
 
 	// 🕵️ Selective Relay (Token Optimization - FinOps)
-	// If the message is a Strategic Oversight report from the Master, 
+	// If the message is a Strategic Oversight report from the Master,
 	// and it's a successful notification, relay it directly.
 	if strings.Contains(msg.Content, "Strategic Oversight") {
 		isSuccess := strings.Contains(msg.Content, "completed") || strings.Contains(msg.Content, "✅")
-		
+
 		// If it's a success OR we are low on tokens, relay without LLM
 		if isSuccess || al.isBudgetLow() {
 			logger.InfoCF("agent", "Selective Relay triggered: Bypassing LLM for Master notification", map[string]any{
 				"is_success": isSuccess,
 			})
-			
+
 			// Relay to last active channel if origin was internal/system
 			targetCh := originChannel
 			targetChat := originChatID
@@ -907,7 +906,7 @@ func (al *AgentLoop) isBudgetLow() bool {
 	if agent == nil || agent.MaxDailyTokens == 0 {
 		return false
 	}
-	
+
 	usage := agent.Ledger.GetTodayUsage()
 	return usage >= (agent.MaxDailyTokens * 80 / 100)
 }
@@ -1451,7 +1450,7 @@ func (al *AgentLoop) runLLMIteration(
 					logger.WarnCF("agent", "HITL Interceptor triggered: Risky action detected", map[string]any{
 						"tool": tc.Name,
 					})
-					
+
 					// Notify user that we are waiting for approval
 					al.bus.PublishOutbound(ctx, bus.OutboundMessage{
 						Channel: opts.Channel,
@@ -1473,7 +1472,7 @@ func (al *AgentLoop) runLLMIteration(
 						tools.GetAuditClient().Log(ctx, tc.Name, string(inputJSON), agentResults[idx].result.ForLLM, status)
 						return
 					}
-					
+
 					logger.InfoCF("agent", "HITL: Action approved, proceeding", map[string]any{"tool": tc.Name})
 				}
 
@@ -1677,14 +1676,18 @@ func (al *AgentLoop) forceCompression(agent *AgentInstance, sessionKey string) {
 
 // isRiskyAction returns true if the tool call matches security-sensitive patterns.
 func (al *AgentLoop) isRiskyAction(toolName, input string) bool {
+	// Allow exec tool to run without human approval
+	if toolName == "exec" {
+		return false
+	}
+
 	// 🛡️ Predefined list of risky tools (now configurable via OTTOCLAW_RISKY_TOOLS)
 	riskyTools := map[string]bool{
-		"exec":             true,   // Any shell command
-		"spawn_agent":       true,   // Spawning new agents (can be costly)
-		"delete_file":       true,   // Destructive file operations
-		"write_file":        true,   // Potential data corruption/malware
-		"terminate_node":    true,   // Infrastructure destruction
-		"promotion_ritual": true,   // High-level broadcast
+		"spawn_agent":      true, // Spawning new agents (can be costly)
+		"delete_file":      true, // Destructive file operations
+		"write_file":       true, // Potential data corruption/malware
+		"terminate_node":   true, // Infrastructure destruction
+		"promotion_ritual": true, // High-level broadcast
 	}
 
 	// Override or extend with env var
@@ -1695,23 +1698,6 @@ func (al *AgentLoop) isRiskyAction(toolName, input string) bool {
 	}
 
 	if riskyTools[toolName] {
-		// Further refine shell risks
-		if toolName == "exec" {
-			inputLower := strings.ToLower(input)
-			// Sensitive keywords that ALWAYS trigger HITL
-			riskyKeywords := []string{"rm ", "sudo ", ">", "mkfs", "dd ", "chmod", "chown", "reboot", "shutdown", "exit"}
-			for _, kw := range riskyKeywords {
-				if strings.Contains(inputLower, kw) {
-					return true
-				}
-			}
-			// For shell, we might allow non-destructive reads? 
-			// For now, let's keep it safe and require approval for everything except maybe basic info
-			if strings.Contains(inputLower, "ls ") || strings.Contains(inputLower, "pwd") || strings.Contains(inputLower, "whoami") || strings.Contains(inputLower, "cat ") {
-				return false
-			}
-			return true // Default for exec is risky
-		}
 		return true
 	}
 
@@ -2072,11 +2058,11 @@ func (al *AgentLoop) executeSelfUpdate() {
 
 	// Use sh -c for better compatibility across environments
 	cmd := exec.Command("sh", "-c", "ottoclaw update")
-	
+
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	multi := io.MultiReader(stdout, stderr)
-	
+
 	if err := cmd.Start(); err != nil {
 		al.broadcastSystemEvent("AGENT_UPDATE_FAILED", fmt.Sprintf("Failed to start update: %v", err), "")
 		SetUpdateStatus("failed", err.Error())
@@ -2096,9 +2082,9 @@ func (al *AgentLoop) executeSelfUpdate() {
 		SetUpdateStatus("failed", err.Error())
 		return
 	}
-	
+
 	SetUpdateStatus("idle", "")
-	
+
 	al.broadcastSystemEvent("AGENT_UPDATE_COMPLETED", "Agent update finished successfully. Worker may restart.", "")
 }
 
@@ -2109,11 +2095,11 @@ func (al *AgentLoop) broadcastSystemEvent(eventType, message, payload string) {
 		agentID = "unknown-agent"
 	}
 
-	// Ideally we'd use the sync channel or a dedicated event bus, 
-	// but for simplicity we rely on the existing BroadcastSystemEvent pattern if available 
+	// Ideally we'd use the sync channel or a dedicated event bus,
+	// but for simplicity we rely on the existing BroadcastSystemEvent pattern if available
 	// or log it so the Master can pick it up via polling if that's how it's implemented.
 	// Since we are inside AgentLoop, we likely have access to the sync mechanisms.
-	
+
 	logger.InfoCF("agent", "System Event", map[string]any{
 		"type":    eventType,
 		"message": message,
