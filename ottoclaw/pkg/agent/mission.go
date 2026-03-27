@@ -44,6 +44,17 @@ type MissionManager struct {
 func NewMissionManager(cfg *config.Config, b *bus.MessageBus, r *AgentRegistry) *MissionManager {
 	agentID := os.Getenv("AGENT_NAME")
 	if agentID == "" {
+		// Try to load from SOUL_ID file in workspace
+		workspaceDir := os.Getenv("OTTOCLAW_WORKSPACE")
+		if workspaceDir == "" {
+			workspaceDir = "/app/workspace"
+		}
+		soulIDPath := filepath.Join(workspaceDir, "SOUL_ID")
+		if data, err := os.ReadFile(soulIDPath); err == nil && len(data) > 0 {
+			agentID = strings.TrimSpace(string(data))
+		}
+	}
+	if agentID == "" {
 		agentID = "unknown"
 	}
 
@@ -127,14 +138,30 @@ func isOlder(current, latest string) bool {
 		pC := partsCurrent[i]
 		pL := partsLatest[i]
 
-		if idx := strings.Index(pC, "-"); idx != -1 { pC = pC[:idx] }
-		if idx := strings.Index(pL, "-"); idx != -1 { pL = pL[:idx] }
+		if idx := strings.Index(pC, "-"); idx != -1 {
+			pC = pC[:idx]
+		}
+		if idx := strings.Index(pL, "-"); idx != -1 {
+			pL = pL[:idx]
+		}
 
-		for _, r := range pC { if r >= '0' && r <= '9' { c = c*10 + int(r-'0') } }
-		for _, r := range pL { if r >= '0' && r <= '9' { l = l*10 + int(r-'0') } }
+		for _, r := range pC {
+			if r >= '0' && r <= '9' {
+				c = c*10 + int(r-'0')
+			}
+		}
+		for _, r := range pL {
+			if r >= '0' && r <= '9' {
+				l = l*10 + int(r-'0')
+			}
+		}
 
-		if c < l { return true }
-		if c > l { return false }
+		if c < l {
+			return true
+		}
+		if c > l {
+			return false
+		}
 	}
 	return len(partsCurrent) < len(partsLatest)
 }
@@ -187,14 +214,14 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 		needNodeSecret := m.cfg.Channels.SiamSync.NodeSecret == "" && os.Getenv("NODE_SECRET") == ""
 
 		payload := map[string]any{
-			"today_usage":       usage,
-			"today_cost":        cost,
-			"max_daily_tokens":  agent.MaxDailyTokens,
-			"tools":             agent.Tools.List(),
-			"version":           m.getVersion(),
-			"update_status":     upStatus,
-			"update_error":      upErr,
-			"need_node_secret":  needNodeSecret,
+			"today_usage":      usage,
+			"today_cost":       cost,
+			"max_daily_tokens": agent.MaxDailyTokens,
+			"tools":            agent.Tools.List(),
+			"version":          m.getVersion(),
+			"update_status":    upStatus,
+			"update_error":     upErr,
+			"need_node_secret": needNodeSecret,
 		}
 		body, _ := json.Marshal(payload)
 

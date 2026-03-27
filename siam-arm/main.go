@@ -282,6 +282,8 @@ func getSafeEnv() []string {
 		"GOOGLE_",
 		"SIAM_",
 		"MASTER_API_",
+		"MASTER_",
+		"GEMINI_",
 	}
 
 	safeEnv := make([]string, 0, 32)
