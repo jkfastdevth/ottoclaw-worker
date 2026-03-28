@@ -416,7 +416,7 @@ generate_config_json() {
       "workspace": "${WORKSPACE_V2}",
       "model": "${OTTOCLAW_MODEL_NAME}",
       "max_tokens": 8192,
-      "max_tool_iterations": 20
+      "max_tool_iterations": 50
     }
   },
   "model_list": [
