@@ -172,6 +172,7 @@ import (
 
 	"encoding/json"
 	"os/exec"
+	"syscall"
 
 	"github.com/jkfastdevth/Siam-Synapse/proto" // เปลี่ยนเป็น path โปรเจคของคุณ
 	"github.com/shirou/gopsutil/cpu"            // ต้องติดตั้งเพิ่ม: go get github.com/shirou/gopsutil/cpu
@@ -903,6 +904,32 @@ func main() {
 						})
 						execCmd.Wait()
 					}(identityName)
+					continue
+				}
+
+				// SYSTEM_POLL_MISSIONS: nudge brain to poll for new missions immediately via SIGUSR1
+				if cmd.Type == "SYSTEM_POLL_MISSIONS" {
+					brainMutex.Lock()
+					brain := currentBrain
+					brainMutex.Unlock()
+					if brain != nil && brain.Process != nil {
+						brain.Process.Signal(syscall.SIGUSR1)
+						log.Printf("🎯 [Mission Nudge] Sent SIGUSR1 to brain (pid %d) — immediate poll triggered", brain.Process.Pid)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   true,
+							Output:    "Mission poll nudge sent",
+						})
+					} else {
+						log.Printf("⚠️  [Mission Nudge] No active brain to nudge")
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    "No active brain process",
+						})
+					}
 					continue
 				}
 
