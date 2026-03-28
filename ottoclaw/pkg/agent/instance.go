@@ -98,6 +98,11 @@ func NewAgentInstance(
 		toolsRegistry.Register(tools.NewTermuxAPITool())
 	}
 
+	// 📤 Telegram file sender — enabled when ORCHESTRATOR_TELEGRAM_TOKEN is set
+	if os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN") != "" || os.Getenv("TELEGRAM_BOT_TOKEN") != "" {
+		toolsRegistry.Register(tools.NewTelegramSendTool())
+	}
+
 	// Siam-Synapse orchestrator tools — enabled when SIAM_MASTER_URL / MASTER_API_URL is set
 	siamTools, siamAuditor := tools.NewSiamToolsetFromEnv()
 	for _, t := range siamTools {
