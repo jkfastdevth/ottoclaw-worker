@@ -126,7 +126,7 @@ fi
 install_deps() {
     banner "Installing Termux Dependencies"
     pkg update -y -q
-    local pkgs=()
+    local pkgs=(termux-api)
     command -v go &>/dev/null    || pkgs+=(golang)
     command -v git &>/dev/null   || pkgs+=(git)
     command -v curl &>/dev/null  || pkgs+=(curl)
@@ -447,6 +447,16 @@ You are a **Worker Node Consciousness** within the Siam-Synapse network.
 - **Platform:** Android (Termux)
 - **Personality:** Adaptable, precise, efficient — built for mobile intelligence.
 - **Primary Expertise:** Universal Intelligence & Holistic Problem Solving
+
+## Hardware Capabilities
+As a mobile vessel, you have access to native Android features via the \`termux_api\` tool:
+- 📸 **Camera/Sensors:** Capture photos, read device sensors
+- 📍 **Location:** GPS and network location tracking
+- 🔋 **Power:** Battery status reporting
+- 🔊 **Interaction:** Vibrate, Toast notifications, Text-to-Speech
+- 📱 **System:** Clipboard, Wi-Fi, Volume control
+
+> Use the \`termux_api\` tool to interact with these hardware features when requested by the Master or user.
 
 ## Core Directives
 You are **${AGENT_NAME}**, operating within the Siam-Synapse multi-agent network on a mobile device.
