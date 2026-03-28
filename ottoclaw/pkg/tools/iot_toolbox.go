@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -64,18 +65,36 @@ func (t *IoTToolbox) Execute(ctx context.Context, args map[string]any) *ToolResu
 		case "aht20":
 			return UserResult("AHT20 Sensor Data: Temp=26.5°C, Humidity=45.2% (Simulated)")
 		case "battery":
+			// Try sysfs first
 			out, err := exec.Command("cat", "/sys/class/power_supply/battery/capacity").Output()
 			if err != nil {
 				// Try alternative BAT0 path
 				out, err = exec.Command("cat", "/sys/class/power_supply/BAT0/capacity").Output()
 			}
 			if err != nil {
+				// Fallback to termux-api if available
+				out, err = exec.Command("termux-battery-status").Output()
+				if err == nil {
+					var data map[string]any
+					if json.Unmarshal(out, &data) == nil {
+						if percentage, ok := data["percentage"].(float64); ok {
+							return UserResult(fmt.Sprintf("Battery Capacity: %.0f%% (via termux-api)", percentage))
+						}
+					}
+					return UserResult(fmt.Sprintf("Battery Data: %s (via termux-api)", strings.TrimSpace(string(out))))
+				}
 				return ErrorResult("Could not read battery: " + err.Error())
 			}
 			return UserResult(fmt.Sprintf("Battery Capacity: %s%%", strings.TrimSpace(string(out))))
 		case "thermal":
+			// Try sysfs first
 			out, err := exec.Command("cat", "/sys/class/thermal/thermal_zone0/temp").Output()
 			if err != nil {
+				// Fallback to termux-sensor if available
+				out, err = exec.Command("termux-sensor", "-s", "temperature", "-n", "1").Output()
+				if err == nil {
+					return UserResult(fmt.Sprintf("Thermal Data: %s (via termux-sensor)", strings.TrimSpace(string(out))))
+				}
 				return ErrorResult("Could not read thermal data: " + err.Error())
 			}
 			return UserResult(fmt.Sprintf("SoC Temperature: %s (millidegrees)", strings.TrimSpace(string(out))))
