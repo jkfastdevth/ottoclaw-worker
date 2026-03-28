@@ -1952,8 +1952,8 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) 
 	content := strings.TrimSpace(msg.Content)
 
 	// 🛠️ Special: Handle Master-API triggered update command
-	if content == "ottoclaw update" {
-		logger.InfoCF("agent", "Received remote update command via bus", map[string]any{"sender": msg.SenderID})
+	if content == "ottoclaw update" || content == "CMD_UPDATE_REMOTE" {
+		logger.InfoCF("agent", "Received remote update command via bus", map[string]any{"content": content, "sender": msg.SenderID})
 		go al.executeSelfUpdate()
 		return "Agent update triggered successfully.", true
 	}
