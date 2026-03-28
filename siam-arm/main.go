@@ -949,6 +949,96 @@ func main() {
 					continue
 				}
 
+
+				// SYSTEM_DM: deliver a direct message to the brain's inbox
+				if cmd.Type == "SYSTEM_DM" {
+					var from, message string
+					decoded, err := base64.StdEncoding.DecodeString(cmd.Payload)
+					if err == nil {
+						parts := strings.SplitN(string(decoded), "\x00", 2)
+						if len(parts) == 2 {
+							from, message = parts[0], parts[1]
+						} else {
+							from = "master"
+							message = string(decoded)
+						}
+					} else {
+						parts := strings.SplitN(cmd.Payload, ":", 2)
+						if len(parts) == 2 {
+							from, message = parts[0], parts[1]
+						} else {
+							from = "master"
+							message = cmd.Payload
+						}
+					}
+					log.Printf("\U0001f4ac [DM] From %s: %s", from, message)
+
+					// Append to DM inbox file so brain can pick it up on next poll
+					inboxPath := filepath.Join(workspaceDir, "DM_INBOX")
+					entry := fmt.Sprintf("[%s][%s] %s\n", time.Now().Format(time.RFC3339), from, message)
+					os.WriteFile(inboxPath, []byte(entry), 0644)
+
+					// Nudge brain via SIGUSR1 to poll AgentMessages immediately
+					brainMutex.Lock()
+					brain := currentBrain
+					brainMutex.Unlock()
+					nudged := false
+					if brain != nil && brain.Process != nil {
+						brain.Process.Signal(syscall.SIGUSR1)
+						nudged = true
+						log.Printf("\U0001f4ac [DM] Nudged brain (pid %d) via SIGUSR1", brain.Process.Pid)
+					}
+					out := fmt.Sprintf("DM from [%s] written to inbox", from)
+					if !nudged {
+						out += " (brain offline — DM queued)"
+					}
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId,
+						NodeId:    nodeID,
+						Success:   true,
+						Output:    out,
+					})
+					continue
+				}
+
+				// SYSTEM_SPEAK: speak text aloud via platform TTS
+				if cmd.Type == "SYSTEM_SPEAK" {
+					text := cmd.Payload
+					if text == "" {
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmd.CommandId,
+							NodeId:    nodeID,
+							Success:   false,
+							Output:    "empty text payload",
+						})
+						continue
+					}
+					log.Printf("\U0001f50a [Speak] TTS: %s", text)
+					go func(cmdID, txt string) {
+						var speakCmd *exec.Cmd
+						if _, statErr := os.Stat("/data/data/com.termux"); statErr == nil {
+							// Android / Termux
+							speakCmd = exec.CommandContext(workerCtx, "termux-tts-speak", txt)
+						} else {
+							// Linux (espeak-ng)
+							speakCmd = exec.CommandContext(workerCtx, "espeak-ng", txt)
+						}
+						spkOut, err := speakCmd.CombinedOutput()
+						success := err == nil
+						output := string(spkOut)
+						if err != nil {
+							output += "\nError: " + err.Error()
+						}
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID,
+							NodeId:    nodeID,
+							Success:   success,
+							Output:    output,
+						})
+					}(cmd.CommandId, text)
+					continue
+				}
+
 				fmt.Printf("📥 Received Command ID: %s, Type: %s\n", cmd.CommandId, cmd.Type)
 
 				if cmd.Type == "action" {
