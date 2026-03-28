@@ -82,6 +82,11 @@ func (c *siamClient) delete(path string) ([]byte, error) {
 	return data, err
 }
 
+func (c *siamClient) put(path string, body any) ([]byte, error) {
+	data, _, err := c.do("PUT", path, body)
+	return data, err
+}
+
 // AuditAction logs a tool execution to the Master.
 func (c *siamClient) AuditAction(agentID, nodeID, toolName, input, output, status string) {
 	payload := map[string]any{
@@ -130,6 +135,7 @@ func NewSiamToolset(masterURL, apiKey string) ([]Tool, AuditLogger) {
 		&SiamForgeTool{client: client},
 		&SiamRitualTool{client: client},
 		&SiamSelfImproveTool{client: client},
+		&SiamUpdateSoulTool{client: client},
 		&SiamSendEmailTool{},
 		&SiamListCalendarTool{},
 		&SiamCreateCalendarEventTool{},
@@ -1235,6 +1241,101 @@ func (t *SiamForgeTool) Execute(_ context.Context, args map[string]any) *ToolRes
 
 	default:
 		return ErrorResult("siam_forge: action must be list, create, execute, stats, graduate, or delete")
+	}
+}
+
+// SiamUpdateSoulTool — update a soul file on disk and optionally deploy it to a running agent.
+type SiamUpdateSoulTool struct{ client *siamClient }
+
+func (t *SiamUpdateSoulTool) Name() string { return "siam_update_soul" }
+func (t *SiamUpdateSoulTool) Description() string {
+	return "Update an agent's Soul (identity + behavioral rules) and optionally deploy it to the running agent in real-time via gRPC. " +
+		"Use action=get to read the current soul content, action=update to write new content, " +
+		"action=deploy to push the current soul to the running agent, " +
+		"action=update_and_deploy to update content AND deploy in one step (recommended). " +
+		"The soul controls personality, capabilities, MUST/MUST NOT rules, and tool workflows."
+}
+func (t *SiamUpdateSoulTool) Parameters() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"enum":        []string{"get", "update", "deploy", "update_and_deploy"},
+				"description": "get=read soul content, update=write soul content, deploy=push to running agent, update_and_deploy=write+push in one step",
+			},
+			"soul_id": map[string]any{
+				"type":        "string",
+				"description": "Soul ID (e.g. 'kook', 'kaidos', 'jarvis'). Use siam_get_agents to find agent IDs.",
+			},
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "Agent ID to deploy soul to (usually same as soul_id). Required for deploy/update_and_deploy.",
+			},
+			"content": map[string]any{
+				"type":        "string",
+				"description": "Full markdown content of the soul file. Required for update/update_and_deploy.",
+			},
+		},
+		"required": []string{"action", "soul_id"},
+	}
+}
+func (t *SiamUpdateSoulTool) Execute(_ context.Context, args map[string]any) *ToolResult {
+	action, _ := args["action"].(string)
+	soulID, _ := args["soul_id"].(string)
+	agentID, _ := args["agent_id"].(string)
+	content, _ := args["content"].(string)
+
+	if strings.TrimSpace(soulID) == "" {
+		return ErrorResult("siam_update_soul: soul_id is required")
+	}
+	if agentID == "" {
+		agentID = soulID
+	}
+
+	switch action {
+	case "get":
+		data, err := t.client.get("/api/agent/v1/souls/" + strings.TrimSpace(soulID))
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_update_soul get: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "update":
+		if strings.TrimSpace(content) == "" {
+			return ErrorResult("siam_update_soul update: content is required")
+		}
+		data, err := t.client.put("/api/agent/v1/souls/"+strings.TrimSpace(soulID), map[string]any{"content": content})
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_update_soul update: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "deploy":
+		data, err := t.client.post("/api/agent/v1/souls/"+strings.TrimSpace(soulID)+"/deploy/"+strings.TrimSpace(agentID), nil)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_update_soul deploy: %v", err))
+		}
+		return UserResult(string(data))
+
+	case "update_and_deploy":
+		if strings.TrimSpace(content) == "" {
+			return ErrorResult("siam_update_soul update_and_deploy: content is required")
+		}
+		// Step 1: Update
+		_, err := t.client.put("/api/agent/v1/souls/"+strings.TrimSpace(soulID), map[string]any{"content": content})
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_update_soul update_and_deploy (update step): %v", err))
+		}
+		// Step 2: Deploy
+		data, err := t.client.post("/api/agent/v1/souls/"+strings.TrimSpace(soulID)+"/deploy/"+strings.TrimSpace(agentID), nil)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("siam_update_soul update_and_deploy (deploy step): %v", err))
+		}
+		return UserResult(fmt.Sprintf("Soul '%s' updated and deployed to agent '%s': %s", soulID, agentID, string(data)))
+
+	default:
+		return ErrorResult("siam_update_soul: action must be get, update, deploy, or update_and_deploy")
 	}
 }
 
