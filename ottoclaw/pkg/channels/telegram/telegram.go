@@ -40,6 +40,7 @@ var (
 	reInlineCode    = regexp.MustCompile("`([^`]+)`")
 	reOrchestration = regexp.MustCompile(`^@?([^\s:,]+)[:,\s]*[:,-]\s*(.*)$`)
 	reBridgeOrchestration = regexp.MustCompile(`^\[(.+?)\s*↳\s*(.+?)\]\s*\n?\s*([\s\S]*)$`)
+	reHTMLTag             = regexp.MustCompile(`(?i)<(?:/)?(?:b|i|u|s|code|pre|a)(?:\s+[^>]+)?>`)
 )
 
 type TelegramChannel struct {
@@ -940,7 +941,19 @@ func markdownToTelegramHTML(text string) string {
 
 	text = reBlockquote.ReplaceAllString(text, "$1")
 
+	// 🧱 Mask existing valid HTML tags to prevent double-escaping
+	var preservedTags []string
+	text = reHTMLTag.ReplaceAllStringFunc(text, func(tag string) string {
+		preservedTags = append(preservedTags, tag)
+		return fmt.Sprintf("\x00TG%d\x00", len(preservedTags)-1)
+	})
+
 	text = escapeHTML(text)
+
+	// 🧱 Restore masked tags
+	for i, tag := range preservedTags {
+		text = strings.ReplaceAll(text, fmt.Sprintf("\x00TG%d\x00", i), tag)
+	}
 
 	text = reLink.ReplaceAllString(text, `<a href="$2">$1</a>`)
 
