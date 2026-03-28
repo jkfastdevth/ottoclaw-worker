@@ -224,6 +224,22 @@ func sanitizeFilename(name string) error {
 
 // backoffDuration returns exponential backoff duration capped at 60s.
 // attempt=0 → 1s, 1 → 2s, 2 → 4s, 3 → 8s, 4 → 16s, 5+ → 60s
+// detectPlatform returns a canonical platform string for this node.
+// Used to tag Evolution rules with platform context.
+func detectPlatform() string {
+	if _, err := os.Stat("/data/data/com.termux"); err == nil {
+		return "android-termux"
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return "darwin"
+	case "windows":
+		return "windows"
+	default:
+		return "linux"
+	}
+}
+
 func backoffDuration(attempt int) time.Duration {
 	if attempt > 5 {
 		attempt = 5
@@ -1264,8 +1280,16 @@ func main() {
 					} else if strings.HasPrefix(res.Action, "auto_qa:") {
 						skill := strings.TrimPrefix(res.Action, "auto_qa:")
 						fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
-						go func(s string, ctx context.Context) {
-							cmd := exec.CommandContext(ctx, "python3", filepath.Join(workspaceDir, "auto_qa_skill.py"), "--skill", s, "--force")
+						currentSoulMu.RLock()
+						soul := currentSoul
+						currentSoulMu.RUnlock()
+						platform := detectPlatform()
+						go func(s, soulID, plat string, ctx context.Context) {
+							args := []string{filepath.Join(workspaceDir, "auto_qa_skill.py"), "--skill", s, "--force", "--platform", plat}
+							if soulID != "" {
+								args = append(args, "--soul-id", soulID)
+							}
+							cmd := exec.CommandContext(ctx, "python3", args...)
 							output, err := cmd.CombinedOutput()
 							if ctx.Err() != nil {
 								fmt.Printf("🛑 [Auto QA] Cancelled for %s (worker shutdown)\n", s)
@@ -1276,7 +1300,7 @@ func main() {
 							} else {
 								fmt.Printf("✅ [Auto QA] Finished for %s\n", s)
 							}
-						}(skill, workerCtx)
+						}(skill, soul, platform, workerCtx)
 					}
 				}
 			}
