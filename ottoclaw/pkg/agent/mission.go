@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -186,6 +187,41 @@ func (m *MissionManager) getVersion() string {
 	return strings.TrimSpace(string(data))
 }
 
+func (m *MissionManager) collectSystemSpec() map[string]any {
+	spec := make(map[string]any)
+	spec["os"] = runtime.GOOS
+	spec["arch"] = runtime.GOARCH
+
+	// 🕵️ Detect Camera
+	if runtime.GOOS == "linux" {
+		// Try termux-camera-info
+		cmd := exec.Command("termux-camera-info")
+		if err := cmd.Run(); err == nil {
+			spec["camera"] = "available (termux)"
+		} else {
+			// Check /dev/video*
+			files, _ := filepath.Glob("/dev/video*")
+			if len(files) > 0 {
+				spec["camera"] = "available (v4l2)"
+			}
+		}
+
+		// 🔋 Battery
+		if _, err := os.Stat("/sys/class/power_supply/battery/capacity"); err == nil {
+			spec["battery"] = "available (sysfs)"
+		} else if cmd := exec.Command("termux-battery-status"); cmd.Run() == nil {
+			spec["battery"] = "available (termux)"
+		}
+
+		// 🌡️ Thermal
+		if _, err := os.Stat("/sys/class/thermal/thermal_zone0/temp"); err == nil {
+			spec["thermal"] = "available (sysfs)"
+		}
+	}
+
+	return spec
+}
+
 func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey string) {
 	if m.registry == nil {
 		return
@@ -214,6 +250,8 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 		// request node_secret only when it's missing from config (avoids broadcasting on every heartbeat)
 		needNodeSecret := m.cfg.Channels.SiamSync.NodeSecret == "" && os.Getenv("NODE_SECRET") == ""
 
+		spec := m.collectSystemSpec()
+
 		payload := map[string]any{
 			"today_usage":      usage,
 			"today_cost":       cost,
@@ -223,6 +261,7 @@ func (m *MissionManager) reportHeartbeats(ctx context.Context, masterURL, apiKey
 			"update_status":    upStatus,
 			"update_error":     upErr,
 			"need_node_secret": needNodeSecret,
+			"system_spec":      spec,
 		}
 		body, _ := json.Marshal(payload)
 
