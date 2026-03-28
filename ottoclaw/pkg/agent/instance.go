@@ -93,6 +93,11 @@ func NewAgentInstance(
 		toolsRegistry.Register(tools.NewAppendFileTool(workspace, restrict, allowWritePaths))
 	}
 
+	// 📱 Detect Termux environment and enable hardware capabilities
+	if _, err := os.Stat("/data/data/com.termux"); err == nil {
+		toolsRegistry.Register(tools.NewTermuxAPITool())
+	}
+
 	// Siam-Synapse orchestrator tools — enabled when SIAM_MASTER_URL / MASTER_API_URL is set
 	siamTools, siamAuditor := tools.NewSiamToolsetFromEnv()
 	for _, t := range siamTools {
