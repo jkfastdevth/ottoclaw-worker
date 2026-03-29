@@ -201,10 +201,11 @@ func recordWAV(ctx context.Context, wavPath, durSec string) error {
 	type attempt struct{ name string; args []string }
 	tries := []attempt{
 		// PulseAudio/PipeWire first — works on modern Ubuntu/Zorin/Debian desktops
-		{"parec",           []string{"parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
-		{"parecord",        []string{"parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		// parec/parecord/pw-record record indefinitely — wrap with "timeout durSec"
+		{"parec",           []string{"timeout", durSec, "parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"parecord",        []string{"timeout", durSec, "parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
 		{"ffmpeg(pulse)",   []string{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
-		{"pw-record",       []string{"pw-record", "--target", "alsa_input.default", wavPath}},
+		{"pw-record",       []string{"timeout", durSec, "pw-record", "--target", "alsa_input.default", wavPath}},
 		// ALSA (bare-metal / server)
 		{"arecord(pulse)",  []string{"arecord", "-D", "pulse", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
 		{"arecord",         []string{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
@@ -213,7 +214,12 @@ func recordWAV(ctx context.Context, wavPath, durSec string) error {
 	}
 	var tried []string
 	for _, t := range tries {
-		if _, err := exec.LookPath(t.args[0]); err != nil {
+		// For "timeout CMD ..." wrapper, check the real binary (args[1])
+		toolBin := t.args[0]
+		if toolBin == "timeout" && len(t.args) > 1 {
+			toolBin = t.args[1]
+		}
+		if _, err := exec.LookPath(toolBin); err != nil {
 			continue
 		}
 		tried = append(tried, t.name)
