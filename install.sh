@@ -845,7 +845,13 @@ elif command -v apt-get &>/dev/null; then
 else
     warn "pip not found — skipping TTS/STT install (espeak-ng fallback will be used)"
 fi
-# Install arecord (ALSA utils) if missing — needed for SYSTEM_LISTEN recording
+# Install audio recording tools — parec (PulseAudio/PipeWire) preferred on desktop Linux
+if ! command -v parec &>/dev/null && ! command -v parecord &>/dev/null; then
+    if command -v apt-get &>/dev/null; then
+        apt-get install -y -q pulseaudio-utils 2>/dev/null && info "parec (pulseaudio-utils) installed" || warn "pulseaudio-utils install failed"
+    fi
+fi
+# Also install arecord (ALSA) as fallback for headless/server systems
 if ! command -v arecord &>/dev/null; then
     if command -v apt-get &>/dev/null; then
         apt-get install -y -q alsa-utils 2>/dev/null && info "arecord installed" || warn "arecord install failed"

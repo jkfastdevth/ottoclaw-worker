@@ -200,17 +200,19 @@ func recordWAV(ctx context.Context, wavPath, durSec string) error {
 	}
 	type attempt struct{ name string; args []string }
 	tries := []attempt{
-		{"arecord",    []string{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
-		{"ffmpeg(alsa)",[]string{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
-		{"ffmpeg(pulse)",[]string{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
-		{"sox",        []string{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec}},
-		{"parec",      []string{"parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
-		{"parecord",   []string{"parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
-		{"pw-record",  []string{"pw-record", "--target", "alsa_input.default", wavPath}},
+		// PulseAudio/PipeWire first — works on modern Ubuntu/Zorin/Debian desktops
+		{"parec",           []string{"parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"parecord",        []string{"parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"ffmpeg(pulse)",   []string{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
+		{"pw-record",       []string{"pw-record", "--target", "alsa_input.default", wavPath}},
+		// ALSA (bare-metal / server)
+		{"arecord(pulse)",  []string{"arecord", "-D", "pulse", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
+		{"arecord",         []string{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
+		{"ffmpeg(alsa)",    []string{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
+		{"sox",             []string{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec}},
 	}
 	var tried []string
 	for _, t := range tries {
-		// Skip if binary not found — avoid misleading "exit status 1" errors
 		if _, err := exec.LookPath(t.args[0]); err != nil {
 			continue
 		}
@@ -221,9 +223,9 @@ func recordWAV(ctx context.Context, wavPath, durSec string) error {
 		}
 	}
 	if len(tried) == 0 {
-		return fmt.Errorf("ไม่พบ audio recording tool — ติดตั้งด้วย: sudo apt install alsa-utils  หรือ  sudo apt install ffmpeg")
+		return fmt.Errorf("ไม่พบ audio recording tool\nZorin/Ubuntu: sudo apt install pulseaudio-utils\nหรือ: sudo apt install ffmpeg")
 	}
-	return fmt.Errorf("บันทึกเสียงไม่สำเร็จ (ลองแล้ว: %s) — เช็ค mic และ audio device", strings.Join(tried, ", "))
+	return fmt.Errorf("บันทึกเสียงไม่สำเร็จ (ลองแล้ว: %s)\nZorin/PipeWire: sudo apt install pulseaudio-utils\nเช็คด้วย: parecord test.wav", strings.Join(tried, ", "))
 }
 
 // listenLoops tracks active SYSTEM_LISTEN_LOOP goroutines by their loopID.
