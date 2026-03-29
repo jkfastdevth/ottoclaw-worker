@@ -144,9 +144,16 @@ install_deps() {
     if command -v pip3 &>/dev/null; then
         local pip_flags="--quiet --break-system-packages"
         pip3 install $pip_flags edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
-        # PyAV requires --no-build-isolation to use Termux's system ffmpeg headers
-        if pip3 install $pip_flags av --no-build-isolation 2>/dev/null && \
-           pip3 install $pip_flags faster-whisper 2>/dev/null; then
+        # av (PyAV) ต้องใช้ pre-built จาก Termux pkg — ไม่สามารถ compile บน Android ได้
+        local av_ok=false
+        if pkg install -y python-av 2>/dev/null; then
+            info "python-av installed via pkg (pre-built)"
+            av_ok=true
+        elif pip3 install $pip_flags av --no-build-isolation 2>/dev/null; then
+            info "av installed via pip"
+            av_ok=true
+        fi
+        if $av_ok && pip3 install $pip_flags faster-whisper 2>/dev/null; then
             info "faster-whisper installed (STT)"
         else
             warn "faster-whisper install failed — STT จะทำงานผ่าน master แทน (ไม่ต้องติดตั้ง local STT)"
