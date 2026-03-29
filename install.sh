@@ -832,9 +832,15 @@ if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
     fi
     if "$PIP_CMD" install --quiet --break-system-packages faster-whisper 2>/dev/null || \
        "$PIP_CMD" install --quiet faster-whisper 2>/dev/null; then
-        info "faster-whisper installed (STT/SYSTEM_LISTEN)"
+        info "faster-whisper installed (STT primary)"
     else
-        warn "faster-whisper install failed — SYSTEM_LISTEN will not work"
+        warn "faster-whisper install failed — trying openai-whisper as fallback"
+    fi
+    if "$PIP_CMD" install --quiet --break-system-packages openai-whisper 2>/dev/null || \
+       "$PIP_CMD" install --quiet openai-whisper 2>/dev/null; then
+        info "openai-whisper installed (STT fallback for Termux/ARM)"
+    else
+        warn "openai-whisper install failed"
     fi
 elif command -v apt-get &>/dev/null; then
     apt-get install -y -q python3-pip 2>/dev/null

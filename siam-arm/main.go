@@ -1217,12 +1217,19 @@ print("enrolled:" + sys.argv[3])
 							return
 						}
 
-						// Transcribe via faster-whisper Python one-liner
+						// Transcribe: faster-whisper first, fallback to openai-whisper
 						pyScript := `import sys
-from faster_whisper import WhisperModel
-m = WhisperModel('small', device='cpu', compute_type='int8')
-segs, _ = m.transcribe(sys.argv[1], language=sys.argv[2])
-print(''.join([s.text for s in segs]))
+wav, lang = sys.argv[1], sys.argv[2]
+try:
+    from faster_whisper import WhisperModel
+    m = WhisperModel('small', device='cpu', compute_type='int8')
+    segs, _ = m.transcribe(wav, language=lang)
+    print(''.join([s.text for s in segs]))
+except Exception:
+    import whisper
+    m = whisper.load_model('small')
+    result = m.transcribe(wav, language=lang)
+    print(result['text'])
 `
 						out, err := exec.CommandContext(workerCtx, "python3", "-c", pyScript, wavPath, lang).Output()
 						if err != nil {
