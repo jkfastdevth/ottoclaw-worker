@@ -866,9 +866,18 @@ fi
 
 # 6. Copy installer to known location for wrapper
 mkdir -p /opt/siam-synapse
-cp "${BASH_SOURCE[0]}" /opt/siam-synapse/install.sh
-chmod +x /opt/siam-synapse/install.sh
-info "Installer copied  → /opt/siam-synapse/install.sh"
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]:-}" ]]; then
+    cp "${BASH_SOURCE[0]}" /opt/siam-synapse/install.sh
+    chmod +x /opt/siam-synapse/install.sh
+    info "Installer copied  → /opt/siam-synapse/install.sh"
+else
+    # Running via curl | bash — download script directly
+    curl -fsSL https://raw.githubusercontent.com/jkfastdevth/ottoclaw-worker/main/install.sh \
+        -o /opt/siam-synapse/install.sh 2>/dev/null \
+        && chmod +x /opt/siam-synapse/install.sh \
+        && info "Installer downloaded → /opt/siam-synapse/install.sh" \
+        || warn "Could not save installer to /opt/siam-synapse/install.sh"
+fi
 
 # 7. Enable & start
 banner "Starting Services"

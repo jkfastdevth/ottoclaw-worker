@@ -142,15 +142,16 @@ install_deps() {
     pkg install -y clang make libc++ 2>/dev/null || true
     # Install edge-tts (TTS) + faster-whisper (STT) for Thai voice I/O
     if command -v pip3 &>/dev/null; then
-        pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
+        local pip_flags="--quiet --break-system-packages"
+        pip3 install $pip_flags edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
         # PyAV requires --no-build-isolation to use Termux's system ffmpeg headers
-        if pip3 install --quiet av --no-build-isolation 2>/dev/null && \
-           pip3 install --quiet faster-whisper 2>/dev/null; then
+        if pip3 install $pip_flags av --no-build-isolation 2>/dev/null && \
+           pip3 install $pip_flags faster-whisper 2>/dev/null; then
             info "faster-whisper installed (STT)"
         else
             warn "faster-whisper install failed — STT จะทำงานผ่าน master แทน (ไม่ต้องติดตั้ง local STT)"
         fi
-        pip3 install --quiet resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
+        pip3 install $pip_flags resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
     fi
 }
 
