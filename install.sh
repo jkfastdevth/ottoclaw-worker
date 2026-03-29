@@ -836,12 +836,7 @@ if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
     else
         warn "faster-whisper install failed — trying openai-whisper as fallback"
     fi
-    if "$PIP_CMD" install --quiet --break-system-packages openai-whisper 2>/dev/null || \
-       "$PIP_CMD" install --quiet openai-whisper 2>/dev/null; then
-        info "openai-whisper installed (STT fallback for Termux/ARM)"
-    else
-        warn "openai-whisper install failed"
-    fi
+    info "STT fallback (openai-whisper) can be installed manually: pip3 install openai-whisper"
 elif command -v apt-get &>/dev/null; then
     apt-get install -y -q python3-pip 2>/dev/null
     pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed"
