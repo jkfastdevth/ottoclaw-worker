@@ -170,7 +170,9 @@ import (
 	"sync"
 	"time"
 
+	"bytes"
 	"encoding/json"
+	"sync/atomic"
 	"net/http"
 	"os/exec"
 	"syscall"
@@ -187,6 +189,18 @@ import (
 // isTermux returns true when running inside Android Termux environment.
 func isTermux() bool {
 	return os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("PREFIX"), "com.termux")
+}
+
+// Phase 5.4: isSpeaking tracks whether TTS is currently playing.
+// Set to true during SYSTEM_SPEAK, checked in SYSTEM_LISTEN to prevent echo.
+var isSpeaking atomic.Bool
+
+// voicePrintsDir returns the directory for stored resemblyzer voice embeddings.
+func voicePrintsDir() string {
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".picoclaw", "voice_prints")
+	_ = os.MkdirAll(dir, 0o755)
+	return dir
 }
 
 // guardCommand blocks dangerous shell command patterns before execution.
@@ -1021,6 +1035,10 @@ func main() {
 					}
 					log.Printf("\U0001f50a [Speak] TTS: %s", text)
 					go func(cmdID, txt string) {
+						// Phase 5.4: Speaking Lock — mark device as speaking
+						isSpeaking.Store(true)
+						defer isSpeaking.Store(false)
+
 						var success bool
 						var output string
 						isTermux := false
@@ -1077,9 +1095,86 @@ func main() {
 					continue
 				}
 
+				// SYSTEM_ENROLL_VOICE: record voice sample → save resemblyzer embedding for speaker ID
+				// Payload: <name>:<duration>  e.g. "alfred:10"
+				if cmd.Type == "SYSTEM_ENROLL_VOICE" {
+					go func(cmdID, payload string) {
+						name := "default"
+						duration := "10"
+						if payload != "" {
+							parts := strings.SplitN(payload, ":", 2)
+							if parts[0] != "" {
+								name = parts[0]
+							}
+							if len(parts) >= 2 && parts[1] != "" {
+								duration = parts[1]
+							}
+						}
+						wavPath := "/tmp/enroll-" + cmdID + ".wav"
+						defer os.Remove(wavPath)
+
+						// Record voice sample
+						var recErr error
+						if isTermux() {
+							recErr = exec.CommandContext(workerCtx, "termux-microphone-record",
+								"-e", "WAV", "-l", duration, "-f", wavPath).Run()
+						} else {
+							recErr = exec.CommandContext(workerCtx, "arecord",
+								"-d", duration, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath).Run()
+							if recErr != nil {
+								recErr = exec.CommandContext(workerCtx, "ffmpeg", "-y",
+									"-f", "alsa", "-i", "default",
+									"-t", duration, "-ar", "16000", "-ac", "1", wavPath).Run()
+							}
+						}
+						if recErr != nil {
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: cmdID, NodeId: nodeID, Success: false, Output: "record failed: " + recErr.Error(),
+							})
+							return
+						}
+
+						// Save resemblyzer embedding
+						vpDir := voicePrintsDir()
+						embedPath := filepath.Join(vpDir, name+".npy")
+						pyEnroll := `import sys, numpy as np
+from resemblyzer import VoiceEncoder, preprocess_wav
+from pathlib import Path
+enc = VoiceEncoder()
+wav = preprocess_wav(Path(sys.argv[1]))
+embed = enc.embed_utterance(wav)
+np.save(sys.argv[2], embed)
+print("enrolled:" + sys.argv[3])
+`
+						out, err := exec.CommandContext(workerCtx, "python3", "-c", pyEnroll,
+							wavPath, embedPath, name).Output()
+						if err != nil {
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: cmdID, NodeId: nodeID, Success: false, Output: "enroll failed: " + err.Error(),
+							})
+							return
+						}
+						log.Printf("🎙️ [ENROLL] %s", strings.TrimSpace(string(out)))
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID, NodeId: nodeID, Success: true,
+							Output: "enrolled voice print for: " + name,
+						})
+					}(cmd.CommandId, cmd.Payload)
+					continue
+				}
+
 				// SYSTEM_LISTEN: record audio → faster-whisper STT → return transcript
 				if cmd.Type == "SYSTEM_LISTEN" {
 					go func(cmdID, payload string) {
+						// Phase 5.4: Speaking Lock — refuse to listen while TTS is playing
+						if isSpeaking.Load() {
+							log.Printf("🔇 [LISTEN] blocked — device is currently speaking")
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: cmdID, NodeId: nodeID, Success: false, Output: "speaking_locked",
+							})
+							return
+						}
+
 						duration := "5"
 						lang := "th"
 						if payload != "" {
@@ -1139,8 +1234,55 @@ print(''.join([s.text for s in segs]))
 						}
 						transcript := strings.TrimSpace(string(out))
 						log.Printf("🎤 [LISTEN] transcript: %s", transcript)
+
+						// Phase 5.3: Speaker Identification via resemblyzer
+						speaker := ""
+						confidence := 0.0
+						vpDir := voicePrintsDir()
+						pyIdentify := `import sys, os, json, numpy as np
+from resemblyzer import VoiceEncoder, preprocess_wav
+from pathlib import Path
+vp_dir = sys.argv[2]
+wav_path = sys.argv[1]
+try:
+    enc = VoiceEncoder()
+    wav = preprocess_wav(Path(wav_path))
+    embed = enc.embed_utterance(wav)
+    best_name, best_sim = "", 0.0
+    for f in Path(vp_dir).glob("*.npy"):
+        ref = np.load(str(f))
+        sim = float(np.dot(embed, ref) / (np.linalg.norm(embed) * np.linalg.norm(ref) + 1e-9))
+        if sim > best_sim:
+            best_sim = sim
+            best_name = f.stem
+    print(json.dumps({"speaker": best_name, "confidence": round(best_sim, 3)}))
+except Exception as e:
+    print(json.dumps({"speaker": "", "confidence": 0.0, "error": str(e)}))
+`
+						sidOut, sidErr := exec.CommandContext(workerCtx, "python3", "-c", pyIdentify,
+							wavPath, vpDir).Output()
+						if sidErr == nil {
+							var sidResult struct {
+								Speaker    string  `json:"speaker"`
+								Confidence float64 `json:"confidence"`
+							}
+							if json.Unmarshal(bytes.TrimSpace(sidOut), &sidResult) == nil && sidResult.Confidence >= 0.75 {
+								speaker = sidResult.Speaker
+								confidence = sidResult.Confidence
+								log.Printf("🎙️ [LISTEN] speaker: %s (%.2f)", speaker, confidence)
+							}
+						}
+
+						// Return transcript + optional speaker as JSON
+						var resultOut string
+						if speaker != "" {
+							resultOut = fmt.Sprintf(`{"transcript":%q,"speaker":%q,"confidence":%.3f}`,
+								transcript, speaker, confidence)
+						} else {
+							resultOut = transcript
+						}
 						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
-							CommandId: cmdID, NodeId: nodeID, Success: true, Output: transcript,
+							CommandId: cmdID, NodeId: nodeID, Success: true, Output: resultOut,
 						})
 					}(cmd.CommandId, cmd.Payload)
 					continue

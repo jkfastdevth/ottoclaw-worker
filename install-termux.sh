@@ -142,6 +142,7 @@ install_deps() {
     if command -v pip3 &>/dev/null; then
         pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
         pip3 install --quiet faster-whisper 2>/dev/null && info "faster-whisper installed (STT)" || warn "faster-whisper install failed"
+        pip3 install --quiet resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
     fi
 }
 
