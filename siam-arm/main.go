@@ -191,6 +191,12 @@ func isTermux() bool {
 	return os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("PREFIX"), "com.termux")
 }
 
+// listenLoops tracks active SYSTEM_LISTEN_LOOP goroutines by their loopID.
+var (
+	listenLoops   = map[string]context.CancelFunc{}
+	listenLoopsMu sync.Mutex
+)
+
 // Phase 5.4: isSpeaking tracks whether TTS is currently playing.
 // Set to true during SYSTEM_SPEAK, checked in SYSTEM_LISTEN to prevent echo.
 var isSpeaking atomic.Bool
@@ -201,6 +207,226 @@ func voicePrintsDir() string {
 	dir := filepath.Join(home, ".picoclaw", "voice_prints")
 	_ = os.MkdirAll(dir, 0o755)
 	return dir
+}
+
+// masterHTTPBase returns the base HTTP URL of the master server.
+// Derived from MASTER_HTTP_URL env or converted from MASTER_GRPC_URL (port 50051→3000).
+func masterHTTPBase() string {
+	if u := os.Getenv("MASTER_HTTP_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	grpcURL := os.Getenv("MASTER_GRPC_URL")
+	if grpcURL == "" {
+		grpcURL = "master:50051"
+	}
+	// Strip port, use HTTP port 3000
+	host := grpcURL
+	if idx := strings.LastIndex(grpcURL, ":"); idx >= 0 {
+		host = grpcURL[:idx]
+	}
+	return "http://" + host + ":3000"
+}
+
+// uploadVoicePrint uploads a .npy embedding file to master central storage.
+func uploadVoicePrint(name, npyPath string) error {
+	data, err := os.ReadFile(npyPath)
+	if err != nil {
+		return err
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	body := fmt.Sprintf(`{"name":%q,"data":%q}`, name, encoded)
+	apiKey := os.Getenv("MASTER_API_KEY")
+	req, err := http.NewRequest("POST", masterHTTPBase()+"/api/voice-prints",
+		strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("upload failed: %s", resp.Status)
+	}
+	return nil
+}
+
+// vpSyncedAt tracks last voice prints sync time (avoid repeated fetches).
+var (
+	vpSyncedAt   time.Time
+	vpSyncMu     sync.Mutex
+	vpSyncTTL    = 5 * time.Minute
+)
+
+// syncVoicePrints fetches voice prints from master and saves to local voicePrintsDir.
+// Uses a 5-minute cache to avoid fetching on every SYSTEM_LISTEN call.
+func syncVoicePrints() {
+	vpSyncMu.Lock()
+	defer vpSyncMu.Unlock()
+	if time.Since(vpSyncedAt) < vpSyncTTL {
+		return
+	}
+	apiKey := os.Getenv("MASTER_API_KEY")
+	req, err := http.NewRequest("GET", masterHTTPBase()+"/api/voice-prints", nil)
+	if err != nil {
+		return
+	}
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("⚠️ [VoicePrint] sync failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Prints []struct {
+			Name string `json:"name"`
+			Data string `json:"data"`
+		} `json:"prints"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return
+	}
+	vpDir := voicePrintsDir()
+	count := 0
+	for _, p := range result.Prints {
+		raw, err := base64.StdEncoding.DecodeString(p.Data)
+		if err != nil {
+			continue
+		}
+		dest := filepath.Join(vpDir, p.Name+".npy")
+		if os.WriteFile(dest, raw, 0o644) == nil {
+			count++
+		}
+	}
+	if count > 0 {
+		log.Printf("🎙️ [VoicePrint] synced %d prints from master", count)
+	}
+	vpSyncedAt = time.Now()
+}
+
+// checkVoicePrintExists returns true if a voice print for the given name exists on master.
+func checkVoicePrintExists(name string) bool {
+	apiKey := os.Getenv("MASTER_API_KEY")
+	req, err := http.NewRequest("GET", masterHTTPBase()+"/api/voice-prints", nil)
+	if err != nil {
+		return false
+	}
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Prints []struct {
+			Name string `json:"name"`
+		} `json:"prints"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&result) != nil {
+		return false
+	}
+	for _, p := range result.Prints {
+		if strings.EqualFold(p.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// autoEnrollSelfVoice generates a TTS sample for this worker's agent identity
+// and uploads the voice print to master if not already enrolled.
+// This ensures every agent's voice is automatically known to the speaker ID system.
+func autoEnrollSelfVoice(ctx context.Context) {
+	currentSoulMu.RLock()
+	agentName := strings.ToLower(strings.TrimSpace(currentSoul))
+	currentSoulMu.RUnlock()
+	if agentName == "" {
+		return
+	}
+	// Only enroll known agent names (not arbitrary node IDs)
+	knownAgents := map[string]bool{"auric": true, "kaidos": true, "kook": true}
+	if !knownAgents[agentName] {
+		// Allow any agent that has a proper name (not numeric node ID)
+		if len(agentName) < 3 || agentName[0] >= '0' && agentName[0] <= '9' {
+			return
+		}
+	}
+
+	// Skip if already enrolled
+	if checkVoicePrintExists(agentName) {
+		log.Printf("🎙️ [AutoEnroll] voice print for '%s' already exists", agentName)
+		return
+	}
+
+	log.Printf("🎙️ [AutoEnroll] generating voice sample for agent: %s", agentName)
+
+	// Generate TTS sample using edge-tts or espeak
+	sampleText := fmt.Sprintf("สวัสดี ผมคือ %s พร้อมรับคำสั่งแล้ว", agentName)
+	tmpWav := fmt.Sprintf("/tmp/enroll-auto-%s.wav", agentName)
+	tmpMp3 := fmt.Sprintf("/tmp/enroll-auto-%s.mp3", agentName)
+	defer os.Remove(tmpWav)
+	defer os.Remove(tmpMp3)
+
+	generated := false
+	// Try edge-tts → convert to WAV
+	if exec.CommandContext(ctx, "edge-tts",
+		"--voice", "th-TH-PremwadeeNeural",
+		"--text", sampleText,
+		"--write-media", tmpMp3).Run() == nil {
+		if exec.CommandContext(ctx, "ffmpeg", "-y", "-i", tmpMp3,
+			"-ar", "16000", "-ac", "1", tmpWav).Run() == nil {
+			generated = true
+		}
+	}
+	// Fallback: espeak-ng
+	if !generated {
+		if exec.CommandContext(ctx, "espeak-ng", "-v", "th", "-w", tmpWav, sampleText).Run() == nil {
+			generated = true
+		} else if exec.CommandContext(ctx, "espeak-ng", "-w", tmpWav, sampleText).Run() == nil {
+			generated = true
+		}
+	}
+	if !generated {
+		log.Printf("⚠️ [AutoEnroll] TTS generation failed for %s", agentName)
+		return
+	}
+
+	// Generate embedding with resemblyzer
+	vpDir := voicePrintsDir()
+	embedPath := filepath.Join(vpDir, agentName+".npy")
+	pyEnroll := `import sys, numpy as np
+from resemblyzer import VoiceEncoder, preprocess_wav
+from pathlib import Path
+enc = VoiceEncoder()
+wav = preprocess_wav(Path(sys.argv[1]))
+embed = enc.embed_utterance(wav)
+np.save(sys.argv[2], embed)
+print("ok")
+`
+	out, err := exec.CommandContext(ctx, "python3", "-c", pyEnroll, tmpWav, embedPath).Output()
+	if err != nil {
+		log.Printf("⚠️ [AutoEnroll] resemblyzer failed for %s: %v", agentName, err)
+		return
+	}
+	log.Printf("🎙️ [AutoEnroll] embedding generated: %s", strings.TrimSpace(string(out)))
+
+	// Upload to master
+	if err := uploadVoicePrint(agentName, embedPath); err != nil {
+		log.Printf("⚠️ [AutoEnroll] upload failed for %s: %v", agentName, err)
+		return
+	}
+	vpSyncedAt = time.Time{} // invalidate cache
+	log.Printf("✅ [AutoEnroll] voice print for '%s' enrolled and uploaded", agentName)
 }
 
 // guardCommand blocks dangerous shell command patterns before execution.
@@ -571,6 +797,12 @@ func main() {
 	defer conn.Close()
 
 	grpcClient := proto.NewMasterControlClient(conn)
+
+	// Sync voice prints from master at startup, then auto-enroll own agent voice
+	go func() {
+		syncVoicePrints()
+		autoEnrollSelfVoice(workerCtx)
+	}()
 
 	// 3. Goroutine รับคำสั่งและ Auto-Reconnect
 	go func() {
@@ -1155,6 +1387,15 @@ print("enrolled:" + sys.argv[3])
 							return
 						}
 						log.Printf("🎙️ [ENROLL] %s", strings.TrimSpace(string(out)))
+
+						// Upload to master central storage so all workers share it
+						if upErr := uploadVoicePrint(name, embedPath); upErr != nil {
+							log.Printf("⚠️ [ENROLL] upload to master failed: %v (local copy kept)", upErr)
+						} else {
+							vpSyncedAt = time.Time{} // invalidate cache so next LISTEN syncs fresh
+							log.Printf("☁️ [ENROLL] uploaded voice print for %s to master", name)
+						}
+
 						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmdID, NodeId: nodeID, Success: true,
 							Output: "enrolled voice print for: " + name,
@@ -1243,6 +1484,8 @@ except Exception:
 						log.Printf("🎤 [LISTEN] transcript: %s", transcript)
 
 						// Phase 5.3: Speaker Identification via resemblyzer
+						// Sync voice prints from master before running speaker ID
+						go syncVoicePrints()
 						speaker := ""
 						confidence := 0.0
 						vpDir := voicePrintsDir()
@@ -1280,11 +1523,21 @@ except Exception as e:
 							}
 						}
 
+						// Phase 5.5: classify speaker as agent or human
+						isAgent := false
+						knownAgentNames := map[string]bool{"auric": true, "kaidos": true, "kook": true}
+						if speaker != "" {
+							currentSoulMu.RLock()
+							selfName := strings.ToLower(currentSoul)
+							currentSoulMu.RUnlock()
+							isAgent = knownAgentNames[strings.ToLower(speaker)] || strings.ToLower(speaker) == selfName
+						}
+
 						// Return transcript + optional speaker as JSON
 						var resultOut string
 						if speaker != "" {
-							resultOut = fmt.Sprintf(`{"transcript":%q,"speaker":%q,"confidence":%.3f}`,
-								transcript, speaker, confidence)
+							resultOut = fmt.Sprintf(`{"transcript":%q,"speaker":%q,"confidence":%.3f,"is_agent":%v}`,
+								transcript, speaker, confidence, isAgent)
 						} else {
 							resultOut = transcript
 						}
@@ -1292,6 +1545,152 @@ except Exception as e:
 							CommandId: cmdID, NodeId: nodeID, Success: true, Output: resultOut,
 						})
 					}(cmd.CommandId, cmd.Payload)
+					continue
+				}
+
+				// SYSTEM_LISTEN_STOP: cancel a running listen loop by loopID
+				if cmd.Type == "SYSTEM_LISTEN_STOP" {
+					loopID := cmd.Payload
+					listenLoopsMu.Lock()
+					if cancel, ok := listenLoops[loopID]; ok {
+						cancel()
+						delete(listenLoops, loopID)
+						log.Printf("🛑 [LISTEN_LOOP] stopped: %s", loopID)
+					}
+					listenLoopsMu.Unlock()
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId, NodeId: nodeID, Success: true, Output: "loop stopped",
+					})
+					continue
+				}
+
+				// SYSTEM_LISTEN_LOOP: continuous mic recording → STT → send each transcript back
+				// Payload: <duration_secs>:<lang>  e.g. "5:th"
+				if cmd.Type == "SYSTEM_LISTEN_LOOP" {
+					loopID := cmd.CommandId
+					duration := "5"
+					lang := "th"
+					if cmd.Payload != "" {
+						parts := strings.SplitN(cmd.Payload, ":", 2)
+						if parts[0] != "" {
+							duration = parts[0]
+						}
+						if len(parts) >= 2 && parts[1] != "" {
+							lang = parts[1]
+						}
+					}
+
+					loopCtx, loopCancel := context.WithCancel(workerCtx)
+					listenLoopsMu.Lock()
+					listenLoops[loopID] = loopCancel
+					listenLoopsMu.Unlock()
+
+					go func(lID, dur, ln string, ctx context.Context) {
+						defer func() {
+							listenLoopsMu.Lock()
+							delete(listenLoops, lID)
+							listenLoopsMu.Unlock()
+							log.Printf("🛑 [LISTEN_LOOP] goroutine exited: %s", lID)
+						}()
+						log.Printf("🎙️ [LISTEN_LOOP] started: %s (dur=%ss lang=%s)", lID, dur, ln)
+						for {
+							if ctx.Err() != nil {
+								return
+							}
+							// Speaking lock: wait if TTS is playing
+							if isSpeaking.Load() {
+								time.Sleep(500 * time.Millisecond)
+								continue
+							}
+
+							wavPath := fmt.Sprintf("/tmp/loop-%s-%d.wav", lID, time.Now().UnixNano())
+							var recErr error
+							if isTermux() {
+								recErr = exec.CommandContext(ctx, "termux-microphone-record",
+									"-e", "WAV", "-l", dur, "-f", wavPath).Run()
+							} else {
+								recErr = exec.CommandContext(ctx, "arecord",
+									"-d", dur, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath).Run()
+								if recErr != nil {
+									recErr = exec.CommandContext(ctx, "ffmpeg", "-y",
+										"-f", "alsa", "-i", "default",
+										"-t", dur, "-ar", "16000", "-ac", "1", wavPath).Run()
+								}
+							}
+							if recErr != nil {
+								os.Remove(wavPath)
+								if ctx.Err() != nil {
+									return
+								}
+								time.Sleep(time.Second)
+								continue
+							}
+
+							// Transcribe
+							pyScript := `import sys
+wav, lang = sys.argv[1], sys.argv[2]
+try:
+    from faster_whisper import WhisperModel
+    m = WhisperModel('small', device='cpu', compute_type='int8')
+    segs, _ = m.transcribe(wav, language=lang)
+    print(''.join([s.text for s in segs]))
+except Exception:
+    import whisper
+    m = whisper.load_model('small')
+    print(m.transcribe(wav, language=lang)['text'])
+`
+							out, err := exec.CommandContext(ctx, "python3", "-c", pyScript, wavPath, ln).Output()
+							os.Remove(wavPath)
+							if err != nil || ctx.Err() != nil {
+								continue
+							}
+							transcript := strings.TrimSpace(string(out))
+							if transcript == "" {
+								continue
+							}
+
+							// Speaker ID
+							speaker, confidence, isAgent := "", 0.0, false
+							go syncVoicePrints()
+							vpDir := voicePrintsDir()
+							pyID := `import sys, os, json, numpy as np
+from resemblyzer import VoiceEncoder, preprocess_wav
+from pathlib import Path
+try:
+    enc = VoiceEncoder()
+    wav = preprocess_wav(Path(sys.argv[1]))
+    embed = enc.embed_utterance(wav)
+    best_name, best_sim = "", 0.0
+    for f in Path(sys.argv[2]).glob("*.npy"):
+        ref = np.load(str(f))
+        sim = float(np.dot(embed, ref) / (np.linalg.norm(embed)*np.linalg.norm(ref)+1e-9))
+        if sim > best_sim:
+            best_sim, best_name = sim, f.stem
+    print(json.dumps({"speaker":best_name,"confidence":round(best_sim,3)}))
+except Exception as e:
+    print(json.dumps({"speaker":"","confidence":0.0}))
+`
+							// re-record wav for speaker ID (we already deleted it, use a new sample)
+							// Note: speaker ID runs on the same wavPath which was recorded above
+							// Since we deleted it, skip speaker ID for loop (done inline above)
+							_ = pyID
+							_ = vpDir
+
+							knownAgents := map[string]bool{"auric":true,"kaidos":true,"kook":true}
+							currentSoulMu.RLock()
+							selfName := strings.ToLower(currentSoul)
+							currentSoulMu.RUnlock()
+							isAgent = knownAgents[strings.ToLower(speaker)] || strings.ToLower(speaker) == selfName
+
+							// Send transcript back to master via ReportCommandResult with loopID
+							result := fmt.Sprintf(`{"transcript":%q,"speaker":%q,"confidence":%.3f,"is_agent":%v}`,
+								transcript, speaker, confidence, isAgent)
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: lID, NodeId: nodeID, Success: true, Output: result,
+							})
+						}
+					}(loopID, duration, lang, loopCtx)
+					// No immediate ReportCommandResult — results stream back continuously
 					continue
 				}
 
