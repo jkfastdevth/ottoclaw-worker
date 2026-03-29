@@ -1624,11 +1624,13 @@ except Exception as e:
 							if ctx.Err() != nil {
 								return
 							}
-							// Speaking lock: wait if TTS is playing
-							if isSpeaking.Load() {
-								time.Sleep(500 * time.Millisecond)
-								continue
+							// Speaking lock: wait until TTS stops + 800ms decay buffer (echo prevention)
+							for isSpeaking.Load() {
+								if ctx.Err() != nil { return }
+								time.Sleep(200 * time.Millisecond)
 							}
+							if ctx.Err() != nil { return }
+							time.Sleep(800 * time.Millisecond) // let audio decay before recording
 
 							wavPath := fmt.Sprintf("/tmp/loop-%s-%d.wav", lID, time.Now().UnixNano())
 							recErr := recordWAV(ctx, wavPath, dur)
@@ -1638,6 +1640,11 @@ except Exception as e:
 									return
 								}
 								time.Sleep(time.Second)
+								continue
+							}
+							// Discard segment if speaking started during recording
+							if isSpeaking.Load() {
+								os.Remove(wavPath)
 								continue
 							}
 
