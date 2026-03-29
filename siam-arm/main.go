@@ -191,6 +191,33 @@ func isTermux() bool {
 	return os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("PREFIX"), "com.termux")
 }
 
+// recordWAV records audio to wavPath for durSec seconds.
+// Tries: arecord → ffmpeg(alsa) → ffmpeg(pulse) → sox → parec → pw-record
+func recordWAV(ctx context.Context, wavPath, durSec string) error {
+	if isTermux() {
+		return exec.CommandContext(ctx, "termux-microphone-record",
+			"-e", "WAV", "-l", durSec, "-f", wavPath).Run()
+	}
+	try := [][]string{
+		{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath},
+		{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath},
+		{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath},
+		{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec},
+		{"parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath},
+		{"pw-record", "--target", "alsa_input.default", wavPath},
+	}
+	var lastErr error
+	for _, args := range try {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		if err := cmd.Run(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
 // listenLoops tracks active SYSTEM_LISTEN_LOOP goroutines by their loopID.
 var (
 	listenLoops   = map[string]context.CancelFunc{}
@@ -1346,19 +1373,7 @@ func main() {
 						defer os.Remove(wavPath)
 
 						// Record voice sample
-						var recErr error
-						if isTermux() {
-							recErr = exec.CommandContext(workerCtx, "termux-microphone-record",
-								"-e", "WAV", "-l", duration, "-f", wavPath).Run()
-						} else {
-							recErr = exec.CommandContext(workerCtx, "arecord",
-								"-d", duration, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath).Run()
-							if recErr != nil {
-								recErr = exec.CommandContext(workerCtx, "ffmpeg", "-y",
-									"-f", "alsa", "-i", "default",
-									"-t", duration, "-ar", "16000", "-ac", "1", wavPath).Run()
-							}
-						}
+						recErr := recordWAV(workerCtx, wavPath, duration)
 						if recErr != nil {
 							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 								CommandId: cmdID, NodeId: nodeID, Success: false, Output: "record failed: " + recErr.Error(),
@@ -1438,17 +1453,7 @@ print("enrolled:" + sys.argv[3])
 								"-e", "WAV", "-l", duration, "-f", wavPath)
 							recErr = recCmd.Run()
 						} else {
-							// Linux: arecord (ALSA)
-							recCmd := exec.CommandContext(workerCtx, "arecord",
-								"-d", duration, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath)
-							recErr = recCmd.Run()
-							if recErr != nil {
-								// Fallback: ffmpeg ALSA
-								recCmd2 := exec.CommandContext(workerCtx, "ffmpeg", "-y",
-									"-f", "alsa", "-i", "default",
-									"-t", duration, "-ar", "16000", "-ac", "1", wavPath)
-								recErr = recCmd2.Run()
-							}
+							recErr = recordWAV(workerCtx, wavPath, duration)
 						}
 						if recErr != nil {
 							log.Printf("⚠️ [LISTEN] record failed: %v", recErr)
@@ -1604,19 +1609,7 @@ except Exception as e:
 							}
 
 							wavPath := fmt.Sprintf("/tmp/loop-%s-%d.wav", lID, time.Now().UnixNano())
-							var recErr error
-							if isTermux() {
-								recErr = exec.CommandContext(ctx, "termux-microphone-record",
-									"-e", "WAV", "-l", dur, "-f", wavPath).Run()
-							} else {
-								recErr = exec.CommandContext(ctx, "arecord",
-									"-d", dur, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath).Run()
-								if recErr != nil {
-									recErr = exec.CommandContext(ctx, "ffmpeg", "-y",
-										"-f", "alsa", "-i", "default",
-										"-t", dur, "-ar", "16000", "-ac", "1", wavPath).Run()
-								}
-							}
+							recErr := recordWAV(ctx, wavPath, dur)
 							if recErr != nil {
 								os.Remove(wavPath)
 								if ctx.Err() != nil {
