@@ -184,6 +184,11 @@ import (
 	"regexp"
 )
 
+// isTermux returns true when running inside Android Termux environment.
+func isTermux() bool {
+	return os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("PREFIX"), "com.termux")
+}
+
 // guardCommand blocks dangerous shell command patterns before execution.
 func guardCommand(cmd string) error {
 	lower := strings.ToLower(cmd)
@@ -1069,6 +1074,75 @@ func main() {
 							Output:    output,
 						})
 					}(cmd.CommandId, text)
+					continue
+				}
+
+				// SYSTEM_LISTEN: record audio → faster-whisper STT → return transcript
+				if cmd.Type == "SYSTEM_LISTEN" {
+					go func(cmdID, payload string) {
+						duration := "5"
+						lang := "th"
+						if payload != "" {
+							parts := strings.SplitN(payload, ":", 2)
+							if len(parts) >= 1 && parts[0] != "" {
+								duration = parts[0]
+							}
+							if len(parts) >= 2 && parts[1] != "" {
+								lang = parts[1]
+							}
+						}
+						wavPath := "/tmp/listen-" + cmdID + ".wav"
+						defer os.Remove(wavPath)
+
+						// Record audio
+						var recErr error
+						if isTermux() {
+							// Android/Termux: termux-microphone-record
+							recCmd := exec.CommandContext(workerCtx, "termux-microphone-record",
+								"-e", "WAV", "-l", duration, "-f", wavPath)
+							recErr = recCmd.Run()
+						} else {
+							// Linux: arecord (ALSA)
+							recCmd := exec.CommandContext(workerCtx, "arecord",
+								"-d", duration, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath)
+							recErr = recCmd.Run()
+							if recErr != nil {
+								// Fallback: ffmpeg ALSA
+								recCmd2 := exec.CommandContext(workerCtx, "ffmpeg", "-y",
+									"-f", "alsa", "-i", "default",
+									"-t", duration, "-ar", "16000", "-ac", "1", wavPath)
+								recErr = recCmd2.Run()
+							}
+						}
+						if recErr != nil {
+							log.Printf("⚠️ [LISTEN] record failed: %v", recErr)
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: cmdID, NodeId: nodeID, Success: false, Output: "record failed: " + recErr.Error(),
+							})
+							return
+						}
+
+						// Transcribe via faster-whisper Python one-liner
+						pyScript := `import sys
+from faster_whisper import WhisperModel
+m = WhisperModel('small', device='cpu', compute_type='int8')
+segs, _ = m.transcribe(sys.argv[1], language=sys.argv[2])
+print(''.join([s.text for s in segs]))
+`
+						out, err := exec.CommandContext(workerCtx, "python3", "-c", pyScript, wavPath, lang).Output()
+						if err != nil {
+							log.Printf("⚠️ [LISTEN] whisper failed: %v", err)
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: cmdID, NodeId: nodeID, Success: false, Output: "whisper failed: " + err.Error(),
+							})
+							return
+						}
+						transcript := strings.TrimSpace(string(out))
+						log.Printf("🎤 [LISTEN] transcript: %s", transcript)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID, NodeId: nodeID, Success: true, Output: transcript,
+						})
+					}(cmd.CommandId, cmd.Payload)
 					continue
 				}
 
