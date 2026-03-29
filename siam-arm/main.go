@@ -192,30 +192,38 @@ func isTermux() bool {
 }
 
 // recordWAV records audio to wavPath for durSec seconds.
-// Tries: arecord → ffmpeg(alsa) → ffmpeg(pulse) → sox → parec → pw-record
+// Tries multiple tools in order; skips tools not found in PATH.
 func recordWAV(ctx context.Context, wavPath, durSec string) error {
 	if isTermux() {
 		return exec.CommandContext(ctx, "termux-microphone-record",
 			"-e", "WAV", "-l", durSec, "-f", wavPath).Run()
 	}
-	try := [][]string{
-		{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath},
-		{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath},
-		{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath},
-		{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec},
-		{"parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath},
-		{"pw-record", "--target", "alsa_input.default", wavPath},
+	type attempt struct{ name string; args []string }
+	tries := []attempt{
+		{"arecord",    []string{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
+		{"ffmpeg(alsa)",[]string{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
+		{"ffmpeg(pulse)",[]string{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
+		{"sox",        []string{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec}},
+		{"parec",      []string{"parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"parecord",   []string{"parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"pw-record",  []string{"pw-record", "--target", "alsa_input.default", wavPath}},
 	}
-	var lastErr error
-	for _, args := range try {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	var tried []string
+	for _, t := range tries {
+		// Skip if binary not found — avoid misleading "exit status 1" errors
+		if _, err := exec.LookPath(t.args[0]); err != nil {
+			continue
+		}
+		tried = append(tried, t.name)
+		cmd := exec.CommandContext(ctx, t.args[0], t.args[1:]...)
 		if err := cmd.Run(); err == nil {
 			return nil
-		} else {
-			lastErr = err
 		}
 	}
-	return lastErr
+	if len(tried) == 0 {
+		return fmt.Errorf("ไม่พบ audio recording tool — ติดตั้งด้วย: sudo apt install alsa-utils  หรือ  sudo apt install ffmpeg")
+	}
+	return fmt.Errorf("บันทึกเสียงไม่สำเร็จ (ลองแล้ว: %s) — เช็ค mic และ audio device", strings.Join(tried, ", "))
 }
 
 // listenLoops tracks active SYSTEM_LISTEN_LOOP goroutines by their loopID.
