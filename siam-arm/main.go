@@ -1380,6 +1380,11 @@ func main() {
 							})
 							return
 						}
+						// Read WAV for playback feedback
+						audioB64 := ""
+						if wavBytes, rErr := os.ReadFile(wavPath); rErr == nil {
+							audioB64 = base64.StdEncoding.EncodeToString(wavBytes)
+						}
 
 						// Save resemblyzer embedding
 						vpDir := voicePrintsDir()
@@ -1411,9 +1416,10 @@ print("enrolled:" + sys.argv[3])
 							log.Printf("☁️ [ENROLL] uploaded voice print for %s to master", name)
 						}
 
+						resultJSON := fmt.Sprintf(`{"status":"enrolled","name":%q,"audio_b64":%q}`, name, audioB64)
 						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmdID, NodeId: nodeID, Success: true,
-							Output: "enrolled voice print for: " + name,
+							Output: resultJSON,
 						})
 					}(cmd.CommandId, cmd.Payload)
 					continue
