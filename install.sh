@@ -840,6 +840,7 @@ elif command -v apt-get &>/dev/null; then
     apt-get install -y -q python3-pip 2>/dev/null
     pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed"
     pip3 install --quiet faster-whisper 2>/dev/null && info "faster-whisper installed" || warn "faster-whisper install failed"
+    pip3 install --quiet resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed"
 else
     warn "pip not found — skipping TTS/STT install (espeak-ng fallback will be used)"
 fi
