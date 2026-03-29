@@ -171,6 +171,7 @@ import (
 	"time"
 
 	"encoding/json"
+	"net/http"
 	"os/exec"
 	"syscall"
 
@@ -1036,6 +1037,81 @@ func main() {
 							Output:    output,
 						})
 					}(cmd.CommandId, text)
+					continue
+				}
+
+				// SYSTEM_TTS_CAPTURE: generate audio via local TTS → upload to master → Telegram voice
+				if cmd.Type == "SYSTEM_TTS_CAPTURE" {
+					decoded, err := base64.StdEncoding.DecodeString(cmd.Payload)
+					if err != nil || !strings.Contains(string(decoded), "\x00") {
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmd.CommandId, NodeId: nodeID, Success: false, Output: "invalid payload",
+						})
+						continue
+					}
+					parts := strings.SplitN(string(decoded), "\x00", 2)
+					chatID, ttsText := parts[0], parts[1]
+					go func(cmdID, chatID, text string) {
+						// Generate audio with espeak-ng or termux-tts (save to file)
+						wavPath := "/tmp/tts-capture-" + cmdID + ".wav"
+						oggPath := "/tmp/tts-capture-" + cmdID + ".ogg"
+						defer os.Remove(wavPath)
+						defer os.Remove(oggPath)
+
+						var genCmd *exec.Cmd
+						if _, statErr := os.Stat("/data/data/com.termux"); statErr == nil {
+							// Termux: use termux-tts-speak (doesn't save to file easily)
+							// Fallback: use espeak-ng if available
+							genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", "-w", wavPath, text)
+						} else {
+							genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", "-w", wavPath, text)
+						}
+						if err := genCmd.Run(); err != nil {
+							// Try without language flag
+							genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-w", wavPath, text)
+							if err2 := genCmd.Run(); err2 != nil {
+								log.Printf("⚠️ [TTS_CAPTURE] espeak failed: %v / %v", err, err2)
+								grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+									CommandId: cmdID, NodeId: nodeID, Success: false, Output: err2.Error(),
+								})
+								return
+							}
+						}
+						// Convert WAV → OGG Opus
+						conv := exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", wavPath, "-c:a", "libopus", "-b:a", "64k", oggPath)
+						if err := conv.Run(); err != nil {
+							log.Printf("⚠️ [TTS_CAPTURE] ffmpeg failed: %v", err)
+							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+								CommandId: cmdID, NodeId: nodeID, Success: false, Output: err.Error(),
+							})
+							return
+						}
+						// Read OGG → base64 → POST to master
+						oggData, err := os.ReadFile(oggPath)
+						if err != nil {
+							log.Printf("⚠️ [TTS_CAPTURE] read ogg failed: %v", err)
+							return
+						}
+						uploadPayload := `{"chat_id":"` + chatID + `","audio_b64":"` + base64.StdEncoding.EncodeToString(oggData) + `"}`
+						masterURL := os.Getenv("MASTER_API_URL")
+						if masterURL == "" {
+							masterURL = "http://master:8080/api/agent/v1"
+						}
+						apiKey := os.Getenv("MASTER_API_KEY")
+						req, _ := http.NewRequestWithContext(workerCtx, "POST", masterURL+"/bridge/voice/upload", strings.NewReader(uploadPayload))
+						req.Header.Set("Content-Type", "application/json")
+						req.Header.Set("X-API-Key", apiKey)
+						resp, err := http.DefaultClient.Do(req)
+						if err != nil {
+							log.Printf("⚠️ [TTS_CAPTURE] upload failed: %v", err)
+						} else {
+							resp.Body.Close()
+							log.Printf("🔊 [TTS_CAPTURE] audio uploaded for chat %s (status %d)", chatID, resp.StatusCode)
+						}
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID, NodeId: nodeID, Success: true, Output: "tts sent",
+						})
+					}(cmd.CommandId, chatID, ttsText)
 					continue
 				}
 
