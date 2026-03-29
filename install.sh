@@ -820,6 +820,27 @@ install_setup_helper
 banner "Creating systemd Services"
 install_services "${SERVICE_USER}"
 
+# 5b. Install TTS dependencies (edge-tts for natural Thai voice)
+banner "Installing TTS Dependencies"
+if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
+    PIP_CMD="$(command -v pip3 2>/dev/null || command -v pip)"
+    if "$PIP_CMD" install --quiet --break-system-packages edge-tts 2>/dev/null ||        "$PIP_CMD" install --quiet edge-tts 2>/dev/null; then
+        info "edge-tts installed (th-TH-PremwadeeNeural voice)"
+    else
+        warn "edge-tts install failed — will fallback to espeak-ng"
+    fi
+elif command -v apt-get &>/dev/null; then
+    apt-get install -y -q python3-pip 2>/dev/null && pip3 install --quiet edge-tts 2>/dev/null &&         info "edge-tts installed" || warn "edge-tts install failed"
+else
+    warn "pip not found — skipping edge-tts install (espeak-ng fallback will be used)"
+fi
+# Install ffmpeg if missing (required for audio conversion)
+if ! command -v ffmpeg &>/dev/null; then
+    if command -v apt-get &>/dev/null; then
+        apt-get install -y -q ffmpeg 2>/dev/null && info "ffmpeg installed" || warn "ffmpeg install failed"
+    fi
+fi
+
 # 6. Copy installer to known location for wrapper
 mkdir -p /opt/siam-synapse
 cp "${BASH_SOURCE[0]}" /opt/siam-synapse/install.sh

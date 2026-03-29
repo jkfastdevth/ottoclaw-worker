@@ -127,14 +127,20 @@ install_deps() {
     banner "Installing Termux Dependencies"
     pkg update -y -q
     local pkgs=(termux-api)
-    command -v go &>/dev/null    || pkgs+=(golang)
-    command -v git &>/dev/null   || pkgs+=(git)
-    command -v curl &>/dev/null  || pkgs+=(curl)
+    command -v go &>/dev/null      || pkgs+=(golang)
+    command -v git &>/dev/null     || pkgs+=(git)
+    command -v curl &>/dev/null    || pkgs+=(curl)
+    command -v ffmpeg &>/dev/null  || pkgs+=(ffmpeg)
+    command -v python3 &>/dev/null || pkgs+=(python)
     if [[ ${#pkgs[@]} -gt 0 ]]; then
         info "Installing: ${pkgs[*]}"
         pkg install -y "${pkgs[@]}"
     else
         info "All dependencies already installed"
+    fi
+    # Install edge-tts for natural Thai TTS
+    if command -v pip3 &>/dev/null; then
+        pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
     fi
 }
 

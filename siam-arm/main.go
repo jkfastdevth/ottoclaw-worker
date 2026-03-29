@@ -1016,19 +1016,51 @@ func main() {
 					}
 					log.Printf("\U0001f50a [Speak] TTS: %s", text)
 					go func(cmdID, txt string) {
-						var speakCmd *exec.Cmd
+						var success bool
+						var output string
+						isTermux := false
 						if _, statErr := os.Stat("/data/data/com.termux"); statErr == nil {
-							// Android / Termux
-							speakCmd = exec.CommandContext(workerCtx, "termux-tts-speak", txt)
-						} else {
-							// Linux (espeak-ng)
-							speakCmd = exec.CommandContext(workerCtx, "espeak-ng", txt)
+							isTermux = true
 						}
-						spkOut, err := speakCmd.CombinedOutput()
-						success := err == nil
-						output := string(spkOut)
-						if err != nil {
-							output += "\nError: " + err.Error()
+						if isTermux {
+							// Android/Termux: native TTS
+							out, err := exec.CommandContext(workerCtx, "termux-tts-speak", txt).CombinedOutput()
+							success = err == nil
+							output = string(out)
+						} else {
+							// Linux: edge-tts → ffplay (natural Thai voice)
+							tmpMp3 := "/tmp/speak-" + cmdID + ".mp3"
+							defer os.Remove(tmpMp3)
+							edgeErr := exec.CommandContext(workerCtx, "edge-tts",
+								"--voice", "th-TH-PremwadeeNeural",
+								"--text", txt,
+								"--write-media", tmpMp3,
+							).Run()
+							if edgeErr == nil {
+								// Try players in order: ffplay, mpv, aplay (via ffmpeg convert)
+								if exec.CommandContext(workerCtx, "ffplay", "-nodisp", "-autoexit", tmpMp3).Run() == nil {
+									success = true
+								} else if exec.CommandContext(workerCtx, "mpv", "--no-terminal", tmpMp3).Run() == nil {
+									success = true
+								} else if exec.CommandContext(workerCtx, "paplay", tmpMp3).Run() == nil {
+									success = true
+								}
+							}
+							// Fallback: espeak-ng
+							if !success {
+								out, err := exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", txt).CombinedOutput()
+								if err != nil {
+									out2, err2 := exec.CommandContext(workerCtx, "espeak-ng", txt).CombinedOutput()
+									success = err2 == nil
+									output = string(out2)
+									if err2 != nil {
+										output = string(out) + " / " + string(out2)
+									}
+								} else {
+									success = true
+									output = string(out)
+								}
+							}
 						}
 						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmdID,
@@ -1052,39 +1084,47 @@ func main() {
 					parts := strings.SplitN(string(decoded), "\x00", 2)
 					chatID, ttsText := parts[0], parts[1]
 					go func(cmdID, chatID, text string) {
-						// Generate audio with espeak-ng or termux-tts (save to file)
-						wavPath := "/tmp/tts-capture-" + cmdID + ".wav"
 						oggPath := "/tmp/tts-capture-" + cmdID + ".ogg"
-						defer os.Remove(wavPath)
 						defer os.Remove(oggPath)
 
-						var genCmd *exec.Cmd
-						if _, statErr := os.Stat("/data/data/com.termux"); statErr == nil {
-							// Termux: use termux-tts-speak (doesn't save to file easily)
-							// Fallback: use espeak-ng if available
-							genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", "-w", wavPath, text)
-						} else {
-							genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", "-w", wavPath, text)
+						// Try edge-tts first (natural Thai voice)
+						mp3Path := "/tmp/tts-capture-" + cmdID + ".mp3"
+						defer os.Remove(mp3Path)
+						edgeOK := false
+						if exec.CommandContext(workerCtx, "edge-tts",
+							"--voice", "th-TH-PremwadeeNeural",
+							"--text", text,
+							"--write-media", mp3Path,
+						).Run() == nil {
+							if exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", mp3Path,
+								"-c:a", "libopus", "-b:a", "64k", oggPath).Run() == nil {
+								edgeOK = true
+							}
 						}
-						if err := genCmd.Run(); err != nil {
-							// Try without language flag
-							genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-w", wavPath, text)
-							if err2 := genCmd.Run(); err2 != nil {
-								log.Printf("⚠️ [TTS_CAPTURE] espeak failed: %v / %v", err, err2)
+
+						if !edgeOK {
+							// Fallback: espeak-ng → WAV → OGG
+							wavPath := "/tmp/tts-capture-" + cmdID + ".wav"
+							defer os.Remove(wavPath)
+							genCmd := exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", "-w", wavPath, text)
+							if err := genCmd.Run(); err != nil {
+								genCmd = exec.CommandContext(workerCtx, "espeak-ng", "-w", wavPath, text)
+								if err2 := genCmd.Run(); err2 != nil {
+									log.Printf("⚠️ [TTS_CAPTURE] TTS failed: %v / %v", err, err2)
+									grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+										CommandId: cmdID, NodeId: nodeID, Success: false, Output: err2.Error(),
+									})
+									return
+								}
+							}
+							conv := exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", wavPath, "-c:a", "libopus", "-b:a", "64k", oggPath)
+							if err := conv.Run(); err != nil {
+								log.Printf("⚠️ [TTS_CAPTURE] ffmpeg failed: %v", err)
 								grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
-									CommandId: cmdID, NodeId: nodeID, Success: false, Output: err2.Error(),
+									CommandId: cmdID, NodeId: nodeID, Success: false, Output: err.Error(),
 								})
 								return
 							}
-						}
-						// Convert WAV → OGG Opus
-						conv := exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", wavPath, "-c:a", "libopus", "-b:a", "64k", oggPath)
-						if err := conv.Run(); err != nil {
-							log.Printf("⚠️ [TTS_CAPTURE] ffmpeg failed: %v", err)
-							grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
-								CommandId: cmdID, NodeId: nodeID, Success: false, Output: err.Error(),
-							})
-							return
 						}
 						// Read OGG → base64 → POST to master
 						oggData, err := os.ReadFile(oggPath)
