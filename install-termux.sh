@@ -148,8 +148,7 @@ install_deps() {
            pip3 install --quiet faster-whisper 2>/dev/null; then
             info "faster-whisper installed (STT)"
         else
-            warn "faster-whisper install failed — installing openai-whisper as fallback (~1.5GB)"
-            pip3 install --quiet openai-whisper 2>/dev/null && info "openai-whisper installed (STT fallback)" || warn "openai-whisper install failed (STT unavailable)"
+            warn "faster-whisper install failed — STT จะทำงานผ่าน master แทน (ไม่ต้องติดตั้ง local STT)"
         fi
         pip3 install --quiet resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
     fi
