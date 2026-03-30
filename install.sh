@@ -534,6 +534,7 @@ SOULEOF
     ;;
 
   update)
+    export PATH="/usr/local/go/bin:$PATH"
     # ── Pull latest code and rebuild binaries ─────────────────
     if [[ "$EUID" -ne 0 ]]; then
         exec sudo bash "$0" update
@@ -585,12 +586,16 @@ SOULEOF
     mv -f /tmp/ottoclaw-brain-new /usr/local/bin/ottoclaw-brain
     mv -f /tmp/siam-worker-new /usr/local/bin/siam-worker
     
-    # We detach the restart command so it survives the cgroup kill when siam-worker stops!
-    echo "🚀 Restarting services in background..."
-    nohup bash -c 'systemctl restart siam-worker && sleep 2 && systemctl restart ottoclaw-worker' >/dev/null 2>&1 &
+    echo "🚀 Force-Restarting siam-worker to apply OTA..."
     echo ""
-    echo "✅ Update complete! Services are running with the latest code."
-    echo "   journalctl -u ottoclaw-worker -f   → view logs"
+    echo "✅ Update complete! Services are restarting organically."
+    
+    # Send SIGKILL to siam-worker to prevent it from reaching os.Exit(0)
+    # This guarantees systemd's Restart=on-failure naturally handles the restart
+    # safely within the cgroup constraints.
+    pkill -9 -f "siam-worker" || true
+    systemctl restart ottoclaw-worker &
+    exit 0
     ;;
 
   help|--help|-h)
