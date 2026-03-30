@@ -101,34 +101,177 @@ pull_vision_model() {
 # ── STEP 2: Full Config Wizard ────────────────────────────────────────────────
 run_config_wizard() {
     banner "Configuration Setup"
-    local HIDE_SECRETS="true"
-    AGENT_NAME=$(prompt_val "AGENT_NAME" "Kaidos")
-    MASTER_HOST=$(prompt_val "MASTER_HOST (IP)" "192.168.1.100")
-    MASTER_API_KEY=$(prompt_val "MASTER_API_KEY" "73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90" "true")
-    NODE_SECRET=$(prompt_val "NODE_SECRET" "ea710cf8c0f08298e9aa938dff0e0133" "true")
+    echo -e "Press ${CYAN}Enter${RESET} to accept the default value in brackets.\n"
 
-    MASTER_URL="http://${MASTER_HOST}:8080"
+    MASTER_HOST="${MASTER_HOST:-192.168.1.100}"
+    MASTER_API_KEY="${MASTER_API_KEY:-}"
+    NODE_SECRET="${NODE_SECRET:-}"
+    ORCHESTRATOR_TELEGRAM_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN:-}"
+    TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM:-}"
+    GOOGLE_EMAIL="${GOOGLE_EMAIL:-}"
+    GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD:-}"
+
+    echo -e "  🛡️  Input Security:"
+    HIDE_SECRETS=$(prompt_val "Hide secret keys during input? [Y/n]" "y")
+    if [[ "${HIDE_SECRETS,,}" == "n" || "${HIDE_SECRETS,,}" == "no" ]]; then
+        HIDE_SECRETS="false"
+        info "Keys will be visible as you type/paste them for verification."
+    else
+        HIDE_SECRETS="true"
+    fi
+    echo ""
+
+    # ── [1/3] System Config ───────────────────────────────────────────────────
+    echo -e "${BOLD}[1/3] System Configuration${RESET}"
+    AGENT_NAME=$(prompt_val "AGENT_NAME" "${AGENT_NAME:-Kaidos}")
+    ORCHESTRATOR_NICKNAMES=$(prompt_val "ORCHESTRATOR_NICKNAMES" "${ORCHESTRATOR_NICKNAMES:-${AGENT_NAME}}")
+    echo ""
+    echo -e "  เลือกประเภทการเชื่อมต่อ:"
+    echo -e "    ${CYAN}1${RESET}) Local LAN     — เครื่องอยู่วง network เดียวกัน (e.g. 192.168.x.x)"
+    echo -e "    ${CYAN}2${RESET}) Tailscale VPN — เชื่อมผ่าน Tailscale mesh (e.g. 100.x.x.x)"
+    echo -e "    ${CYAN}3${RESET}) VPS / Public  — Master อยู่ cloud หรือ domain สาธารณะ"
+    echo ""
+    NET_TYPE=$(prompt_val "Network type [1/2/3]" "${NET_TYPE:-1}")
+    NET_TYPE=$(echo "$NET_TYPE" | tr -dc '1-3')
+    NET_TYPE="${NET_TYPE:-1}"
+
+    PROTOCOL="http"
+    case "$NET_TYPE" in
+      2)
+        NET_LABEL="Tailscale VPN"
+        TS_IP=$(get_tailscale_ip)
+        if [[ -n "$TS_IP" ]]; then
+            info "Detected Tailscale IP: ${TS_IP}"
+            DEFAULT_HOST="${TS_IP}"
+        else
+            DEFAULT_HOST="${MASTER_HOST:-100.x.x.x}"
+        fi
+        HOST_HINT="Tailscale IP (100.x.x.x) หรือ machine name (e.g. master.tail1234.ts.net)"
+        ;;
+      3)
+        NET_LABEL="VPS / Public IP"
+        DEFAULT_HOST="${MASTER_HOST:-1.2.3.4}"
+        HOST_HINT="Public IP หรือ domain (e.g. master.example.com)"
+        echo ""
+        echo -e "  ใช้ HTTPS? (กรณี Master มี SSL certificate)"
+        USE_HTTPS=$(prompt_val "Use HTTPS? [y/N]" "n")
+        [[ "${USE_HTTPS,,}" == "y" ]] && PROTOCOL="https"
+        ;;
+      *)
+        NET_LABEL="Local LAN"
+        LAN_IP=$(get_local_ip)
+        if [[ -n "$LAN_IP" ]]; then
+            info "Detected Local IP: ${LAN_IP}"
+            DEFAULT_HOST="${LAN_IP}"
+        else
+            DEFAULT_HOST="${MASTER_HOST:-192.168.1.100}"
+        fi
+        HOST_HINT="IP ของเครื่อง Master ในวง LAN (e.g. 192.168.1.100)"
+        ;;
+    esac
+
+    echo ""
+    info "Network: ${NET_LABEL} (${PROTOCOL})"
+    echo -e "\n  ${YELLOW}Hint:${RESET} ${HOST_HINT}"
+    echo -e "  Ports → HTTP API :8080   gRPC :50051\n"
+
+    MASTER_HOST=$(prompt_val "MASTER_HOST" "${DEFAULT_HOST}")
+    MASTER_API_KEY=$(prompt_val "MASTER_API_KEY" "${MASTER_API_KEY:-73e17cd67e354ad1e36259c1cea0fd974613f460427d7683e48926a34d32ec90}" "true")
+    NODE_SECRET=$(prompt_val "NODE_SECRET" "${NODE_SECRET:-ea710cf8c0f08298e9aa938dff0e0133}" "true")
+
+    MASTER_URL="${PROTOCOL}://${MASTER_HOST}:8080"
+    MASTER_GRPC_URL="${MASTER_HOST}:50051"
+    MASTER_API_URL="${MASTER_URL}"
+    SIAM_MASTER_URL="${MASTER_URL}"
+    SIAM_API_KEY="${MASTER_API_KEY}"
+    OTTOCLAW_API_BASE="${MASTER_URL}/api/agent/v1/llm/proxy"
+    OTTOCLAW_API_KEY="${MASTER_API_KEY}"
+    OTTOCLAW_MODEL_ID="default"
+    OTTOCLAW_MODEL_NAME="default"
+
+    echo ""
+    info "Master HTTP → ${MASTER_URL}"
+    info "Master gRPC → ${MASTER_GRPC_URL}"
+    info "LLM Proxy   → ${OTTOCLAW_API_BASE}"
+    echo ""
+
+    # ── [2/3] Telegram (Optional) ─────────────────────────────────────────────
+    echo -e "${BOLD}[2/3] Telegram Channel (Optional — press Enter to skip)${RESET}"
+    ORCHESTRATOR_TELEGRAM_TOKEN=$(prompt_val "Telegram Bot Token" "${ORCHESTRATOR_TELEGRAM_TOKEN:-}" "true")
+    TELEGRAM_ALLOW_FROM=""
+    TELEGRAM_BRIDGE_CHAT_ID=""
+    TELEGRAM_ORCHESTRATION_ENABLED="false"
+    if [[ -n "$ORCHESTRATOR_TELEGRAM_TOKEN" ]]; then
+        TELEGRAM_ALLOW_FROM=$(prompt_val "Allowed User IDs (comma-separated)" "${TELEGRAM_ALLOW_FROM:-}")
+        echo ""
+        echo -e "  ${YELLOW}Telegram Bridge Orchestration${RESET}"
+        echo -e "  อนุญาตให้ Agent คุยกันเองผ่าน Telegram Group หรือไม่?"
+        ENABLE_ORCH=$(prompt_val "Enable Agent-to-Agent via Telegram? [y/N]" "n")
+        if [[ "${ENABLE_ORCH,,}" == "y" ]]; then
+            TELEGRAM_ORCHESTRATION_ENABLED="true"
+            echo -e "  ${CYAN}Hint:${RESET} นำ Bot ไปเข้ากลุ่ม Private แล้วนำ Group ID (e.g. -100123456) มาใส่"
+            TELEGRAM_BRIDGE_CHAT_ID=$(prompt_val "Telegram Bridge Group ID" "${TELEGRAM_BRIDGE_CHAT_ID:-}")
+            echo -e "  ${CYAN}Nicknames:${RESET} ชื่อที่ใช้เรียก Agent ใน Telegram (คั่นด้วยคอมมา)"
+            ORCHESTRATOR_NICKNAMES=$(prompt_val "Orchestrator Nicknames" "${ORCHESTRATOR_NICKNAMES:-}")
+        fi
+    fi
+    echo ""
+
+    # ── [3/3] Google Skill Access (Optional) ─────────────────────────────────
+    echo -e "${BOLD}[3/3] Google Skill Access (Optional — leave blank for General Worker)${RESET}"
+    GOOGLE_EMAIL=$(prompt_val "GOOGLE_EMAIL" "${GOOGLE_EMAIL:-}")
+    GOOGLE_APP_PASSWORD=$(prompt_val "GOOGLE_APP_PASSWORD" "${GOOGLE_APP_PASSWORD:-}" "true")
+    echo ""
+
     NODE_ID="$(hostname)-proot"
-    
+    OTTOCLAW_MODE="worker"
+    OTTOCLAW_HOME="/var/lib/ottoclaw"
+    OTTOCLAW_WORKSPACE="${OTTOCLAW_HOME}/workspace"
+
     mkdir -p /etc/ottoclaw
     cat > /etc/ottoclaw/env << EOF
+# ═══════════════════════════════════════════════════════════════
+# OttoClaw Worker — Environment Configuration (PRoot)
+# Generated on $(date)
+# ═══════════════════════════════════════════════════════════════
+
+# ── Agent Identity ─────────────────────────────────────────────
 NODE_ID="${NODE_ID}"
 AGENT_NAME="${AGENT_NAME}"
-ORCHESTRATOR_NICKNAMES="${AGENT_NAME}"
-OTTOCLAW_MODE="worker"
+ORCHESTRATOR_NICKNAMES="${ORCHESTRATOR_NICKNAMES}"
+OTTOCLAW_MODE="${OTTOCLAW_MODE}"
+
+# ── Master Connection ─────────────────────────────────────────
 MASTER_URL="${MASTER_URL}"
-MASTER_GRPC_URL="${MASTER_HOST}:50051"
+MASTER_GRPC_URL="${MASTER_GRPC_URL}"
+MASTER_API_URL="${MASTER_API_URL}"
 MASTER_API_KEY="${MASTER_API_KEY}"
-SIAM_API_KEY="${MASTER_API_KEY}"
+SIAM_MASTER_URL="${SIAM_MASTER_URL}"
+SIAM_API_KEY="${SIAM_API_KEY}"
 NODE_SECRET="${NODE_SECRET}"
-OTTOCLAW_API_BASE="${MASTER_URL}/api/agent/v1/llm/proxy"
-OTTOCLAW_API_KEY="${MASTER_API_KEY}"
-OTTOCLAW_MODEL_NAME="default"
-OTTOCLAW_MODEL_ID="default"
-OTTOCLAW_HOME="/var/lib/ottoclaw"
-OTTOCLAW_WORKSPACE="/var/lib/ottoclaw/workspace/v2"
-OTTOCLAW_CONFIG="/var/lib/ottoclaw/config.json"
-OTTOCLAW_BIN=/usr/local/bin/ottoclaw-brain
+
+# ── LLM (via Master Proxy — auto-derived) ────────────────────
+OTTOCLAW_API_BASE="${OTTOCLAW_API_BASE}"
+OTTOCLAW_API_KEY="${OTTOCLAW_API_KEY}"
+OTTOCLAW_MODEL_ID="${OTTOCLAW_MODEL_ID}"
+OTTOCLAW_MODEL_NAME="${OTTOCLAW_MODEL_NAME}"
+
+# ── Telegram Channel ──────────────────────────────────────────
+ORCHESTRATOR_TELEGRAM_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN}"
+TELEGRAM_BOT_TOKEN="${ORCHESTRATOR_TELEGRAM_TOKEN}"
+TELEGRAM_ALLOW_FROM="${TELEGRAM_ALLOW_FROM}"
+TELEGRAM_BRIDGE_CHAT_ID="${TELEGRAM_BRIDGE_CHAT_ID}"
+TELEGRAM_ORCHESTRATION_ENABLED="${TELEGRAM_ORCHESTRATION_ENABLED}"
+
+# ── Google Skill Access (Optional) ──────────────────────────
+GOOGLE_EMAIL="${GOOGLE_EMAIL}"
+GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD}"
+
+# ── Paths ──────────────────────────────────────────────────────
+OTTOCLAW_HOME="${OTTOCLAW_HOME}"
+OTTOCLAW_WORKSPACE="${OTTOCLAW_WORKSPACE}/v2"
+OTTOCLAW_CONFIG="${OTTOCLAW_HOME}/config.json"
+OTTOCLAW_BIN="/usr/local/bin/ottoclaw-brain"
 EOF
     chmod 600 /etc/ottoclaw/env
     info "Environment saved → /etc/ottoclaw/env"
