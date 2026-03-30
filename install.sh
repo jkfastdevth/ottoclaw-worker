@@ -13,7 +13,18 @@
 #   ottoclaw uninstall            → Remove the system
 #   ottoclaw gateway --debug      → Start manually (same as service)
 # ═══════════════════════════════════════════════════════════════════════════════
-set -euo pipefail
+set -uo pipefail
+
+# ── Resource Check ────────────────────────────────────────────────────────────
+check_resources() {
+    # Check free memory in MB
+    local free_mem=$(free -m | grep "Mem:" | awk '{print $7}')
+    if [[ $free_mem -lt 500 ]]; then
+        warn "แรมเหลือน้อย ($free_mem MB) การคอมไพล์ Go อาจทำให้เครื่องค้างได้"
+        warn "แนะนำให้มี Swap หรือปิด Service อื่นก่อนรันสคริปต์นี้ครับ"
+    fi
+}
+check_resources
 
 # ── Colors & Helpers ──────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -662,7 +673,18 @@ EOF
 install_setup_helper() {
     cat > /usr/local/bin/ottoclaw-setup << 'SETUPEOF'
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
+
+# ── Resource Check ────────────────────────────────────────────────────────────
+check_resources() {
+    # Check free memory in MB
+    local free_mem=$(free -m | grep "Mem:" | awk '{print $7}')
+    if [[ $free_mem -lt 500 ]]; then
+        warn "แรมเหลือน้อย ($free_mem MB) การคอมไพล์ Go อาจทำให้เครื่องค้างได้"
+        warn "แนะนำให้มี Swap หรือปิด Service อื่นก่อนรันสคริปต์นี้ครับ"
+    fi
+}
+check_resources
 
 HOME_DIR="${OTTOCLAW_HOME:-/var/lib/ottoclaw}"
 CONFIG="${OTTOCLAW_CONFIG:-${HOME_DIR}/config.json}"
@@ -833,26 +855,41 @@ install_services "${SERVICE_USER}"
 banner "Installing TTS/STT Dependencies"
 if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
     PIP_CMD="$(command -v pip3 2>/dev/null || command -v pip)"
-    if "$PIP_CMD" install --quiet --break-system-packages edge-tts 2>/dev/null || \
-       "$PIP_CMD" install --quiet edge-tts 2>/dev/null; then
-        info "edge-tts installed (th-TH-PremwadeeNeural voice)"
-    else
-        warn "edge-tts install failed — will fallback to espeak-ng"
+    local pip_flags="--quiet --break-system-packages"
+    
+    pip_try() {
+        local pkg_name="$1"; shift
+        info "กำลังพยายามติดตั้ง ${pkg_name}..."
+        if timeout 90 "$PIP_CMD" install $pip_flags "$@" 2>/dev/null; then
+            info "${pkg_name} installed"
+        else
+            warn "${pkg_name} install skipped (timeout/failed) — ฟีเจอร์นี้จะทำงานผ่าน master แทน"
+        fi
+        return 0  # never fail — always continue
+    }
+
+    # edge-tts: lightweight, installs fast
+    pip_try "edge-tts" edge-tts || true
+
+    # av (PyAV): try pre-built pkg first — never compile from source on low-spec Linux
+    local av_ok=false
+    if apt-get install -y -q python3-av 2>/dev/null; then
+        info "python3-av installed via apt (pre-built)"
+        av_ok=true
     fi
-    if "$PIP_CMD" install --quiet --break-system-packages faster-whisper 2>/dev/null || \
-       "$PIP_CMD" install --quiet faster-whisper 2>/dev/null; then
-        info "faster-whisper installed (STT primary)"
+    
+    # faster-whisper: only if av is available AND only via pre-built wheel
+    if $av_ok; then
+        pip_try "faster-whisper" faster-whisper --only-binary=:all: || true
     else
-        warn "faster-whisper install failed — trying openai-whisper as fallback"
+        warn "faster-whisper skipped — python3-av unavailable (STT จะทำงานผ่าน master)"
     fi
-    info "STT fallback (openai-whisper) can be installed manually: pip3 install openai-whisper"
-    # Phase 5.2: Vosk for wake word detection
-    if "$PIP_CMD" install --quiet --break-system-packages vosk 2>/dev/null || \
-       "$PIP_CMD" install --quiet vosk 2>/dev/null; then
-        info "vosk installed (wake word detection)"
-    else
-        warn "vosk install failed — wake word detection will be unavailable"
-    fi
+
+    # resemblyzer: Speaker ID — skip if it tries to compile
+    pip_try "resemblyzer" resemblyzer --only-binary=:all: || true
+
+    # Phase 5.2: Vosk — lightweight, pre-built wheel available
+    pip_try "vosk" vosk || true
 elif command -v apt-get &>/dev/null; then
     apt-get install -y -q python3-pip 2>/dev/null
     pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed"
