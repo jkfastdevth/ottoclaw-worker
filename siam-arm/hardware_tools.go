@@ -172,7 +172,7 @@ func TakePhoto(ctx context.Context, outputPath string) (string, error) {
 		outputPath = fmt.Sprintf("/tmp/photo-%d.jpg", time.Now().UnixNano())
 	}
 
-	if isTermux() {
+	if _, lookErr := exec.LookPath("termux-camera-photo"); lookErr == nil || isTermux() {
 		// termux-camera-photo -c 0 <path>  (camera 0 = back, 1 = front)
 		camera := os.Getenv("CAMERA_ID")
 		if camera == "" {
