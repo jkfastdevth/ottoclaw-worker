@@ -187,9 +187,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// isTermux returns true when running inside Android Termux environment.
+// isTermux returns true when running inside Android Termux environment (natively or via PRoot).
 func isTermux() bool {
-	return os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("PREFIX"), "com.termux")
+	if os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("PREFIX"), "com.termux") {
+		return true
+	}
+	_, err := os.Stat("/data/data/com.termux")
+	return err == nil
 }
 
 // recordWAV records audio to wavPath for durSec seconds.
