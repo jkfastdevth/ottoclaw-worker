@@ -38,6 +38,7 @@ type NodeStatus struct {
 	OrgId         string                 `protobuf:"bytes,12,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
 	BatteryLevel  float32                `protobuf:"fixed32,13,opt,name=battery_level,json=batteryLevel,proto3" json:"battery_level,omitempty"`
 	Temperature   float32                `protobuf:"fixed32,14,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	ConfigPatch   map[string]string      `protobuf:"bytes,15,rep,name=config_patch,json=configPatch,proto3" json:"config_patch,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -168,6 +169,13 @@ func (x *NodeStatus) GetTemperature() float32 {
 		return x.Temperature
 	}
 	return 0
+}
+
+func (x *NodeStatus) GetConfigPatch() map[string]string {
+	if x != nil {
+		return x.ConfigPatch
+	}
+	return nil
 }
 
 // ข้อความการตอบรับ

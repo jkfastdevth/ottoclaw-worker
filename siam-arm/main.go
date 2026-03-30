@@ -787,6 +787,9 @@ func main() {
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 
+	// 🧠 Phase 4B: Start Control Brain (local Ollama) in background
+	InitControlBrain(workerCtx)
+
 	if activeIdentity != "" && os.Getenv("OTTOCLAW_MODE") != "orchestrator" {
 		log.Printf("⚡ [Soul Recovery] Auto-igniting the brain for '%s'...", activeIdentity)
 		go func(identityName string) {
@@ -1143,6 +1146,21 @@ func main() {
 						Success:   true,
 						Output:    fmt.Sprintf("File %s synced successfully. Hot reload triggered: %v", filename, isCritical),
 					})
+					continue
+				}
+
+				// SYSTEM_BRAIN_QUERY: query Control Brain (local Ollama) with optional hardware tools
+				if cmd.Type == "SYSTEM_BRAIN_QUERY" {
+					payload := cmd.Payload
+					go func(cmdID, nodeID_, p string) {
+						result := HandleBrainQuery(workerCtx, p)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID,
+							NodeId:    nodeID_,
+							Success:   true,
+							Output:    result,
+						})
+					}(cmd.CommandId, nodeID, payload)
 					continue
 				}
 
@@ -2105,6 +2123,20 @@ except Exception as e:
 				if normalizedSoulID != "" {
 					ctx = metadata.AppendToOutgoingContext(ctx, "x-soul-id", normalizedSoulID)
 				}
+			}
+
+			// 🧠 [4B] Inject Control Brain routing stats into heartbeat
+			routingSnap := GetRoutingStats()
+			routingJSON, _ := json.Marshal(routingSnap)
+			if status.ConfigPatch == nil {
+				status.ConfigPatch = map[string]string{}
+			}
+			status.ConfigPatch["brain_routing_stats"] = string(routingJSON)
+			status.ConfigPatch["control_brain_model"] = controlBrainModel()
+			if ollamaReady.Load() {
+				status.ConfigPatch["control_brain_status"] = "ready"
+			} else {
+				status.ConfigPatch["control_brain_status"] = "starting"
 			}
 
 			res, err := grpcClient.ReportStatus(ctx, status)
