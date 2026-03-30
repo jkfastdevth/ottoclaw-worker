@@ -13,7 +13,17 @@
 #   ottoclaw config                 → ตั้งค่าใหม่
 #   ottoclaw log                    → ดู log แบบ real-time
 # ═══════════════════════════════════════════════════════════════════════════════
-set -euo pipefail
+set -uo pipefail
+
+# ── Resource Check ────────────────────────────────────────────────────────────
+check_resources() {
+    local free_mem=$(free -m | grep "Mem:" | awk '{print $7}')
+    if [[ $free_mem -lt 300 ]]; then
+        warn "แรมเหลือน้อย ($free_mem MB) การคอมไพล์อาจทำให้เครื่องค้าง"
+        warn "แนะนำให้ปิดแอปอื่นที่ไม่ได้ใช้ก่อนรันสคริปต์นี้ครับ"
+    fi
+}
+check_resources
 
 # ── Non-interactive detection ─────────────────────────────────────────────────
 # Auto mode: stdin is not a terminal (piped via curl|bash) OR AUTO_INSTALL=1
@@ -164,26 +174,26 @@ install_deps() {
         # pip_try: install with a 90-second timeout — skip silently if it hangs/fails
         pip_try() {
             local pkg_name="$1"; shift
+            info "กำลังพยายามติดตั้ง ${pkg_name}..."
             if timeout 90 pip3 install $pip_flags "$@" 2>/dev/null; then
                 info "${pkg_name} installed"
-                return 0
             else
                 warn "${pkg_name} install skipped (timeout/failed) — ฟีเจอร์นี้จะทำงานผ่าน master แทน"
-                return 1
             fi
+            return 0  # never fail — always continue
         }
 
         # edge-tts: lightweight, installs fast
-        pip_try "edge-tts" edge-tts
+        pip_try "edge-tts" edge-tts || true
 
         # av (PyAV): try pre-built pkg first — never compile from source on Android
         local av_ok=false
-        if timeout 60 pkg install -y python-av 2>/dev/null; then
+        if pkg install -y python-av -q 2>/dev/null; then
             info "python-av installed via pkg (pre-built)"
             av_ok=true
         fi
+        
         # faster-whisper: only if av is available AND only via pre-built wheel
-        # Never attempt source compile — it hangs for hours on Android
         if $av_ok; then
             pip_try "faster-whisper" faster-whisper --only-binary=:all: || true
         else
@@ -194,23 +204,23 @@ install_deps() {
         pip_try "resemblyzer" resemblyzer --only-binary=:all: || true
 
         # Phase 5.2: Vosk — lightweight, pre-built wheel available
-        pip_try "vosk" vosk
+        pip_try "vosk" vosk || true
     fi
     # Phase 5.1: Piper TTS for Android ARM64
     local piper_dir="${HOME}/.picoclaw/piper"
     local piper_bin="${piper_dir}/piper"
     if [[ ! -f "${piper_bin}" ]]; then
-        mkdir -p "${piper_dir}/models"
+        mkdir -p "${piper_dir}/models" || true
         local piper_url="https://github.com/rhasspy/piper/releases/latest/download/piper_linux_aarch64.tar.gz"
         local piper_tmp="/tmp/piper_linux_aarch64.tar.gz"
         if curl -fsSL "${piper_url}" -o "${piper_tmp}" 2>/dev/null; then
-            tar -xzf "${piper_tmp}" -C "${piper_dir}" 2>/dev/null
-            [[ -f "${piper_dir}/piper/piper" ]] && mv "${piper_dir}/piper/piper" "${piper_bin}" && rm -rf "${piper_dir}/piper"
-            chmod +x "${piper_bin}" 2>/dev/null
-            rm -f "${piper_tmp}"
+            tar -xzf "${piper_tmp}" -C "${piper_dir}" 2>/dev/null || true
+            [[ -f "${piper_dir}/piper/piper" ]] && mv "${piper_dir}/piper/piper" "${piper_bin}" && rm -rf "${piper_dir}/piper" || true
+            chmod +x "${piper_bin}" 2>/dev/null || true
+            rm -f "${piper_tmp}" || true
             [[ -f "${piper_bin}" ]] && info "Piper TTS installed (ARM64)" || warn "Piper TTS extraction failed — will retry at runtime"
         else
-            warn "Piper TTS download failed — will install at runtime"
+            warn "Piper TTS download failed — จะติดตั้งให้อัตโนมัติเมื่อเริ่มใช้งานครั้งแรก"
         fi
     else
         info "Piper TTS already installed: ${piper_bin}"
@@ -250,42 +260,52 @@ build_binaries() {
     fi
 
     if [[ "$use_binary" == "false" ]]; then
+        # Check if Go is installed
+        if ! command -v go &>/dev/null; then
+            err "ไม่พบ Go compiler และดาวน์โหลด Binary ไม่สำเร็จ กรุณาติดตั้ง Go (pkg install golang) แล้วลองใหม่ครับ"
+        fi
+
         # Check if source exists, if not clone it (for one-liner source build)
         if [[ ! -d "${SCRIPT_DIR}/ottoclaw" ]]; then
             warn "ไม่พบ Source code ใน ${SCRIPT_DIR}. กำลังดาวน์โหลดจาก GitHub..."
-            local tmp_src=$(mktemp -d)
-            if command -v git >/dev/null 2>&1; then
-                git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}" >/dev/null 2>&1
+            local tmp_src="${HOME}/ottoclaw-temp"
+            rm -rf "${tmp_src}"
+            if git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}"; then
+                SCRIPT_DIR="${tmp_src}"
             else
-                # Fallback to downloading zip if git is missing
-                curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.zip" -o "${tmp_src}/source.zip"
-                unzip -q "${tmp_src}/source.zip" -d "${tmp_src}"
-                mv "${tmp_src}/ottoclaw-worker-main/"* "${tmp_src}/"
+                err "ดาวน์โหลด Source code ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"
             fi
-            SCRIPT_DIR="${tmp_src}"
         fi
 
         # Build Brain (ottoclaw)
-        echo "  Building ottoclaw-brain..."
-        pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-        # Ensure workspace is available for embedding
-        local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
-        mkdir -p "${ONBOARD_DIR}"
-        rm -rf "${ONBOARD_DIR}/workspace"
-        # Create empty workspace if missing to avoid build failure
-        mkdir -p "${SCRIPT_DIR}/workspace"
-        touch "${SCRIPT_DIR}/workspace/placeholder.txt"
-        cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
-        CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
-        popd >/dev/null
-        info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
+        echo "  Building ottoclaw-brain (อาจใช้เวลา 2-5 นาที)..."
+        if pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null; then
+            # Ensure workspace is available for embedding
+            local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
+            mkdir -p "${ONBOARD_DIR}/workspace" || true
+            # Create empty workspace if missing to avoid build failure
+            mkdir -p "${SCRIPT_DIR}/workspace" || true
+            touch "${SCRIPT_DIR}/workspace/placeholder.txt"
+            cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/" || true
+            
+            if CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw; then
+                info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
+            else
+                err "การ Build ottoclaw-brain ล้มเหลว (อาจเกิดจาก RAM ไม่พอ)"
+            fi
+            popd >/dev/null
+        fi
 
         # Build Arm (siam-worker)
         echo "  Building siam-worker..."
-        pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-        CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
-        popd >/dev/null
-        info "siam-worker → ${BIN_DIR}/siam-worker"
+        if pushd "${SCRIPT_DIR}/siam-arm" >/dev/null; then
+            if CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .; then
+                info "siam-worker → ${BIN_DIR}/siam-worker"
+            else
+                err "การ Build siam-worker ล้มเหลว"
+            fi
+            popd >/dev/null
+        fi
     fi
 }
 
