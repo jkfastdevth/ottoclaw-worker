@@ -167,7 +167,11 @@ func GetSensors(ctx context.Context) (*SensorInfo, error) {
 
 // TakePhoto captures a photo and returns the file path.
 // Uses termux-camera-photo on Android, ffmpeg/v4l2 on Linux.
-func TakePhoto(ctx context.Context, outputPath string) (string, error) {
+func TakePhoto(parentCtx context.Context, outputPath string) (string, error) {
+	// Prevent hardware timeouts from stalling the entire worker stream
+	ctx, cancel := context.WithTimeout(parentCtx, 15*time.Second)
+	defer cancel()
+
 	if outputPath == "" {
 		outputPath = fmt.Sprintf("/tmp/photo-%d.jpg", time.Now().UnixNano())
 	}
@@ -198,7 +202,7 @@ func TakePhoto(ctx context.Context, outputPath string) (string, error) {
 		"-frames:v", "1", "-q:v", "2", outputPath,
 	).Run()
 	if err != nil {
-		return "", fmt.Errorf("ffmpeg capture failed: %w", err)
+		return "", fmt.Errorf("ffmpeg capture failed (or timed out): %w", err)
 	}
 	return outputPath, nil
 }
