@@ -800,6 +800,9 @@ func main() {
 
 	// 🔊 Phase 5.1: Install Piper TTS in background if not present
 	go EnsurePiperInstalled(workerCtx)
+	go EnsureVisionModelInstalled(workerCtx)
+	LoadProactiveTriggers()
+	StartProactiveLoop(workerCtx)
 
 	// 🎤 Phase 5.2: Install Vosk wake word model in background
 	go EnsureVoskInstalled(workerCtx)
@@ -1243,6 +1246,64 @@ func main() {
 					payload := cmd.Payload
 					go func(cmdID, nodeID_, p string) {
 						result := handleOrchestratorStep(workerCtx, p)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID,
+							NodeId:    nodeID_,
+							Success:   true,
+							Output:    result,
+						})
+					}(cmd.CommandId, nodeID, payload)
+					continue
+				}
+
+				// SYSTEM_PROACTIVE_ADD: add or replace a proactive trigger
+				// Payload: JSON ProactiveTrigger
+				if cmd.Type == "SYSTEM_PROACTIVE_ADD" {
+					result := HandleProactiveAdd(cmd.Payload)
+					SaveProactiveTriggers()
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId, NodeId: nodeID, Success: true, Output: result,
+					})
+					continue
+				}
+
+				// SYSTEM_PROACTIVE_REMOVE: remove a trigger by ID
+				if cmd.Type == "SYSTEM_PROACTIVE_REMOVE" {
+					result := HandleProactiveRemove(cmd.Payload)
+					SaveProactiveTriggers()
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId, NodeId: nodeID, Success: true, Output: result,
+					})
+					continue
+				}
+
+				// SYSTEM_PROACTIVE_LIST: list all triggers
+				if cmd.Type == "SYSTEM_PROACTIVE_LIST" {
+					result := HandleProactiveList()
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId, NodeId: nodeID, Success: true, Output: result,
+					})
+					continue
+				}
+
+				// SYSTEM_PROACTIVE_RUN: fire a trigger immediately by ID
+				if cmd.Type == "SYSTEM_PROACTIVE_RUN" {
+					payload := cmd.Payload
+					go func(cmdID, nodeID_, p string) {
+						result := HandleProactiveRun(workerCtx, p)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID, NodeId: nodeID_, Success: true, Output: result,
+						})
+					}(cmd.CommandId, nodeID, payload)
+					continue
+				}
+
+				// SYSTEM_VISION: analyze image with local vision model (LLaVA/moondream)
+				// Payload: JSON {"image_b64":"...","image_path":"...","prompt":"...","capture_now":true}
+				if cmd.Type == "SYSTEM_VISION" {
+					payload := cmd.Payload
+					go func(cmdID, nodeID_, p string) {
+						result := HandleVisionCommand(workerCtx, p)
 						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
 							CommandId: cmdID,
 							NodeId:    nodeID_,

@@ -283,6 +283,15 @@ func GetHardwareTools() []ControlBrainTool {
 				return fmt.Sprintf(`{"path":"%s","success":true}`, path), nil
 			},
 		},
+		{
+			Name:        "analyze_photo",
+			Description: "Capture or analyze a photo using the local vision model (LLaVA/moondream). Args: prompt (optional), image_path (optional, captures fresh photo if omitted)",
+			Handler: func(ctx context.Context, args map[string]string) (string, error) {
+				prompt := args["prompt"]
+				imagePath := args["image_path"]
+				return AnalyzePhoto(ctx, imagePath, prompt)
+			},
+		},
 	}
 
 	// Location only makes sense on Termux
