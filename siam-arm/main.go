@@ -568,7 +568,38 @@ var (
 	currentBrain  *exec.Cmd
 	currentSoul   string
 	currentSoulMu sync.RWMutex
+	// 📣 Startup Telegram notification — sent once per process lifetime
+	onceStartupNotify sync.Once
 )
+
+// notifyTelegramBridge sends a one-shot startup message to the Telegram bridge
+// group when ORCHESTRATOR_TELEGRAM_TOKEN and TELEGRAM_BRIDGE_CHAT_ID are set.
+// Runs in a goroutine; failures are logged but never fatal.
+func notifyTelegramBridge(nodeID, agentName string) {
+	token := os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN")
+	chatID := os.Getenv("TELEGRAM_BRIDGE_CHAT_ID")
+	if token == "" || chatID == "" {
+		return
+	}
+	go func() {
+		msg := "🟢 *" + agentName + "* (`" + nodeID + "`) พร้อมทำงานแล้ว"
+		body, _ := json.Marshal(map[string]interface{}{
+			"chat_id":    chatID,
+			"text":       msg,
+			"parse_mode": "Markdown",
+		})
+		url := "https://api.telegram.org/bot" + token + "/sendMessage"
+		resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+		if err != nil {
+			log.Printf("⚠️  [TelegramBridge] Failed to send startup notify: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			log.Printf("⚠️  [TelegramBridge] Startup notify HTTP %d", resp.StatusCode)
+		}
+	}()
+}
 
 // getSafeEnv returns an allowlisted environment for the brain process.
 // Only explicitly permitted variables are passed to prevent leaking infrastructure
@@ -904,6 +935,7 @@ func main() {
 			}
 			log.Println("📡 Stream opened and listening for commands...")
 			streamAttempt = 0 // reset backoff on successful open
+			onceStartupNotify.Do(func() { notifyTelegramBridge(nodeID, currentSoul) })
 
 			// สร้าง Context ย่อยสำหรับ lifecycle ของ stream นี้
 			_, streamCancel := context.WithCancel(workerCtx)

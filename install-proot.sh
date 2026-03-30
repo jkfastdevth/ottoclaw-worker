@@ -68,9 +68,20 @@ install_deps() {
     
     if ! command -v ollama &>/dev/null; then
         info "Installing Ollama (Binary mode for PRoot)..."
-        curl -L https://ollama.com/download/ollama-linux-arm64 -o /usr/local/bin/ollama
-        chmod +x /usr/local/bin/ollama
-        info "Ollama installed to /usr/local/bin/ollama"
+        local _arch
+        case "$(uname -m)" in
+            x86_64)  _arch="amd64" ;;
+            aarch64) _arch="arm64" ;;
+            *)       warn "Unknown arch $(uname -m), defaulting to arm64"; _arch="arm64" ;;
+        esac
+        local _url="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-${_arch}"
+        info "Downloading from: ${_url}"
+        if ! curl -fsSL "$_url" -o /usr/local/bin/ollama; then
+            warn "Ollama download failed — please install manually: curl -fsSL ${_url} -o /usr/local/bin/ollama"
+        else
+            chmod +x /usr/local/bin/ollama
+            info "Ollama installed to /usr/local/bin/ollama"
+        fi
     fi
 }
 
