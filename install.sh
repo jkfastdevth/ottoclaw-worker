@@ -855,7 +855,7 @@ install_services "${SERVICE_USER}"
 banner "Installing TTS/STT Dependencies"
 if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
     PIP_CMD="$(command -v pip3 2>/dev/null || command -v pip)"
-    local pip_flags="--quiet --break-system-packages"
+    pip_flags="--quiet --break-system-packages"
     
     pip_try() {
         local pkg_name="$1"; shift
@@ -872,7 +872,7 @@ if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
     pip_try "edge-tts" edge-tts || true
 
     # av (PyAV): try pre-built pkg first — never compile from source on low-spec Linux
-    local av_ok=false
+    av_ok=false
     if apt-get install -y -q python3-av 2>/dev/null; then
         info "python3-av installed via apt (pre-built)"
         av_ok=true
