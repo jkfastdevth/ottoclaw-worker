@@ -374,27 +374,29 @@ case "${1:-}" in
     if [[ -z "$INSTALL_SH" ]]; then echo "❌ Cannot find install-proot.sh"; exit 1; fi
     REPO_DIR="$(dirname "$INSTALL_SH")"
     
-    echo "🛑 หยุดการทำงาน Service ก่อน..."
-    "$0" stop 2>/dev/null || true
-    
     echo "⏳ ดึงข้อมูลจาก Github ล่าสุด..."
     if [[ -d "${REPO_DIR}/.git" ]]; then
+        git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
         git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed"; exit 1; }
     fi
     
     echo "🔨 Rebuilding binaries..."
     export CGO_ENABLED=0
     pushd "${REPO_DIR}/ottoclaw" >/dev/null
-    go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    go build -buildvcs=false -ldflags="-s -w" -o /tmp/ottoclaw-brain-new ./cmd/ottoclaw
     popd >/dev/null
     
     pushd "${REPO_DIR}/siam-arm" >/dev/null
-    go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    go build -buildvcs=false -ldflags="-s -w" -o /tmp/siam-worker-new .
     popd >/dev/null
     
-    echo "🚀 เริ่มทำงาน Service ใหม่..."
-    "$0" start
-    echo "✅ Update complete!"
+    echo "🛑 หยุดการทำงาน Service ก่อน & Replacing binaries..."
+    mv -f /tmp/ottoclaw-brain-new /usr/local/bin/ottoclaw-brain
+    mv -f /tmp/siam-worker-new /usr/local/bin/siam-worker
+    # Use background command to ensure the restart survives if this script is killed by the stop command
+    nohup bash -c "\"$0\" stop 2>/dev/null || true; sleep 2; \"$0\" start" >/dev/null 2>&1 &
+    
+    echo "✅ Update complete! Services restarting in background..."
     ;;
   *) 
     if [ -f "$BRAIN" ]; then

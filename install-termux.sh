@@ -700,22 +700,25 @@ case "${1:-}" in
         exit 0
     fi
 
-    echo "🛑 Stopping services..."
-    "$0" stop 2>/dev/null || true
-    sleep 1
     echo "🔨 Rebuilding binaries..."
     BRAIN_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/ottoclaw-brain"
     WORKER_BIN="${PREFIX:-/data/data/com.termux/files/usr}/bin/siam-worker"
     pushd "${REPO_DIR}/ottoclaw" >/dev/null
-    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "$BRAIN_BIN" ./cmd/ottoclaw && echo "  ✓ ottoclaw-brain rebuilt"
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${TMPDIR:-/tmp}/ottoclaw-brain-new" ./cmd/ottoclaw && echo "  ✓ ottoclaw-brain rebuilt"
     popd >/dev/null
     pushd "${REPO_DIR}/siam-arm" >/dev/null
-    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "$WORKER_BIN" . && echo "  ✓ siam-worker rebuilt"
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${TMPDIR:-/tmp}/siam-worker-new" . && echo "  ✓ siam-worker rebuilt"
     popd >/dev/null
-    echo "🚀 Restarting services..."
-    "$0" start
+
+    echo "🛑 Stopping services & Replacing binaries..."
+    mv -f "${TMPDIR:-/tmp}/ottoclaw-brain-new" "$BRAIN_BIN"
+    mv -f "${TMPDIR:-/tmp}/siam-worker-new" "$WORKER_BIN"
+
+    # Background detached restart!
+    nohup bash -c "\"$0\" stop 2>/dev/null || true; sleep 2; \"$0\" start" >/dev/null 2>&1 &
+    
     echo ""
-    echo "✅ Update complete!"
+    echo "✅ Update complete! Services restarting in background..."
     ;;
 
   uninstall)

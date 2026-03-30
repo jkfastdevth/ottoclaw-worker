@@ -567,23 +567,27 @@ SOULEOF
         fi
         exit 0
     fi
-    echo "🛑 Stopping services..."
-    systemctl stop ottoclaw-worker siam-worker 2>/dev/null || true
     echo "🔨 Rebuilding ottoclaw-brain..."
     pushd "$(dirname "$INSTALL_SH")/ottoclaw" >/dev/null
     # Fix: exit 128 "error obtaining VCS status" by using -buildvcs=false
-    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /tmp/ottoclaw-brain-new ./cmd/ottoclaw
     popd >/dev/null
     echo "   ✓ ottoclaw-brain rebuilt"
+
     echo "🔨 Rebuilding siam-worker..."
     pushd "$(dirname "$INSTALL_SH")/siam-arm" >/dev/null
-    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /tmp/siam-worker-new .
     popd >/dev/null
     echo "   ✓ siam-worker rebuilt"
-    echo "🚀 Restarting services..."
-    systemctl restart siam-worker
-    sleep 2
-    systemctl restart ottoclaw-worker
+
+    echo "🛑 Stopping services & Replacing binaries..."
+    # Use mv to safely replace running binaries (prevents "text file busy")
+    mv -f /tmp/ottoclaw-brain-new /usr/local/bin/ottoclaw-brain
+    mv -f /tmp/siam-worker-new /usr/local/bin/siam-worker
+    
+    # We detach the restart command so it survives the cgroup kill when siam-worker stops!
+    echo "🚀 Restarting services in background..."
+    nohup bash -c 'systemctl restart siam-worker && sleep 2 && systemctl restart ottoclaw-worker' >/dev/null 2>&1 &
     echo ""
     echo "✅ Update complete! Services are running with the latest code."
     echo "   journalctl -u ottoclaw-worker -f   → view logs"
