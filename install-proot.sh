@@ -8,6 +8,17 @@
 set -uo pipefail
 
 # ── Colors & Helpers ──────────────────────────────────────────────────────────
+
+# ── OTA Update Interceptor ────────────────────────────────────────────────────
+if [[ "${1:-}" == "update" ]]; then
+    if command -v ottoclaw >/dev/null 2>&1; then
+        echo "🔄 Starting OTA Update via native wrapper..."
+        exec ottoclaw update
+    else
+        echo "❌ Cannot perform OTA update: 'ottoclaw' command not found."
+        exit 1
+    fi
+fi
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 
@@ -357,6 +368,34 @@ case "${1:-}" in
   stop) pkill -f "ottoclaw-brain|siam-worker|ollama serve" || true; echo "✅ Stopped." ;;
   restart) $0 stop; sleep 1; $0 start ;;
   status) pgrep -fl "ottoclaw|siam-worker|ollama" || echo "No services running." ;;
+  update)
+    echo "🔄 OttoClaw Update"
+    INSTALL_SH="$(find /opt/siam-synapse /home -name install-proot.sh -path '*/ottoclaw-worker/*' 2>/dev/null | head -1)"
+    if [[ -z "$INSTALL_SH" ]]; then echo "❌ Cannot find install-proot.sh"; exit 1; fi
+    REPO_DIR="$(dirname "$INSTALL_SH")"
+    
+    echo "🛑 หยุดการทำงาน Service ก่อน..."
+    "$0" stop 2>/dev/null || true
+    
+    echo "⏳ ดึงข้อมูลจาก Github ล่าสุด..."
+    if [[ -d "${REPO_DIR}/.git" ]]; then
+        git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed"; exit 1; }
+    fi
+    
+    echo "🔨 Rebuilding binaries..."
+    export CGO_ENABLED=0
+    pushd "${REPO_DIR}/ottoclaw" >/dev/null
+    go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/ottoclaw-brain ./cmd/ottoclaw
+    popd >/dev/null
+    
+    pushd "${REPO_DIR}/siam-arm" >/dev/null
+    go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
+    popd >/dev/null
+    
+    echo "🚀 เริ่มทำงาน Service ใหม่..."
+    "$0" start
+    echo "✅ Update complete!"
+    ;;
   *) 
     if [ -f "$BRAIN" ]; then
         exec "$BRAIN" "$@"

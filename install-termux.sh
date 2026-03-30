@@ -772,6 +772,17 @@ if [[ "${1:-}" == "--reconfigure" ]]; then
     exit 0
 fi
 
+# ── OTA Update Interceptor ────────────────────────────────────────────────────
+if [[ "${1:-}" == "update" ]]; then
+    if command -v ottoclaw >/dev/null 2>&1; then
+        echo "🔄 Starting OTA Update via native wrapper..."
+        exec ottoclaw update
+    else
+        echo "❌ Cannot perform OTA update: 'ottoclaw' command not found."
+        exit 1
+    fi
+fi
+
 # ── Banner ────────────────────────────────────────────────────────────────────
 echo -e "\n${CYAN}${BOLD}"
 echo "  ╔═══════════════════════════════════════════╗"
