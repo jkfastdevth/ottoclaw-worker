@@ -172,10 +172,12 @@ import (
 
 	"bytes"
 	"encoding/json"
-	"sync/atomic"
 	"net/http"
 	"os/exec"
+	"sync/atomic"
 	"syscall"
+
+	"regexp"
 
 	"github.com/jkfastdevth/Siam-Synapse/proto" // เปลี่ยนเป็น path โปรเจคของคุณ
 	"github.com/shirou/gopsutil/cpu"            // ต้องติดตั้งเพิ่ม: go get github.com/shirou/gopsutil/cpu
@@ -183,7 +185,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-	"regexp"
 )
 
 // isTermux returns true when running inside Android Termux environment.
@@ -198,19 +199,22 @@ func recordWAV(ctx context.Context, wavPath, durSec string) error {
 		return exec.CommandContext(ctx, "termux-microphone-record",
 			"-e", "WAV", "-l", durSec, "-f", wavPath).Run()
 	}
-	type attempt struct{ name string; args []string }
+	type attempt struct {
+		name string
+		args []string
+	}
 	tries := []attempt{
 		// PulseAudio/PipeWire first — works on modern Ubuntu/Zorin/Debian desktops
 		// parec/parecord/pw-record record indefinitely — wrap with "timeout durSec"
-		{"parec",           []string{"timeout", durSec, "parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
-		{"parecord",        []string{"timeout", durSec, "parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
-		{"ffmpeg(pulse)",   []string{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
-		{"pw-record",       []string{"timeout", durSec, "pw-record", "--target", "alsa_input.default", wavPath}},
+		{"parec", []string{"timeout", durSec, "parec", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"parecord", []string{"timeout", durSec, "parecord", "--file-format=wav", "--rate=16000", "--channels=1", wavPath}},
+		{"ffmpeg(pulse)", []string{"ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
+		{"pw-record", []string{"timeout", durSec, "pw-record", "--target", "alsa_input.default", wavPath}},
 		// ALSA (bare-metal / server)
-		{"arecord(pulse)",  []string{"arecord", "-D", "pulse", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
-		{"arecord",         []string{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
-		{"ffmpeg(alsa)",    []string{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
-		{"sox",             []string{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec}},
+		{"arecord(pulse)", []string{"arecord", "-D", "pulse", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
+		{"arecord", []string{"arecord", "-d", durSec, "-f", "S16_LE", "-r", "16000", "-c", "1", wavPath}},
+		{"ffmpeg(alsa)", []string{"ffmpeg", "-y", "-f", "alsa", "-i", "default", "-t", durSec, "-ar", "16000", "-ac", "1", wavPath}},
+		{"sox", []string{"sox", "-t", "alsa", "default", "-r", "16000", "-c", "1", "-e", "signed-integer", "-b", "16", wavPath, "trim", "0", durSec}},
 	}
 	var tried []string
 	for _, t := range tries {
@@ -301,9 +305,9 @@ func uploadVoicePrint(name, npyPath string) error {
 
 // vpSyncedAt tracks last voice prints sync time (avoid repeated fetches).
 var (
-	vpSyncedAt   time.Time
-	vpSyncMu     sync.Mutex
-	vpSyncTTL    = 5 * time.Minute
+	vpSyncedAt time.Time
+	vpSyncMu   sync.Mutex
+	vpSyncTTL  = 5 * time.Minute
 )
 
 // syncVoicePrints fetches voice prints from master and saves to local voicePrintsDir.
@@ -1444,7 +1448,6 @@ func main() {
 					continue
 				}
 
-
 				// SYSTEM_DM: deliver a direct message to the brain's inbox
 				if cmd.Type == "SYSTEM_DM" {
 					var from, message string
@@ -1839,10 +1842,14 @@ except Exception as e:
 							}
 							// Speaking lock: wait until TTS stops + 800ms decay buffer (echo prevention)
 							for isSpeaking.Load() {
-								if ctx.Err() != nil { return }
+								if ctx.Err() != nil {
+									return
+								}
 								time.Sleep(200 * time.Millisecond)
 							}
-							if ctx.Err() != nil { return }
+							if ctx.Err() != nil {
+								return
+							}
 							time.Sleep(800 * time.Millisecond) // let audio decay before recording
 
 							wavPath := fmt.Sprintf("/tmp/loop-%s-%d.wav", lID, time.Now().UnixNano())
@@ -1911,7 +1918,7 @@ except Exception as e:
 							_ = pyID
 							_ = vpDir
 
-							knownAgents := map[string]bool{"auric":true,"kaidos":true,"kook":true}
+							knownAgents := map[string]bool{"auric": true, "kaidos": true, "kook": true}
 							currentSoulMu.RLock()
 							selfName := strings.ToLower(currentSoul)
 							currentSoulMu.RUnlock()
