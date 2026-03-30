@@ -103,10 +103,11 @@ pull_vision_model() {
         ollama pull moondream
         info "Vision model ready."
     else
-        warn "Ollama server failed to start — please run 'ollama pull moondream' manually later."
+        warn "Ollama server failed to start in PRoot — ไม่ต้องกังวล ระบบหลักยังทำงานได้ปกติ"
+        warn "รันด้วยตัวเองทีหลัง: ollama serve & && ollama pull moondream"
     fi
     
-    pkill -f "ollama serve" || kill $ollama_pid || true
+    pkill -f "ollama serve" 2>/dev/null; kill "$ollama_pid" 2>/dev/null; true
 }
 
 # ── STEP 2: Full Config Wizard ────────────────────────────────────────────────
