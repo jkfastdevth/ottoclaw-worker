@@ -2376,6 +2376,23 @@ except Exception as e:
 					fmt.Printf("🔔 [Action] Received command from Master: %s\n", res.Action)
 					if res.Action == "wakeup" {
 						fmt.Println("✨ Waking up the vessel...")
+					} else if res.Action == "restart" {
+						fmt.Println("🔄 [Restart] Received manual restart signal from master. Restarting...")
+						go func() {
+							// If we're on Linux (not termux), the best way to trigger a pure restart
+							// is to kill ourselves so systemd picks it up via Restart=on-failure
+							if _, err := os.Stat("/data/data/com.termux"); os.IsNotExist(err) && os.Getenv("TERMUX_VERSION") == "" {
+								fmt.Println("🛑 Terminating gracefully to orchestrate systemd restart...")
+								time.Sleep(1 * time.Second)
+								exec.Command("pkill", "-9", "-f", "siam-worker").Run()
+								os.Exit(1)
+							} else {
+								// Termux environment restart loop
+								time.Sleep(1 * time.Second)
+								exec.Command("pkill", "-9", "-f", "siam-worker").Run()
+								os.Exit(1) // Supervisor should pick this up
+							}
+						}()
 					} else if res.Action == "update" {
 						fmt.Println("📥 [Update] Received update action from master — running ottoclaw update...")
 						go func() {
