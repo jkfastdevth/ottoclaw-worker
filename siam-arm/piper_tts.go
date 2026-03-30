@@ -44,9 +44,8 @@ func piperBinaryPath() string {
 // lang: "th" → Thai, anything else → English.
 func piperModelPath(lang string) string {
 	dir := filepath.Join(piperDir(), "models")
-	if strings.HasPrefix(lang, "th") {
-		return filepath.Join(dir, "th_TH-tacotron_ddc-medium.onnx")
-	}
+	// If Thai ONNX becomes available, add path check here. 
+	// Currently falls back to English to prevent missing file crashes.
 	return filepath.Join(dir, "en_US-lessac-medium.onnx")
 }
 
@@ -234,11 +233,7 @@ func downloadPiperModels(ctx context.Context, dir string) {
 			onnxURL: "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
 			jsonURL: "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
 		},
-		{
-			name:    "th_TH-tacotron_ddc-medium",
-			onnxURL: "https://huggingface.co/rhasspy/piper-voices/resolve/main/th/th_TH/tacotron_ddc/medium/th_TH-tacotron_ddc-medium.onnx",
-			jsonURL: "https://huggingface.co/rhasspy/piper-voices/resolve/main/th/th_TH/tacotron_ddc/medium/th_TH-tacotron_ddc-medium.onnx.json",
-		},
+		// Removed Thai Tacotron DDC model because it doesn't officially exist on HuggingFace and caused HTTP 404s.
 	}
 
 	for _, m := range models {

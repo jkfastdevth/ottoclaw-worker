@@ -974,15 +974,9 @@ else
                         && info "Piper EN voice model downloaded" \
                         || warn "Piper EN model download failed (will retry at runtime)"
                 fi
-                # Download Thai model
-                TH_ONNX="${PIPER_DIR}/models/th_TH-tacotron_ddc-medium.onnx"
-                TH_JSON="${TH_ONNX}.json"
-                if [[ ! -f "${TH_ONNX}" ]]; then
-                    curl -fsSL "${HF_BASE}/th/th_TH/tacotron_ddc/medium/th_TH-tacotron_ddc-medium.onnx" -o "${TH_ONNX}" 2>/dev/null \
-                        && curl -fsSL "${HF_BASE}/th/th_TH/tacotron_ddc/medium/th_TH-tacotron_ddc-medium.onnx.json" -o "${TH_JSON}" 2>/dev/null \
-                        && info "Piper Thai voice model downloaded" \
-                        || warn "Piper Thai model download failed (will retry at runtime)"
-                fi
+                # Official Thai ONNX model for Piper doesn't exist yet on HuggingFace.
+                # Just keeping the EN model fallback.
+                info "Piper TTS setup complete (EN fallback ready)"
             else
                 warn "Piper TTS extraction failed — will retry at runtime"
             fi
