@@ -1164,6 +1164,21 @@ func main() {
 					continue
 				}
 
+				// ORCHESTRATOR_STEP: execute a skill/tool as part of a DAG job
+				if cmd.Type == "ORCHESTRATOR_STEP" {
+					payload := cmd.Payload
+					go func(cmdID, nodeID_, p string) {
+						result := handleOrchestratorStep(workerCtx, p)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID,
+							NodeId:    nodeID_,
+							Success:   true,
+							Output:    result,
+						})
+					}(cmd.CommandId, nodeID, payload)
+					continue
+				}
+
 				if cmd.Type == "SYSTEM_HOT_RELOAD" {
 					log.Printf("🔥 [Hot Reload] Received SYSTEM_HOT_RELOAD from Master")
 

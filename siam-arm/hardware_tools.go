@@ -419,3 +419,59 @@ func HandleBrainQuery(ctx context.Context, payload string) string {
 	_ = bytes.NewBuffer
 	return string(out)
 }
+
+// ─── ORCHESTRATOR_STEP handler ────────────────────────────────────────────────
+
+// handleOrchestratorStep processes an ORCHESTRATOR_STEP command from master.
+// Payload: JSON {"job_id":"...","step_id":"...","skill":"...","input":"..."}
+// Dispatches to a hardware tool if the skill matches, otherwise forwards to
+// the Control Brain for LLM-based execution.
+func handleOrchestratorStep(ctx context.Context, payload string) string {
+	var req struct {
+		JobID   string `json:"job_id"`
+		StepID  string `json:"step_id"`
+		Skill   string `json:"skill"`
+		Input   string `json:"input"` // JSON string of key→value map
+	}
+	if err := json.Unmarshal([]byte(payload), &req); err != nil {
+		return fmt.Sprintf(`{"error":"invalid payload: %s"}`, err.Error())
+	}
+
+	// Parse input map
+	var inputMap map[string]string
+	if req.Input != "" {
+		json.Unmarshal([]byte(req.Input), &inputMap) //nolint:errcheck
+	}
+	if inputMap == nil {
+		inputMap = map[string]string{}
+	}
+
+	// Try hardware tool dispatch first
+	result, err := DispatchHardwareTool(ctx, req.Skill, inputMap)
+	if err == nil {
+		out, _ := json.Marshal(map[string]interface{}{
+			"job_id":  req.JobID,
+			"step_id": req.StepID,
+			"result":  result,
+			"source":  "hardware_tool",
+		})
+		return string(out)
+	}
+
+	// Fall back to Control Brain
+	prompt := fmt.Sprintf("Execute skill: %s\nInput: %s", req.Skill, req.Input)
+	brainResp, brainErr := QueryControlBrain(ctx, "", prompt)
+	if brainErr != nil {
+		return fmt.Sprintf(`{"error":"skill %q failed: %s","job_id":%q,"step_id":%q}`,
+			req.Skill, brainErr.Error(), req.JobID, req.StepID)
+	}
+	RecordRouting(BrainLocal, false)
+	out, _ := json.Marshal(map[string]interface{}{
+		"job_id":     req.JobID,
+		"step_id":    req.StepID,
+		"result":     brainResp.Content,
+		"source":     "control_brain",
+		"latency_ms": brainResp.LatencyMs,
+	})
+	return string(out)
+}
