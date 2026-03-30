@@ -15,6 +15,14 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
+# ── Non-interactive detection ─────────────────────────────────────────────────
+# Auto mode: stdin is not a terminal (piped via curl|bash) OR AUTO_INSTALL=1
+if [[ ! -t 0 || "${AUTO_INSTALL:-}" == "1" ]]; then
+    NON_INTERACTIVE=1
+else
+    NON_INTERACTIVE=0
+fi
+
 # ── Detect Termux & Architecture ──────────────────────────────────────────────
 if [[ -z "${TERMUX_VERSION:-}" ]] && [[ ! -d "/data/data/com.termux" ]]; then
     echo "❌ Script นี้ออกแบบสำหรับ Termux บน Android เท่านั้น"
@@ -56,7 +64,7 @@ err()    { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
 ask() {
     # Usage: ask "Label" "default" [secret]
     local label="$1" default="$2" secret="${3:-false}" val=""
-    
+
     # 🤖 Automation: Check if an environment variable exists for this field
     # Normalize label to uppercase, replace spaces/special chars with underscores
     local env_name=$(echo "$label" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:lower:]' '[:upper:]' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
@@ -65,9 +73,15 @@ ask() {
         return
     fi
 
+    # Non-interactive: use default silently
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+        echo -n "$default"
+        return
+    fi
+
     local disp="$default"
     [[ "$secret" == "true" && -n "$default" ]] && disp=$(echo -n "$default" | sed 's/./*/g')
-    
+
     if [[ "$secret" == "true" && "${HIDE_SECRETS:-true}" == "true" ]]; then
         echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -s val < /dev/tty; echo "" >&2
     else
@@ -98,11 +112,17 @@ get_local_ip() {
 
 ask_yn() {
     local label="$1" default="$2" val
-    
+
     # 🤖 Automation check
     local env_name=$(echo "$label" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:lower:]' '[:upper:]' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
     if [[ -n "${!env_name:-}" ]]; then
         [[ "${!env_name,,}" == "y" || "${!env_name,,}" == "yes" || "${!env_name}" == "1" || "${!env_name,,}" == "true" ]]
+        return
+    fi
+
+    # Non-interactive: use default silently
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+        [[ "${default,,}" == "y" || "${default,,}" == "yes" ]]
         return
     fi
 
@@ -267,7 +287,11 @@ run_config_wizard() {
         set -o allexport; source "${OTTOCLAW_ENV}" 2>/dev/null || true; set +o allexport
     else
         banner "Configuration Setup"
-        echo -e "  กด ${CYAN}Enter${RESET} เพื่อใช้ค่า default ในวงเล็บ\n"
+        if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+            info "Non-interactive mode — ใช้ค่า default และ env vars"
+        else
+            echo -e "  กด ${CYAN}Enter${RESET} เพื่อใช้ค่า default ในวงเล็บ\n"
+        fi
         MASTER_HOST="${MASTER_HOST:-192.168.1.1}"
         MASTER_API_KEY="${MASTER_API_KEY:-}"
         NODE_SECRET="${NODE_SECRET:-}"
@@ -759,7 +783,10 @@ install_wrapper
 banner "Starting Services"
 # Force stop any old instances before starting (prevents Telegram conflict)
 "${BIN_DIR}/ottoclaw" stop --quiet 2>/dev/null || true
-if ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
+if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+    info "Auto-starting services (non-interactive mode)"
+    "${BIN_DIR}/ottoclaw" start
+elif ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
     "${BIN_DIR}/ottoclaw" start
 fi
 
