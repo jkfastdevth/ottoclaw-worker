@@ -543,8 +543,17 @@ SOULEOF
         git -C "$REPO_DIR" pull --ff-only && git -C "$REPO_DIR" fetch --tags || { echo "❌ git pull failed — resolve conflicts manually"; exit 1; }
         git -C "$REPO_DIR" describe --tags --always > /etc/ottoclaw/version 2>/dev/null || true
     else
-        warn "Not a git repository. Re-running installer to fetch latest code..."
-        sudo bash "$INSTALL_SH"
+        warn "Not a git repository — downloading latest install.sh from GitHub..."
+        local FRESH_INSTALL=$(mktemp /tmp/ottoclaw-install-XXXXXX.sh)
+        if curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/install.sh" -o "$FRESH_INSTALL" 2>/dev/null; then
+            chmod +x "$FRESH_INSTALL"
+            cp "$FRESH_INSTALL" "$INSTALL_SH" 2>/dev/null || true
+            info "install.sh updated from GitHub"
+            exec sudo bash "$FRESH_INSTALL"
+        else
+            warn "Download failed — re-running existing installer"
+            exec sudo bash "$INSTALL_SH"
+        fi
         exit 0
     fi
     echo "🛑 Stopping services..."

@@ -607,8 +607,17 @@ case "${1:-}" in
     if [[ -d "${REPO_DIR}/.git" ]]; then
         git -C "$REPO_DIR" pull --ff-only || { echo "❌ git pull failed"; exit 1; }
     else
-        warn "Not a git repository. Re-running installer to fetch latest code..."
-        bash "$INSTALL_SH"
+        warn "Not a git repository — downloading latest install-termux.sh from GitHub..."
+        local FRESH_INSTALL=$(mktemp /tmp/ottoclaw-termux-XXXXXX.sh)
+        if curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/install-termux.sh" -o "$FRESH_INSTALL" 2>/dev/null; then
+            chmod +x "$FRESH_INSTALL"
+            cp "$FRESH_INSTALL" "$INSTALL_SH" 2>/dev/null || true
+            info "install-termux.sh updated from GitHub"
+            exec bash "$FRESH_INSTALL"
+        else
+            warn "Download failed — re-running existing installer"
+            exec bash "$INSTALL_SH"
+        fi
         exit 0
     fi
 

@@ -2126,7 +2126,64 @@ except Exception as e:
 					if res.Action == "wakeup" {
 						fmt.Println("✨ Waking up the vessel...")
 					} else if res.Action == "update" {
-						fmt.Println("📥 Status: Triggering Update...")
+						fmt.Println("📥 [Update] Received update action from master — running ottoclaw update...")
+						go func() {
+							// Find install script: prefer Termux, then Linux
+							var installScript string
+							if _, err := os.Stat("/data/data/com.termux"); err == nil {
+								// Termux
+								for _, candidate := range []string{
+									os.ExpandEnv("$HOME/ottoclaw-worker/install-termux.sh"),
+									"/data/data/com.termux/files/home/ottoclaw-worker/install-termux.sh",
+									"/opt/siam-synapse/install-termux.sh",
+								} {
+									if _, err := os.Stat(candidate); err == nil {
+										installScript = candidate
+										break
+									}
+								}
+								if installScript == "" {
+									// Download fresh from GitHub
+									installScript = "/tmp/ottoclaw-update.sh"
+									exec.Command("curl", "-fsSL",
+										"https://raw.githubusercontent.com/jkfastdevth/ottoclaw-worker/main/install-termux.sh",
+										"-o", installScript).Run()
+									os.Chmod(installScript, 0o755)
+								}
+								out, err := exec.CommandContext(workerCtx, "bash", installScript, "update").CombinedOutput()
+								fmt.Printf("📥 [Update] %s\n", strings.TrimSpace(string(out)))
+								if err != nil {
+									fmt.Printf("❌ [Update] failed: %v\n", err)
+									return
+								}
+							} else {
+								// Linux
+								for _, candidate := range []string{
+									"/opt/siam-synapse/install.sh",
+									os.ExpandEnv("$HOME/ottoclaw-worker/install.sh"),
+								} {
+									if _, err := os.Stat(candidate); err == nil {
+										installScript = candidate
+										break
+									}
+								}
+								if installScript == "" {
+									installScript = "/tmp/ottoclaw-update.sh"
+									exec.Command("curl", "-fsSL",
+										"https://raw.githubusercontent.com/jkfastdevth/ottoclaw-worker/main/install.sh",
+										"-o", installScript).Run()
+									os.Chmod(installScript, 0o755)
+								}
+								out, err := exec.Command("sudo", "bash", installScript, "update").CombinedOutput()
+								fmt.Printf("📥 [Update] %s\n", strings.TrimSpace(string(out)))
+								if err != nil {
+									fmt.Printf("❌ [Update] failed: %v\n", err)
+									return
+								}
+							}
+							fmt.Println("✅ [Update] Complete — restarting...")
+							os.Exit(0) // systemd/supervisor will restart the updated binary
+						}()
 					} else if strings.HasPrefix(res.Action, "auto_qa:") {
 						skill := strings.TrimPrefix(res.Action, "auto_qa:")
 						fmt.Printf("🤖 [Auto QA] Triggering testing for skill: %s\n", skill)
