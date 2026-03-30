@@ -159,6 +159,27 @@ install_deps() {
             warn "faster-whisper install failed — STT จะทำงานผ่าน master แทน (ไม่ต้องติดตั้ง local STT)"
         fi
         pip3 install $pip_flags resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
+        # Phase 5.2: Vosk for wake word detection (small Thai model)
+        pip3 install $pip_flags vosk 2>/dev/null && info "vosk installed (wake word detection)" || warn "vosk install failed (wake word unavailable)"
+    fi
+    # Phase 5.1: Piper TTS for Android ARM64
+    local piper_dir="${HOME}/.picoclaw/piper"
+    local piper_bin="${piper_dir}/piper"
+    if [[ ! -f "${piper_bin}" ]]; then
+        mkdir -p "${piper_dir}/models"
+        local piper_url="https://github.com/rhasspy/piper/releases/latest/download/piper_linux_aarch64.tar.gz"
+        local piper_tmp="/tmp/piper_linux_aarch64.tar.gz"
+        if curl -fsSL "${piper_url}" -o "${piper_tmp}" 2>/dev/null; then
+            tar -xzf "${piper_tmp}" -C "${piper_dir}" 2>/dev/null
+            [[ -f "${piper_dir}/piper/piper" ]] && mv "${piper_dir}/piper/piper" "${piper_bin}" && rm -rf "${piper_dir}/piper"
+            chmod +x "${piper_bin}" 2>/dev/null
+            rm -f "${piper_tmp}"
+            [[ -f "${piper_bin}" ]] && info "Piper TTS installed (ARM64)" || warn "Piper TTS extraction failed — will retry at runtime"
+        else
+            warn "Piper TTS download failed — will install at runtime"
+        fi
+    else
+        info "Piper TTS already installed: ${piper_bin}"
     fi
 }
 

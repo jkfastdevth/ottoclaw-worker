@@ -421,17 +421,25 @@ func autoEnrollSelfVoice(ctx context.Context) {
 	defer os.Remove(tmpMp3)
 
 	generated := false
-	// Try edge-tts → convert to WAV
-	if exec.CommandContext(ctx, "edge-tts",
-		"--voice", "th-TH-PremwadeeNeural",
-		"--text", sampleText,
-		"--write-media", tmpMp3).Run() == nil {
-		if exec.CommandContext(ctx, "ffmpeg", "-y", "-i", tmpMp3,
-			"-ar", "16000", "-ac", "1", tmpWav).Run() == nil {
+	// Try Piper TTS first (highest quality, local)
+	if IsPiperAvailable() {
+		if SpeakWithPiper(ctx, sampleText, "th", tmpWav) == nil {
 			generated = true
 		}
 	}
-	// Fallback: espeak-ng
+	// Fallback: edge-tts → convert to WAV
+	if !generated {
+		if exec.CommandContext(ctx, "edge-tts",
+			"--voice", "th-TH-PremwadeeNeural",
+			"--text", sampleText,
+			"--write-media", tmpMp3).Run() == nil {
+			if exec.CommandContext(ctx, "ffmpeg", "-y", "-i", tmpMp3,
+				"-ar", "16000", "-ac", "1", tmpWav).Run() == nil {
+				generated = true
+			}
+		}
+	}
+	// Last resort: espeak-ng
 	if !generated {
 		if exec.CommandContext(ctx, "espeak-ng", "-v", "th", "-w", tmpWav, sampleText).Run() == nil {
 			generated = true
@@ -789,6 +797,12 @@ func main() {
 
 	// 🧠 Phase 4B: Start Control Brain (local Ollama) in background
 	InitControlBrain(workerCtx)
+
+	// 🔊 Phase 5.1: Install Piper TTS in background if not present
+	go EnsurePiperInstalled(workerCtx)
+
+	// 🎤 Phase 5.2: Install Vosk wake word model in background
+	go EnsureVoskInstalled(workerCtx)
 
 	if activeIdentity != "" && os.Getenv("OTTOCLAW_MODE") != "orchestrator" {
 		log.Printf("⚡ [Soul Recovery] Auto-igniting the brain for '%s'...", activeIdentity)
@@ -1164,6 +1178,42 @@ func main() {
 					continue
 				}
 
+				// SYSTEM_WAKE_WORD_START: start always-on wake word detection
+				// Payload: optional comma-separated wake words override
+				if cmd.Type == "SYSTEM_WAKE_WORD_START" {
+					if cmd.Payload != "" {
+						os.Setenv("WAKE_WORDS", cmd.Payload)
+					}
+					err := StartWakeWordLoop(workerCtx, func(word string) {
+						// Notify master about wake word activation via command result
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: fmt.Sprintf("wake-%d", time.Now().UnixNano()),
+							NodeId:    nodeID,
+							Success:   true,
+							Output:    fmt.Sprintf(`{"event":"wake_word","word":%q,"node_id":%q}`, word, nodeID),
+						})
+					})
+					var wakeReply string
+					if err != nil {
+						wakeReply = fmt.Sprintf(`{"error":%q}`, err.Error())
+					} else {
+						wakeReply = fmt.Sprintf(`{"started":true,"words":%q}`, strings.Join(getWakeWords(), ","))
+					}
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId, NodeId: nodeID, Success: err == nil, Output: wakeReply,
+					})
+					continue
+				}
+
+				// SYSTEM_WAKE_WORD_STOP: stop wake word detection
+				if cmd.Type == "SYSTEM_WAKE_WORD_STOP" {
+					StopWakeWordLoop()
+					grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+						CommandId: cmd.CommandId, NodeId: nodeID, Success: true, Output: `{"stopped":true}`,
+					})
+					continue
+				}
+
 				// ORCHESTRATOR_STEP: execute a skill/tool as part of a DAG job
 				if cmd.Type == "ORCHESTRATOR_STEP" {
 					payload := cmd.Payload
@@ -1354,30 +1404,43 @@ func main() {
 							isTermux = true
 						}
 						if isTermux {
-							// Android/Termux: native TTS
-							out, err := exec.CommandContext(workerCtx, "termux-tts-speak", txt).CombinedOutput()
-							success = err == nil
-							output = string(out)
+							// Android/Termux: Piper first, then termux-tts-speak, then espeak-ng
+							if IsPiperAvailable() && SpeakWithPiperAndPlay(workerCtx, txt, "th") {
+								success = true
+							} else {
+								out, err := exec.CommandContext(workerCtx, "termux-tts-speak", txt).CombinedOutput()
+								success = err == nil
+								output = string(out)
+							}
 						} else {
-							// Linux: edge-tts → ffplay (natural Thai voice)
-							tmpMp3 := "/tmp/speak-" + cmdID + ".mp3"
-							defer os.Remove(tmpMp3)
-							edgeErr := exec.CommandContext(workerCtx, "edge-tts",
-								"--voice", "th-TH-PremwadeeNeural",
-								"--text", txt,
-								"--write-media", tmpMp3,
-							).Run()
-							if edgeErr == nil {
-								// Try players in order: ffplay, mpv, aplay (via ffmpeg convert)
-								if exec.CommandContext(workerCtx, "ffplay", "-nodisp", "-autoexit", tmpMp3).Run() == nil {
-									success = true
-								} else if exec.CommandContext(workerCtx, "mpv", "--no-terminal", tmpMp3).Run() == nil {
-									success = true
-								} else if exec.CommandContext(workerCtx, "paplay", tmpMp3).Run() == nil {
-									success = true
+							// Linux: Piper (highest quality) → edge-tts → espeak-ng
+							lang := "th"
+							if !strings.Contains(txt, "ก") && !strings.Contains(txt, "า") && !strings.Contains(txt, "ร") {
+								lang = "en"
+							}
+							if IsPiperAvailable() && SpeakWithPiperAndPlay(workerCtx, txt, lang) {
+								success = true
+							}
+							// Fallback: edge-tts → ffplay (natural Thai voice)
+							if !success {
+								tmpMp3 := "/tmp/speak-" + cmdID + ".mp3"
+								defer os.Remove(tmpMp3)
+								edgeErr := exec.CommandContext(workerCtx, "edge-tts",
+									"--voice", "th-TH-PremwadeeNeural",
+									"--text", txt,
+									"--write-media", tmpMp3,
+								).Run()
+								if edgeErr == nil {
+									if exec.CommandContext(workerCtx, "ffplay", "-nodisp", "-autoexit", tmpMp3).Run() == nil {
+										success = true
+									} else if exec.CommandContext(workerCtx, "mpv", "--no-terminal", tmpMp3).Run() == nil {
+										success = true
+									} else if exec.CommandContext(workerCtx, "paplay", tmpMp3).Run() == nil {
+										success = true
+									}
 								}
 							}
-							// Fallback: espeak-ng
+							// Last resort: espeak-ng
 							if !success {
 								out, err := exec.CommandContext(workerCtx, "espeak-ng", "-v", "th", txt).CombinedOutput()
 								if err != nil {
@@ -1764,18 +1827,31 @@ except Exception as e:
 						oggPath := "/tmp/tts-capture-" + cmdID + ".ogg"
 						defer os.Remove(oggPath)
 
-						// Try edge-tts first (natural Thai voice)
+						// Try Piper TTS first (highest quality, local)
 						mp3Path := "/tmp/tts-capture-" + cmdID + ".mp3"
 						defer os.Remove(mp3Path)
 						edgeOK := false
-						if exec.CommandContext(workerCtx, "edge-tts",
-							"--voice", "th-TH-PremwadeeNeural",
-							"--text", text,
-							"--write-media", mp3Path,
-						).Run() == nil {
-							if exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", mp3Path,
-								"-c:a", "libopus", "-b:a", "64k", oggPath).Run() == nil {
-								edgeOK = true
+						if IsPiperAvailable() {
+							piperWav := "/tmp/tts-piper-" + cmdID + ".wav"
+							defer os.Remove(piperWav)
+							if SpeakWithPiper(workerCtx, text, "th", piperWav) == nil {
+								if exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", piperWav,
+									"-c:a", "libopus", "-b:a", "64k", oggPath).Run() == nil {
+									edgeOK = true
+								}
+							}
+						}
+						// Fallback: edge-tts (natural Thai voice, requires internet)
+						if !edgeOK {
+							if exec.CommandContext(workerCtx, "edge-tts",
+								"--voice", "th-TH-PremwadeeNeural",
+								"--text", text,
+								"--write-media", mp3Path,
+							).Run() == nil {
+								if exec.CommandContext(workerCtx, "ffmpeg", "-y", "-i", mp3Path,
+									"-c:a", "libopus", "-b:a", "64k", oggPath).Run() == nil {
+									edgeOK = true
+								}
 							}
 						}
 

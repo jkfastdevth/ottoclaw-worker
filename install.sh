@@ -846,11 +846,19 @@ if command -v pip3 &>/dev/null || command -v pip &>/dev/null; then
         warn "faster-whisper install failed — trying openai-whisper as fallback"
     fi
     info "STT fallback (openai-whisper) can be installed manually: pip3 install openai-whisper"
+    # Phase 5.2: Vosk for wake word detection
+    if "$PIP_CMD" install --quiet --break-system-packages vosk 2>/dev/null || \
+       "$PIP_CMD" install --quiet vosk 2>/dev/null; then
+        info "vosk installed (wake word detection)"
+    else
+        warn "vosk install failed — wake word detection will be unavailable"
+    fi
 elif command -v apt-get &>/dev/null; then
     apt-get install -y -q python3-pip 2>/dev/null
     pip3 install --quiet edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed"
     pip3 install --quiet faster-whisper 2>/dev/null && info "faster-whisper installed" || warn "faster-whisper install failed"
     pip3 install --quiet resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed"
+    pip3 install --quiet vosk 2>/dev/null && info "vosk installed (wake word)" || warn "vosk install failed"
 else
     warn "pip not found — skipping TTS/STT install (espeak-ng fallback will be used)"
 fi
@@ -870,6 +878,60 @@ fi
 if ! command -v ffmpeg &>/dev/null; then
     if command -v apt-get &>/dev/null; then
         apt-get install -y -q ffmpeg 2>/dev/null && info "ffmpeg installed" || warn "ffmpeg install failed"
+    fi
+fi
+
+# Phase 5.1: Install Piper TTS (high-quality local neural TTS)
+banner "Installing Piper TTS"
+PIPER_DIR="${HOME}/.picoclaw/piper"
+PIPER_BIN="${PIPER_DIR}/piper"
+if [[ -f "${PIPER_BIN}" ]]; then
+    info "Piper TTS already installed: ${PIPER_BIN}"
+else
+    ARCH="$(uname -m)"
+    case "${ARCH}" in
+        x86_64)   PIPER_ARCHIVE="piper_linux_x86_64.tar.gz" ;;
+        aarch64)  PIPER_ARCHIVE="piper_linux_aarch64.tar.gz" ;;
+        armv7l)   PIPER_ARCHIVE="piper_linux_armv7l.tar.gz" ;;
+        *)        warn "Piper TTS: unsupported arch ${ARCH} — skipping"; PIPER_ARCHIVE="" ;;
+    esac
+    if [[ -n "${PIPER_ARCHIVE}" ]]; then
+        mkdir -p "${PIPER_DIR}/models"
+        PIPER_URL="https://github.com/rhasspy/piper/releases/latest/download/${PIPER_ARCHIVE}"
+        TMP_PIPER="/tmp/${PIPER_ARCHIVE}"
+        if curl -fsSL "${PIPER_URL}" -o "${TMP_PIPER}" 2>/dev/null; then
+            tar -xzf "${TMP_PIPER}" -C "${PIPER_DIR}" 2>/dev/null
+            # Binary may extract as piper/piper subdirectory
+            [[ -f "${PIPER_DIR}/piper/piper" ]] && mv "${PIPER_DIR}/piper/piper" "${PIPER_BIN}" && rm -rf "${PIPER_DIR}/piper"
+            chmod +x "${PIPER_BIN}" 2>/dev/null
+            rm -f "${TMP_PIPER}"
+            if [[ -f "${PIPER_BIN}" ]]; then
+                info "Piper TTS installed: ${PIPER_BIN}"
+                # Download EN model (smaller, faster to download)
+                EN_ONNX="${PIPER_DIR}/models/en_US-lessac-medium.onnx"
+                EN_JSON="${EN_ONNX}.json"
+                if [[ ! -f "${EN_ONNX}" ]]; then
+                    HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
+                    curl -fsSL "${HF_BASE}/en/en_US/lessac/medium/en_US-lessac-medium.onnx" -o "${EN_ONNX}" 2>/dev/null \
+                        && curl -fsSL "${HF_BASE}/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json" -o "${EN_JSON}" 2>/dev/null \
+                        && info "Piper EN voice model downloaded" \
+                        || warn "Piper EN model download failed (will retry at runtime)"
+                fi
+                # Download Thai model
+                TH_ONNX="${PIPER_DIR}/models/th_TH-tacotron_ddc-medium.onnx"
+                TH_JSON="${TH_ONNX}.json"
+                if [[ ! -f "${TH_ONNX}" ]]; then
+                    curl -fsSL "${HF_BASE}/th/th_TH/tacotron_ddc/medium/th_TH-tacotron_ddc-medium.onnx" -o "${TH_ONNX}" 2>/dev/null \
+                        && curl -fsSL "${HF_BASE}/th/th_TH/tacotron_ddc/medium/th_TH-tacotron_ddc-medium.onnx.json" -o "${TH_JSON}" 2>/dev/null \
+                        && info "Piper Thai voice model downloaded" \
+                        || warn "Piper Thai model download failed (will retry at runtime)"
+                fi
+            else
+                warn "Piper TTS extraction failed — will retry at runtime"
+            fi
+        else
+            warn "Piper TTS download failed — will install at runtime"
+        fi
     fi
 fi
 
