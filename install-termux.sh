@@ -158,29 +158,43 @@ install_deps() {
     else
         info "All dependencies already installed"
     fi
-    # Build tools needed for PyAV (faster-whisper dependency)
-    pkg install -y clang make libc++ 2>/dev/null || true
-    # Install edge-tts (TTS) + faster-whisper (STT) for Thai voice I/O
+    # Install edge-tts (TTS) + optional STT packages for Thai voice I/O
     if command -v pip3 &>/dev/null; then
         local pip_flags="--quiet --break-system-packages"
-        pip3 install $pip_flags edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
-        # av (PyAV) ต้องใช้ pre-built จาก Termux pkg — ไม่สามารถ compile บน Android ได้
+        # pip_try: install with a 90-second timeout — skip silently if it hangs/fails
+        pip_try() {
+            local pkg_name="$1"; shift
+            if timeout 90 pip3 install $pip_flags "$@" 2>/dev/null; then
+                info "${pkg_name} installed"
+                return 0
+            else
+                warn "${pkg_name} install skipped (timeout/failed) — ฟีเจอร์นี้จะทำงานผ่าน master แทน"
+                return 1
+            fi
+        }
+
+        # edge-tts: lightweight, installs fast
+        pip_try "edge-tts" edge-tts
+
+        # av (PyAV): try pre-built pkg first — never compile from source on Android
         local av_ok=false
-        if pkg install -y python-av 2>/dev/null; then
+        if timeout 60 pkg install -y python-av 2>/dev/null; then
             info "python-av installed via pkg (pre-built)"
             av_ok=true
-        elif pip3 install $pip_flags av --no-build-isolation 2>/dev/null; then
-            info "av installed via pip"
-            av_ok=true
         fi
-        if $av_ok && pip3 install $pip_flags faster-whisper 2>/dev/null; then
-            info "faster-whisper installed (STT)"
+        # faster-whisper: only if av is available AND only via pre-built wheel
+        # Never attempt source compile — it hangs for hours on Android
+        if $av_ok; then
+            pip_try "faster-whisper" faster-whisper --only-binary=:all: || true
         else
-            warn "faster-whisper install failed — STT จะทำงานผ่าน master แทน (ไม่ต้องติดตั้ง local STT)"
+            warn "faster-whisper skipped — python-av unavailable (STT จะทำงานผ่าน master)"
         fi
-        pip3 install $pip_flags resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
-        # Phase 5.2: Vosk for wake word detection (small Thai model)
-        pip3 install $pip_flags vosk 2>/dev/null && info "vosk installed (wake word detection)" || warn "vosk install failed (wake word unavailable)"
+
+        # resemblyzer: Speaker ID — skip if it tries to compile
+        pip_try "resemblyzer" resemblyzer --only-binary=:all: || true
+
+        # Phase 5.2: Vosk — lightweight, pre-built wheel available
+        pip_try "vosk" vosk
     fi
     # Phase 5.1: Piper TTS for Android ARM64
     local piper_dir="${HOME}/.picoclaw/piper"
