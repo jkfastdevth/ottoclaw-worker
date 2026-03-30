@@ -13,7 +13,25 @@
 #   ottoclaw config                 → ตั้งค่าใหม่
 #   ottoclaw log                    → ดู log แบบ real-time
 # ═══════════════════════════════════════════════════════════════════════════════
-set -euo pipefail
+set -uo pipefail
+
+# ── Resource Check ────────────────────────────────────────────────────────────
+check_resources() {
+    local free_mem=$(free -m | grep "Mem:" | awk '{print $7}')
+    if [[ $free_mem -lt 300 ]]; then
+        warn "แรมเหลือน้อย ($free_mem MB) การคอมไพล์อาจทำให้เครื่องค้าง"
+        warn "แนะนำให้ปิดแอปอื่นที่ไม่ได้ใช้ก่อนรันสคริปต์นี้ครับ"
+    fi
+}
+check_resources
+
+# ── Non-interactive detection ─────────────────────────────────────────────────
+# Auto mode: stdin is not a terminal (piped via curl|bash) OR AUTO_INSTALL=1
+if [[ ! -t 0 || "${AUTO_INSTALL:-}" == "1" ]]; then
+    NON_INTERACTIVE=1
+else
+    NON_INTERACTIVE=0
+fi
 
 # ── Detect Termux & Architecture ──────────────────────────────────────────────
 if [[ -z "${TERMUX_VERSION:-}" ]] && [[ ! -d "/data/data/com.termux" ]]; then
@@ -56,7 +74,7 @@ err()    { echo -e "  ${RED}✗${RESET}  $1"; exit 1; }
 ask() {
     # Usage: ask "Label" "default" [secret]
     local label="$1" default="$2" secret="${3:-false}" val=""
-    
+
     # 🤖 Automation: Check if an environment variable exists for this field
     # Normalize label to uppercase, replace spaces/special chars with underscores
     local env_name=$(echo "$label" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:lower:]' '[:upper:]' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
@@ -65,9 +83,15 @@ ask() {
         return
     fi
 
+    # Non-interactive: use default silently
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+        echo -n "$default"
+        return
+    fi
+
     local disp="$default"
     [[ "$secret" == "true" && -n "$default" ]] && disp=$(echo -n "$default" | sed 's/./*/g')
-    
+
     if [[ "$secret" == "true" && "${HIDE_SECRETS:-true}" == "true" ]]; then
         echo -ne "  ${CYAN}?${RESET}  ${label} [${disp}]: " >&2; read -s val < /dev/tty; echo "" >&2
     else
@@ -98,11 +122,17 @@ get_local_ip() {
 
 ask_yn() {
     local label="$1" default="$2" val
-    
+
     # 🤖 Automation check
     local env_name=$(echo "$label" | sed 's/[^a-zA-Z0-9]/_/g' | tr '[:lower:]' '[:upper:]' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
     if [[ -n "${!env_name:-}" ]]; then
         [[ "${!env_name,,}" == "y" || "${!env_name,,}" == "yes" || "${!env_name}" == "1" || "${!env_name,,}" == "true" ]]
+        return
+    fi
+
+    # Non-interactive: use default silently
+    if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+        [[ "${default,,}" == "y" || "${default,,}" == "yes" ]]
         return
     fi
 
@@ -138,27 +168,62 @@ install_deps() {
     else
         info "All dependencies already installed"
     fi
-    # Build tools needed for PyAV (faster-whisper dependency)
-    pkg install -y clang make libc++ 2>/dev/null || true
-    # Install edge-tts (TTS) + faster-whisper (STT) for Thai voice I/O
+    # Install edge-tts (TTS) + optional STT packages for Thai voice I/O
     if command -v pip3 &>/dev/null; then
         local pip_flags="--quiet --break-system-packages"
-        pip3 install $pip_flags edge-tts 2>/dev/null && info "edge-tts installed" || warn "edge-tts install failed (termux-tts-speak will be used)"
-        # av (PyAV) ต้องใช้ pre-built จาก Termux pkg — ไม่สามารถ compile บน Android ได้
+        # pip_try: install with a 90-second timeout — skip silently if it hangs/fails
+        pip_try() {
+            local pkg_name="$1"; shift
+            info "กำลังพยายามติดตั้ง ${pkg_name}..."
+            if timeout 90 pip3 install $pip_flags "$@" 2>/dev/null; then
+                info "${pkg_name} installed"
+            else
+                warn "${pkg_name} install skipped (timeout/failed) — ฟีเจอร์นี้จะทำงานผ่าน master แทน"
+            fi
+            return 0  # never fail — always continue
+        }
+
+        # edge-tts: lightweight, installs fast
+        pip_try "edge-tts" edge-tts || true
+
+        # av (PyAV): try pre-built pkg first — never compile from source on Android
         local av_ok=false
-        if pkg install -y python-av 2>/dev/null; then
+        if pkg install -y python-av -q 2>/dev/null; then
             info "python-av installed via pkg (pre-built)"
             av_ok=true
-        elif pip3 install $pip_flags av --no-build-isolation 2>/dev/null; then
-            info "av installed via pip"
-            av_ok=true
         fi
-        if $av_ok && pip3 install $pip_flags faster-whisper 2>/dev/null; then
-            info "faster-whisper installed (STT)"
+        
+        # faster-whisper: only if av is available AND only via pre-built wheel
+        if $av_ok; then
+            pip_try "faster-whisper" faster-whisper --only-binary=:all: || true
         else
-            warn "faster-whisper install failed — STT จะทำงานผ่าน master แทน (ไม่ต้องติดตั้ง local STT)"
+            warn "faster-whisper skipped — python-av unavailable (STT จะทำงานผ่าน master)"
         fi
-        pip3 install $pip_flags resemblyzer 2>/dev/null && info "resemblyzer installed (Speaker ID)" || warn "resemblyzer install failed (speaker ID unavailable)"
+
+        # resemblyzer: Speaker ID — skip if it tries to compile
+        pip_try "resemblyzer" resemblyzer --only-binary=:all: || true
+
+        # Phase 5.2: Vosk — lightweight, pre-built wheel available
+        pip_try "vosk" vosk || true
+    fi
+    # Phase 5.1: Piper TTS for Android ARM64
+    local piper_dir="${HOME}/.picoclaw/piper"
+    local piper_bin="${piper_dir}/piper"
+    if [[ ! -f "${piper_bin}" ]]; then
+        mkdir -p "${piper_dir}/models" || true
+        local piper_url="https://github.com/rhasspy/piper/releases/latest/download/piper_linux_aarch64.tar.gz"
+        local piper_tmp="/tmp/piper_linux_aarch64.tar.gz"
+        if curl -fsSL "${piper_url}" -o "${piper_tmp}" 2>/dev/null; then
+            tar -xzf "${piper_tmp}" -C "${piper_dir}" 2>/dev/null || true
+            [[ -f "${piper_dir}/piper/piper" ]] && mv "${piper_dir}/piper/piper" "${piper_bin}" && rm -rf "${piper_dir}/piper" || true
+            chmod +x "${piper_bin}" 2>/dev/null || true
+            rm -f "${piper_tmp}" || true
+            [[ -f "${piper_bin}" ]] && info "Piper TTS installed (ARM64)" || warn "Piper TTS extraction failed — will retry at runtime"
+        else
+            warn "Piper TTS download failed — จะติดตั้งให้อัตโนมัติเมื่อเริ่มใช้งานครั้งแรก"
+        fi
+    else
+        info "Piper TTS already installed: ${piper_bin}"
     fi
 }
 
@@ -195,42 +260,52 @@ build_binaries() {
     fi
 
     if [[ "$use_binary" == "false" ]]; then
+        # Check if Go is installed
+        if ! command -v go &>/dev/null; then
+            err "ไม่พบ Go compiler และดาวน์โหลด Binary ไม่สำเร็จ กรุณาติดตั้ง Go (pkg install golang) แล้วลองใหม่ครับ"
+        fi
+
         # Check if source exists, if not clone it (for one-liner source build)
         if [[ ! -d "${SCRIPT_DIR}/ottoclaw" ]]; then
             warn "ไม่พบ Source code ใน ${SCRIPT_DIR}. กำลังดาวน์โหลดจาก GitHub..."
-            local tmp_src=$(mktemp -d)
-            if command -v git >/dev/null 2>&1; then
-                git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}" >/dev/null 2>&1
+            local tmp_src="${HOME}/ottoclaw-temp"
+            rm -rf "${tmp_src}"
+            if git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}"; then
+                SCRIPT_DIR="${tmp_src}"
             else
-                # Fallback to downloading zip if git is missing
-                curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.zip" -o "${tmp_src}/source.zip"
-                unzip -q "${tmp_src}/source.zip" -d "${tmp_src}"
-                mv "${tmp_src}/ottoclaw-worker-main/"* "${tmp_src}/"
+                err "ดาวน์โหลด Source code ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต"
             fi
-            SCRIPT_DIR="${tmp_src}"
         fi
 
         # Build Brain (ottoclaw)
-        echo "  Building ottoclaw-brain..."
-        pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null
-        # Ensure workspace is available for embedding
-        local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
-        mkdir -p "${ONBOARD_DIR}"
-        rm -rf "${ONBOARD_DIR}/workspace"
-        # Create empty workspace if missing to avoid build failure
-        mkdir -p "${SCRIPT_DIR}/workspace"
-        touch "${SCRIPT_DIR}/workspace/placeholder.txt"
-        cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/workspace"
-        CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
-        popd >/dev/null
-        info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
+        echo "  Building ottoclaw-brain (อาจใช้เวลา 2-5 นาที)..."
+        if pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null; then
+            # Ensure workspace is available for embedding
+            local ONBOARD_DIR="cmd/ottoclaw/internal/onboard"
+            mkdir -p "${ONBOARD_DIR}/workspace" || true
+            # Create empty workspace if missing to avoid build failure
+            mkdir -p "${SCRIPT_DIR}/workspace" || true
+            touch "${SCRIPT_DIR}/workspace/placeholder.txt"
+            cp -rf "${SCRIPT_DIR}/workspace" "${ONBOARD_DIR}/" || true
+            
+            if CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw; then
+                info "ottoclaw-brain → ${BIN_DIR}/ottoclaw-brain"
+            else
+                err "การ Build ottoclaw-brain ล้มเหลว (อาจเกิดจาก RAM ไม่พอ)"
+            fi
+            popd >/dev/null
+        fi
 
         # Build Arm (siam-worker)
         echo "  Building siam-worker..."
-        pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
-        CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .
-        popd >/dev/null
-        info "siam-worker → ${BIN_DIR}/siam-worker"
+        if pushd "${SCRIPT_DIR}/siam-arm" >/dev/null; then
+            if CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/siam-worker" .; then
+                info "siam-worker → ${BIN_DIR}/siam-worker"
+            else
+                err "การ Build siam-worker ล้มเหลว"
+            fi
+            popd >/dev/null
+        fi
     fi
 }
 
@@ -246,7 +321,11 @@ run_config_wizard() {
         set -o allexport; source "${OTTOCLAW_ENV}" 2>/dev/null || true; set +o allexport
     else
         banner "Configuration Setup"
-        echo -e "  กด ${CYAN}Enter${RESET} เพื่อใช้ค่า default ในวงเล็บ\n"
+        if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+            info "Non-interactive mode — ใช้ค่า default และ env vars"
+        else
+            echo -e "  กด ${CYAN}Enter${RESET} เพื่อใช้ค่า default ในวงเล็บ\n"
+        fi
         MASTER_HOST="${MASTER_HOST:-192.168.1.1}"
         MASTER_API_KEY="${MASTER_API_KEY:-}"
         NODE_SECRET="${NODE_SECRET:-}"
@@ -738,7 +817,10 @@ install_wrapper
 banner "Starting Services"
 # Force stop any old instances before starting (prevents Telegram conflict)
 "${BIN_DIR}/ottoclaw" stop --quiet 2>/dev/null || true
-if ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
+if [[ "${NON_INTERACTIVE:-0}" == "1" ]]; then
+    info "Auto-starting services (non-interactive mode)"
+    "${BIN_DIR}/ottoclaw" start
+elif ask_yn "เริ่ม services เลยตอนนี้เลย?" "Y"; then
     "${BIN_DIR}/ottoclaw" start
 fi
 
