@@ -1178,6 +1178,30 @@ func main() {
 					continue
 				}
 
+				// SYSTEM_REMEMBER: store a memory on master via HTTP
+				// Payload: JSON {"content":"...","importance":0.8,"tags":["tag1"]}
+				if cmd.Type == "SYSTEM_REMEMBER" {
+					go func(cmdID, payload string) {
+						result := storeMemoryOnMaster(workerCtx, payload)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID, NodeId: nodeID, Success: true, Output: result,
+						})
+					}(cmd.CommandId, cmd.Payload)
+					continue
+				}
+
+				// SYSTEM_RECALL: search agent's memories on master via HTTP
+				// Payload: <query>  or  JSON {"q":"...","limit":5}
+				if cmd.Type == "SYSTEM_RECALL" {
+					go func(cmdID, payload string) {
+						result := recallMemoryFromMaster(workerCtx, payload)
+						grpcClient.ReportCommandResult(newGRPCCtx(), &proto.CommandResult{
+							CommandId: cmdID, NodeId: nodeID, Success: true, Output: result,
+						})
+					}(cmd.CommandId, cmd.Payload)
+					continue
+				}
+
 				// SYSTEM_WAKE_WORD_START: start always-on wake word detection
 				// Payload: optional comma-separated wake words override
 				if cmd.Type == "SYSTEM_WAKE_WORD_START" {

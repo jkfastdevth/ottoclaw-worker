@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -366,6 +367,11 @@ func HandleBrainQuery(ctx context.Context, payload string) string {
 		return `{"error":"empty prompt"}`
 	}
 
+	// Inject relevant long-term memories into system prompt
+	if memCtx := fetchMemoryContext(ctx, prompt); memCtx != "" {
+		system += "\n\n[Long-Term Memory]\n" + memCtx
+	}
+
 	// Inject available hardware tools into system prompt if requested
 	if wantsTools {
 		toolsDesc := ToolDescriptionsJSON()
@@ -418,6 +424,117 @@ func HandleBrainQuery(ctx context.Context, payload string) string {
 	// Suppress unused import warning for bytes if not used elsewhere
 	_ = bytes.NewBuffer
 	return string(out)
+}
+
+// ─── Long-Term Memory (Phase 6B) ─────────────────────────────────────────────
+
+// storeMemoryOnMaster sends a SYSTEM_REMEMBER payload to master's memory API.
+// payload: JSON string with content, importance, tags fields.
+func storeMemoryOnMaster(ctx context.Context, payload string) string {
+	agentID := strings.TrimSpace(os.Getenv("AGENT_ID"))
+	masterURL := masterHTTPBase() + "/agents/" + agentID + "/memory"
+	apiKey := os.Getenv("MASTER_API_KEY")
+
+	// If payload is not JSON, wrap it as content
+	if !strings.HasPrefix(strings.TrimSpace(payload), "{") {
+		b, _ := json.Marshal(map[string]interface{}{
+			"content":    payload,
+			"importance": 0.6,
+		})
+		payload = string(b)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", masterURL, strings.NewReader(payload))
+	if err != nil {
+		return fmt.Sprintf(`{"error":%q}`, err.Error())
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf(`{"error":%q}`, err.Error())
+	}
+	defer resp.Body.Close()
+	out := make([]byte, 512)
+	n, _ := resp.Body.Read(out)
+	return string(out[:n])
+}
+
+// recallMemoryFromMaster searches agent memories on master.
+// payload: query string or JSON {"q":"...","limit":5}
+func recallMemoryFromMaster(ctx context.Context, payload string) string {
+	agentID := strings.TrimSpace(os.Getenv("AGENT_ID"))
+	masterURL := masterHTTPBase()
+	apiKey := os.Getenv("MASTER_API_KEY")
+
+	var query string
+	var limit = 5
+	if strings.HasPrefix(strings.TrimSpace(payload), "{") {
+		var p struct {
+			Q     string `json:"q"`
+			Limit int    `json:"limit"`
+		}
+		if json.Unmarshal([]byte(payload), &p) == nil {
+			query = p.Q
+			if p.Limit > 0 {
+				limit = p.Limit
+			}
+		}
+	} else {
+		query = payload
+	}
+
+	url := fmt.Sprintf("%s/agents/%s/memory/search?q=%s&limit=%d",
+		masterURL, agentID, strings.ReplaceAll(query, " ", "+"), limit)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Sprintf(`{"error":%q}`, err.Error())
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf(`{"error":%q}`, err.Error())
+	}
+	defer resp.Body.Close()
+	out := make([]byte, 4096)
+	n, _ := resp.Body.Read(out)
+	return string(out[:n])
+}
+
+// fetchMemoryContext fetches the top-N memory context string from master for
+// injection into the Control Brain system prompt.
+func fetchMemoryContext(ctx context.Context, query string) string {
+	agentID := strings.TrimSpace(os.Getenv("AGENT_ID"))
+	if agentID == "" {
+		return ""
+	}
+	masterURL := masterHTTPBase()
+	apiKey := os.Getenv("MASTER_API_KEY")
+
+	url := fmt.Sprintf("%s/agents/%s/memory/context?q=%s&limit=4",
+		masterURL, agentID, strings.ReplaceAll(query, " ", "+"))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := (&http.Client{Timeout: 3 * time.Second}).Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Context string `json:"context"`
+	}
+	out := make([]byte, 4096)
+	n, _ := resp.Body.Read(out)
+	if json.Unmarshal(out[:n], &result) == nil {
+		return result.Context
+	}
+	return ""
 }
 
 // ─── ORCHESTRATOR_STEP handler ────────────────────────────────────────────────

@@ -25,11 +25,36 @@ import (
 
 // ─── Model Selection ─────────────────────────────────────────────────────────
 
-// controlBrainModel returns the best local model for this hardware.
-// Prefers small, fast, CPU-friendly models.
+// agentSpecializedModel maps agent soul names to their specialist Ollama model.
+// Each agent identity gets a model tuned for its role.
+var agentSpecializedModel = map[string]string{
+	"kaidos": "deepseek-coder:1.3b", // coding specialist (~900MB)
+	"kook":   "qwen2.5:0.5b",        // conversation specialist (~800MB)
+	"auric":  "phi3.5-mini",          // reasoning/planning (~2.2GB)
+}
+
+// controlBrainModel returns the best local model for this agent and hardware.
+// Priority: CONTROL_BRAIN_MODEL env > agent soul specialization > hardware default.
 func controlBrainModel() string {
 	if m := strings.TrimSpace(os.Getenv("CONTROL_BRAIN_MODEL")); m != "" {
 		return m
+	}
+	// Specialization by agent soul identity
+	soul := strings.ToLower(strings.TrimSpace(os.Getenv("SOUL_ID")))
+	if soul == "" {
+		soul = strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_ID")))
+	}
+	if soul != "" {
+		// Strip suffixes like "kaidos-v2" → "kaidos"
+		for name, model := range agentSpecializedModel {
+			if strings.HasPrefix(soul, name) {
+				if isTermux() && model == "phi3.5-mini" {
+					// phi3.5 too large for Android — fall back to qwen2.5:0.5b
+					return "qwen2.5:0.5b"
+				}
+				return model
+			}
+		}
 	}
 	if isTermux() {
 		return "qwen2.5:0.5b" // ~800MB RAM — runs on Android
@@ -155,6 +180,7 @@ const (
 
 // classifyTask decides whether a task is simple enough for the local brain.
 // Returns BrainLocal for simple/offline tasks, BrainMaster for complex ones.
+// Takes the agent's soul identity into account — specialists handle their domain locally.
 func classifyTask(prompt string, masterReachable bool) BrainTarget {
 	// Offline: always local
 	if !masterReachable {
@@ -164,15 +190,52 @@ func classifyTask(prompt string, masterReachable bool) BrainTarget {
 	lower := strings.ToLower(prompt)
 	promptLen := len([]rune(prompt))
 
-	// Long context → master (local models have limited context)
-	if promptLen > 800 {
+	// Identify this agent's specialization
+	soul := strings.ToLower(strings.TrimSpace(os.Getenv("SOUL_ID")))
+	if soul == "" {
+		soul = strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_ID")))
+	}
+
+	// Long context → master (local models have limited context window)
+	contextLimit := 800
+	if strings.HasPrefix(soul, "kaidos") {
+		contextLimit = 1200 // deepseek-coder handles longer code contexts
+	}
+	if promptLen > contextLimit {
 		return BrainMaster
 	}
 
-	// Complex indicators → master
-	complexKeywords := []string{
-		"เขียนโค้ด", "code", "program", "debug", "analyze", "วิเคราะห์",
+	// Coding keywords — route to local if kaidos (specialist), master otherwise
+	codeKeywords := []string{
+		"เขียนโค้ด", "code", "program", "debug", "function", "class",
+		"script", "golang", "python", "javascript", "typescript", "bash",
+		"แก้บัค", "bug", "error", "compile", "syntax",
+	}
+	for _, kw := range codeKeywords {
+		if strings.Contains(lower, kw) {
+			if strings.HasPrefix(soul, "kaidos") {
+				return BrainLocal // kaidos specializes in code — handle locally
+			}
+			return BrainMaster
+		}
+	}
+
+	// Reasoning/planning keywords — route to local if auric, master otherwise
+	reasonKeywords := []string{
 		"แผน", "plan", "strategy", "วางแผน", "design", "architect",
+		"วิเคราะห์", "analyze", "reason", "decide", "evaluate", "ประเมิน",
+	}
+	for _, kw := range reasonKeywords {
+		if strings.Contains(lower, kw) {
+			if strings.HasPrefix(soul, "auric") {
+				return BrainLocal // auric specializes in reasoning — handle locally
+			}
+			return BrainMaster
+		}
+	}
+
+	// General complexity → master
+	complexKeywords := []string{
 		"summarize", "สรุป", "ยาว", "รายงาน", "report",
 		"ค้นหา", "search", "research", "explain", "อธิบาย",
 	}
@@ -182,7 +245,7 @@ func classifyTask(prompt string, masterReachable bool) BrainTarget {
 		}
 	}
 
-	// Default simple tasks → local
+	// Default: simple tasks → local
 	return BrainLocal
 }
 
@@ -274,7 +337,11 @@ func InitControlBrain(ctx context.Context) {
 			log.Printf("⚠️ [ControlBrain] Model pull failed (%s): %v", model, err)
 			return
 		}
-		log.Printf("✅ [ControlBrain] Ready — model: %s @ %s", model, ollamaHost())
+		soul := strings.TrimSpace(os.Getenv("SOUL_ID"))
+		if soul == "" {
+			soul = strings.TrimSpace(os.Getenv("AGENT_ID"))
+		}
+		log.Printf("✅ [ControlBrain] Ready — soul: %s model: %s @ %s", soul, model, ollamaHost())
 	}()
 }
 
