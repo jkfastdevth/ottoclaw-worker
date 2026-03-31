@@ -178,75 +178,21 @@ const (
 	BrainMaster                    // Thinking Brain (master LLM via gRPC)
 )
 
-// classifyTask decides whether a task is simple enough for the local brain.
-// Returns BrainLocal for simple/offline tasks, BrainMaster for complex ones.
-// Takes the agent's soul identity into account — specialists handle their domain locally.
+// classifyTask decides whether a task should use the master LLM or local brain.
+// Policy: Master LLM is ALWAYS preferred when reachable. Local Ollama is only
+// used as offline fallback. This prevents local Ollama cold-starts from blocking
+// mission completion on Linux nodes (kaidos, kook) where Ollama may be slow.
 func classifyTask(prompt string, masterReachable bool) BrainTarget {
-	// Offline: always local
+	// Offline: always local — no other choice
 	if !masterReachable {
 		return BrainLocal
 	}
 
-	lower := strings.ToLower(prompt)
-	promptLen := len([]rune(prompt))
-
-	// Identify this agent's specialization
-	soul := strings.ToLower(strings.TrimSpace(os.Getenv("SOUL_ID")))
-	if soul == "" {
-		soul = strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_ID")))
-	}
-
-	// Long context → master (local models have limited context window)
-	contextLimit := 800
-	if strings.HasPrefix(soul, "kaidos") {
-		contextLimit = 1200 // deepseek-coder handles longer code contexts
-	}
-	if promptLen > contextLimit {
-		return BrainMaster
-	}
-
-	// Coding keywords — route to local if kaidos (specialist), master otherwise
-	codeKeywords := []string{
-		"เขียนโค้ด", "code", "program", "debug", "function", "class",
-		"script", "golang", "python", "javascript", "typescript", "bash",
-		"แก้บัค", "bug", "error", "compile", "syntax",
-	}
-	for _, kw := range codeKeywords {
-		if strings.Contains(lower, kw) {
-			if strings.HasPrefix(soul, "kaidos") {
-				return BrainLocal // kaidos specializes in code — handle locally
-			}
-			return BrainMaster
-		}
-	}
-
-	// Reasoning/planning keywords — route to local if auric, master otherwise
-	reasonKeywords := []string{
-		"แผน", "plan", "strategy", "วางแผน", "design", "architect",
-		"วิเคราะห์", "analyze", "reason", "decide", "evaluate", "ประเมิน",
-	}
-	for _, kw := range reasonKeywords {
-		if strings.Contains(lower, kw) {
-			if strings.HasPrefix(soul, "auric") {
-				return BrainLocal // auric specializes in reasoning — handle locally
-			}
-			return BrainMaster
-		}
-	}
-
-	// General complexity → master
-	complexKeywords := []string{
-		"summarize", "สรุป", "ยาว", "รายงาน", "report",
-		"ค้นหา", "search", "research", "explain", "อธิบาย",
-	}
-	for _, kw := range complexKeywords {
-		if strings.Contains(lower, kw) {
-			return BrainMaster
-		}
-	}
-
-	// Default: simple tasks → local
-	return BrainLocal
+	// Master is reachable → always use master LLM for reliability and speed.
+	// Local brain is reserved for offline/fallback scenarios only.
+	// This ensures kaidos/kook on Linux don't block on slow local Ollama.
+	_ = prompt // prompt reserved for future fine-grained routing if needed
+	return BrainMaster
 }
 
 // ─── Control Brain Inference ─────────────────────────────────────────────────
