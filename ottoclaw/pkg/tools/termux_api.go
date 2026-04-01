@@ -21,7 +21,7 @@ func (t *TermuxAPITool) Name() string {
 
 func (t *TermuxAPITool) Description() string {
 	return "Access Android hardware features via termux-api. " +
-		"Supported actions: vibrate, toast, battery-status, location, camera-info, camera-photo, clipboard-get, clipboard-set. " +
+		"Supported actions: vibrate, toast, battery-status, location, camera-info, camera-photo, video-start, video-stop, clipboard-get, clipboard-set. " +
 		"Requires the termux-api package to be installed on the device."
 }
 
@@ -32,13 +32,15 @@ func (t *TermuxAPITool) Parameters() map[string]any {
 			"action": map[string]any{
 				"type": "string",
 				"enum": []string{
-					"vibrate", 
-					"toast", 
-					"battery-status", 
-					"location", 
-					"camera-info", 
-					"camera-photo", 
-					"clipboard-get", 
+					"vibrate",
+					"toast",
+					"battery-status",
+					"location",
+					"camera-info",
+					"camera-photo",
+					"video-start",
+					"video-stop",
+					"clipboard-get",
 					"clipboard-set",
 				},
 				"description": "The termux-api action to execute.",
@@ -46,7 +48,7 @@ func (t *TermuxAPITool) Parameters() map[string]any {
 			"args": map[string]any{
 				"type":        "array",
 				"items":       map[string]any{"type": "string"},
-				"description": "Optional arguments for the action. For vibrate: ['-d', '1000'] (duration in ms). For toast: ['-s', 'Message'] or just ['Message']. For clipboard-set: ['Text to copy']. For camera-photo: ['-c', '0', 'file.jpg'].",
+				"description": "Optional arguments for the action. For vibrate: ['-d', '1000']. For toast: ['-s', 'Message']. For camera-photo: ['-c', '0', '/tmp/photo.jpg']. For video-start: ['-c', '0', '/tmp/vid.mp4'].",
 			},
 		},
 		"required": []string{"action"},
@@ -74,7 +76,7 @@ func (t *TermuxAPITool) Execute(ctx context.Context, args map[string]any) *ToolR
 	}
 
 	cmd := exec.CommandContext(ctx, command, cmdArgs...)
-	
+
 	// Ensure we run in a clean environment to avoid issues
 	cmd.Env = append(cmd.Environ(), "LD_PRELOAD=")
 

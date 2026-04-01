@@ -97,6 +97,9 @@ func NewAgentInstance(
 	if _, err := os.Stat("/data/data/com.termux"); err == nil {
 		toolsRegistry.Register(tools.NewTermuxAPITool())
 	}
+	
+	// Open-CV Motion Detection
+	toolsRegistry.Register(tools.NewDetectMotionTool())
 
 	// 📤 Telegram file sender — enabled when ORCHESTRATOR_TELEGRAM_TOKEN is set
 	if os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN") != "" || os.Getenv("TELEGRAM_BOT_TOKEN") != "" {

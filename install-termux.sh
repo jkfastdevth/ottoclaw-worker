@@ -161,7 +161,7 @@ install_deps() {
     command -v git &>/dev/null     || pkgs+=(git)
     command -v curl &>/dev/null    || pkgs+=(curl)
     command -v ffmpeg &>/dev/null  || pkgs+=(ffmpeg)
-    command -v python3 &>/dev/null || pkgs+=(python)
+    command -v python3 &>/dev/null || pkgs+=(python opencv-python)
     if [[ ${#pkgs[@]} -gt 0 ]]; then
         info "Installing: ${pkgs[*]}"
         pkg install -y "${pkgs[@]}"
