@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -174,6 +175,28 @@ func TakePhoto(parentCtx context.Context, outputPath string) (string, error) {
 
 	if outputPath == "" {
 		outputPath = fmt.Sprintf("/tmp/photo-%d.jpg", time.Now().UnixNano())
+	}
+
+	// High Priority: Check for IP Webcam (Great for PRoot/External Nodes)
+	ipcam := os.Getenv("IP_WEBCAM_URL")
+	if ipcam != "" {
+		shotURL := ipcam
+		if !strings.HasSuffix(shotURL, ".jpg") {
+			shotURL = strings.TrimRight(ipcam, "/") + "/shot.jpg"
+		}
+		
+		req, err := http.NewRequestWithContext(ctx, "GET", shotURL, nil)
+		if err == nil {
+			if resp, doErr := http.DefaultClient.Do(req); doErr == nil {
+				defer resp.Body.Close()
+				if out, createErr := os.Create(outputPath); createErr == nil {
+					defer out.Close()
+					io.Copy(out, resp.Body)
+					return outputPath, nil
+				}
+			}
+		}
+		return "", fmt.Errorf("failed to capture from IP webcam: %v", shotURL)
 	}
 
 	if _, lookErr := exec.LookPath("termux-camera-photo"); lookErr == nil || isTermux() {
