@@ -21,17 +21,17 @@ import (
 
 // HardwareInfo bundles all available sensor data for a snapshot.
 type HardwareInfo struct {
-	Battery  *BatteryInfo  `json:"battery,omitempty"`
-	Location *LocationInfo `json:"location,omitempty"`
-	Sensors  *SensorInfo   `json:"sensors,omitempty"`
-	Platform string        `json:"platform"`
-	Timestamp time.Time   `json:"timestamp"`
+	Battery   *BatteryInfo  `json:"battery,omitempty"`
+	Location  *LocationInfo `json:"location,omitempty"`
+	Sensors   *SensorInfo   `json:"sensors,omitempty"`
+	Platform  string        `json:"platform"`
+	Timestamp time.Time     `json:"timestamp"`
 }
 
 type BatteryInfo struct {
-	Level    float64 `json:"level"`     // 0-100
-	Plugged  bool    `json:"plugged"`
-	Status   string  `json:"status"`   // "charging" | "discharging" | "full" | "unknown"
+	Level   float64 `json:"level"` // 0-100
+	Plugged bool    `json:"plugged"`
+	Status  string  `json:"status"` // "charging" | "discharging" | "full" | "unknown"
 }
 
 type LocationInfo struct {
@@ -184,7 +184,7 @@ func TakePhoto(parentCtx context.Context, outputPath string) (string, error) {
 		if !strings.HasSuffix(shotURL, ".jpg") {
 			shotURL = strings.TrimRight(ipcam, "/") + "/shot.jpg"
 		}
-		
+
 		req, err := http.NewRequestWithContext(ctx, "GET", shotURL, nil)
 		if err == nil {
 			if resp, doErr := http.DefaultClient.Do(req); doErr == nil {
@@ -498,9 +498,9 @@ func HandleBrainQuery(ctx context.Context, payload string) string {
 
 	// Try JSON parse first
 	var req struct {
-		Prompt  string `json:"prompt"`
-		System  string `json:"system"`
-		Tools   bool   `json:"tools"`
+		Prompt string `json:"prompt"`
+		System string `json:"system"`
+		Tools  bool   `json:"tools"`
 	}
 	if err := json.Unmarshal([]byte(payload), &req); err == nil {
 		prompt = req.Prompt
@@ -692,10 +692,10 @@ func fetchMemoryContext(ctx context.Context, query string) string {
 // the Control Brain for LLM-based execution.
 func handleOrchestratorStep(ctx context.Context, payload string) string {
 	var req struct {
-		JobID   string `json:"job_id"`
-		StepID  string `json:"step_id"`
-		Skill   string `json:"skill"`
-		Input   string `json:"input"` // JSON string of key→value map
+		JobID  string `json:"job_id"`
+		StepID string `json:"step_id"`
+		Skill  string `json:"skill"`
+		Input  string `json:"input"` // JSON string of key→value map
 	}
 	if err := json.Unmarshal([]byte(payload), &req); err != nil {
 		return fmt.Sprintf(`{"error":"invalid payload: %s"}`, err.Error())
@@ -720,7 +720,7 @@ func handleOrchestratorStep(ctx context.Context, payload string) string {
 			"source":  "hardware_tool",
 		})
 		return string(out)
-	} else if err != nil && strings.Contains(err.Error(), "unknown tool:") == false {
+	} else if !strings.Contains(err.Error(), "unknown tool:") {
 		// If the tool is known but failed (e.g., timeout, no camera), return the error immediately!
 		// Do not fall back to Control Brain, because it will just cause confusion and timeout.
 		return fmt.Sprintf(`{"error":"hardware skill %q failed: %s","job_id":%q,"step_id":%q}`,
