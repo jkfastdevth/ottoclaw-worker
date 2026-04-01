@@ -431,9 +431,12 @@ run_config_wizard() {
     fi
 
     echo ""
+    echo -e "${BOLD}[3/4] Hardware Options (Optional)${RESET}"
+    IP_WEBCAM_URL=$(ask "IP_WEBCAM_URL (e.g. http://127.0.0.1:8080)" "${IP_WEBCAM_URL:-}")
+    echo ""
 
-    # [3/3] Process management
-    echo -e "${BOLD}[3/3] Background Process${RESET}"
+    # [4/4] Process management
+    echo -e "${BOLD}[4/4] Background Process${RESET}"
     echo -e "  บน Termux บริการจะรันเป็น background process ผ่าน nohup\n"
 
     NODE_ID="android-$(hostname 2>/dev/null || echo 'device')"
@@ -473,6 +476,8 @@ OTTOCLAW_API_BASE="${OTTOCLAW_API_BASE}"
 OTTOCLAW_API_KEY="${OTTOCLAW_API_KEY}"
 OTTOCLAW_MODEL_ID="${OTTOCLAW_MODEL_ID}"
 OTTOCLAW_MODEL_NAME="${OTTOCLAW_MODEL_NAME}"
+
+IP_WEBCAM_URL="${IP_WEBCAM_URL:-}"
 
 WORKER_TELEGRAM_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"
 ORCHESTRATOR_TELEGRAM_TOKEN="${WORKER_TELEGRAM_TOKEN:-}"

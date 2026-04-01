@@ -296,6 +296,7 @@ run_config_wizard() {
     # ── [4/4] Service User (Optional) ─────────────────────────────────────────
     echo -e "${BOLD}[4/4] Service Options (Optional)${RESET}"
     SERVICE_USER_INPUT=$(prompt_val "Run service as user (leave blank = root)" "${RUN_AS_USER:-}")
+    IP_WEBCAM_URL=$(prompt_val "IP Webcam URL (e.g. http://127.0.0.1:8080)" "${IP_WEBCAM_URL:-}")
 
     # Fixed defaults — identical to Docker container behaviour
     NODE_ID="$(hostname)"
@@ -352,6 +353,9 @@ ORCHESTRATOR_NICKNAMES="${ORCHESTRATOR_NICKNAMES}"
 # ── Google Skill Access (Optional) ──────────────────────────
 GOOGLE_EMAIL="${GOOGLE_EMAIL}"
 GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD}"
+
+# ── Hardware Options ───────────────────────────────────────────
+IP_WEBCAM_URL="${IP_WEBCAM_URL}"
 
 # ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME="${OTTOCLAW_HOME}"

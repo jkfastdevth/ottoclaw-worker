@@ -240,10 +240,15 @@ run_config_wizard() {
     fi
     echo ""
 
-    # ── [3/3] Google Skill Access (Optional) ─────────────────────────────────
-    echo -e "${BOLD}[3/3] Google Skill Access (Optional — leave blank for General Worker)${RESET}"
+    # ── [3/4] Google Skill Access (Optional) ─────────────────────────────────
+    echo -e "${BOLD}[3/4] Google Skill Access (Optional — leave blank for General Worker)${RESET}"
     GOOGLE_EMAIL=$(prompt_val "GOOGLE_EMAIL" "${GOOGLE_EMAIL:-}")
     GOOGLE_APP_PASSWORD=$(prompt_val "GOOGLE_APP_PASSWORD" "${GOOGLE_APP_PASSWORD:-}" "true")
+    echo ""
+
+    # ── [4/4] Hardware Options (Optional) ────────────────────────────────────
+    echo -e "${BOLD}[4/4] Hardware Options (Optional)${RESET}"
+    IP_WEBCAM_URL=$(prompt_val "IP Webcam URL (e.g. http://127.0.0.1:8080)" "${IP_WEBCAM_URL:-}")
     echo ""
 
     NODE_ID="$(hostname)-proot"
@@ -289,6 +294,9 @@ TELEGRAM_ORCHESTRATION_ENABLED="${TELEGRAM_ORCHESTRATION_ENABLED}"
 # ── Google Skill Access (Optional) ──────────────────────────
 GOOGLE_EMAIL="${GOOGLE_EMAIL}"
 GOOGLE_APP_PASSWORD="${GOOGLE_APP_PASSWORD}"
+
+# ── Hardware Options ───────────────────────────────────────────
+IP_WEBCAM_URL="${IP_WEBCAM_URL}"
 
 # ── Paths ──────────────────────────────────────────────────────
 OTTOCLAW_HOME="${OTTOCLAW_HOME}"
