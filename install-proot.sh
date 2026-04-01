@@ -296,15 +296,6 @@ build_binaries() {
     fi
 
     BIN_DIR="/usr/local/bin"
-    
-    echo "  Building ottoclaw-brain..."
-    if pushd "${SCRIPT_DIR}/ottoclaw" >/dev/null; then
-        CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o "${BIN_DIR}/ottoclaw-brain" ./cmd/ottoclaw
-        popd >/dev/null
-        info "ottoclaw-brain ready."
-    else
-        err "Could not enter ottoclaw directory."
-    fi
 
     echo "  Building siam-worker..."
     if pushd "${SCRIPT_DIR}/siam-arm" >/dev/null; then
@@ -319,19 +310,18 @@ build_binaries() {
 install_wrapper() {
     cat > /usr/local/bin/ottoclaw << 'WRAPEOF'
 #!/usr/bin/env bash
-BRAIN="/usr/local/bin/ottoclaw-brain"
 WORKER="/usr/local/bin/siam-worker"
 case "${1:-}" in
   start)
     /usr/local/bin/ottoclaw-setup
     set -o allexport; source /etc/ottoclaw/env; set +o allexport
     nohup "$WORKER" > /var/lib/ottoclaw/logs/siam-worker.log 2>&1 &
-    nohup "$BRAIN" gateway --debug > /var/lib/ottoclaw/logs/ottoclaw-brain.log 2>&1 &
-    echo "✅ Services started in background."
+    echo "✅ Worker started in background."
     ;;
-  stop) pkill -f "ottoclaw-brain|siam-worker" || true; echo "✅ Stopped." ;;
+  stop) pkill -f "siam-worker" || true; echo "✅ Stopped." ;;
   restart) $0 stop; sleep 1; $0 start ;;
-  status) pgrep -fl "ottoclaw|siam-worker" || echo "No services running." ;;
+  status) pgrep -fl "siam-worker" || echo "No services running." ;;
+  config) nano /etc/ottoclaw/env ;;
   update)
     echo "🔄 OttoClaw Update"
     INSTALL_SH="$(find /opt/siam-synapse /home -name install-proot.sh -path '*/ottoclaw-worker/*' 2>/dev/null | head -1)"
@@ -346,29 +336,19 @@ case "${1:-}" in
     
     echo "🔨 Rebuilding binaries..."
     export CGO_ENABLED=0
-    pushd "${REPO_DIR}/ottoclaw" >/dev/null
-    go build -buildvcs=false -ldflags="-s -w" -o /tmp/ottoclaw-brain-new ./cmd/ottoclaw
-    popd >/dev/null
-    
     pushd "${REPO_DIR}/siam-arm" >/dev/null
     go build -buildvcs=false -ldflags="-s -w" -o /tmp/siam-worker-new .
     popd >/dev/null
     
     echo "🛑 หยุดการทำงาน Service ก่อน & Replacing binaries..."
-    mv -f /tmp/ottoclaw-brain-new /usr/local/bin/ottoclaw-brain
     mv -f /tmp/siam-worker-new /usr/local/bin/siam-worker
     # Use background command to ensure the restart survives if this script is killed by the stop command
     nohup bash -c "\"$0\" stop 2>/dev/null || true; sleep 2; \"$0\" start" >/dev/null 2>&1 &
     
-    echo "✅ Update complete! Services restarting in background..."
+    echo "✅ Update complete! Worker restarting in background..."
     ;;
   *) 
-    if [ -f "$BRAIN" ]; then
-        exec "$BRAIN" "$@"
-    else
-        echo "Error: $BRAIN not found. Please run installation again."
-        exit 1
-    fi
+    echo "Usage: ottoclaw {start|stop|restart|status|config|update}"
     ;;
 esac
 WRAPEOF
