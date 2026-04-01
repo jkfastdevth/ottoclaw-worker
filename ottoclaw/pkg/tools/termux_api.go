@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 // TermuxAPITool provides access to Android hardware features via the termux-api package.
@@ -79,6 +79,7 @@ func (t *TermuxAPITool) Execute(ctx context.Context, args map[string]any) *ToolR
 
 	if action == "video-capture" {
 		// Custom virtual action for: video-capture <duration_sec> <camera_id> <output_path>
+		// Since termux-api does not support video directly, we use IP Webcam + ffmpeg
 		if len(cmdArgs) < 3 {
 			return ErrorResult("video-capture requires 3 arguments: duration_sec, camera_id (0=back, 1=front), output_path")
 		}
@@ -86,26 +87,40 @@ func (t *TermuxAPITool) Execute(ctx context.Context, args map[string]any) *ToolR
 		camID := cmdArgs[1]
 		outPath := cmdArgs[2]
 
-		// Ensure no current video is recording
-		exec.CommandContext(ctx, "termux-video-stop").Run()
-
-		startCmd := exec.CommandContext(ctx, "termux-video-start", "-c", camID, outPath)
-		startCmd.Env = append(startCmd.Environ(), "LD_PRELOAD=")
-		if err := startCmd.Run(); err != nil {
-			return ErrorResult(fmt.Sprintf("Failed to start video recording: %v", err))
-		}
-
 		durationSec := 10
 		fmt.Sscanf(durationSecStr, "%d", &durationSec)
 		if durationSec <= 0 || durationSec > 300 {
 			durationSec = 10
 		}
 
-		time.Sleep(time.Duration(durationSec) * time.Second)
+		ipcam := os.Getenv("IP_WEBCAM_URL")
+		if ipcam == "" {
+			ipcam = "http://127.0.0.1:8080"
+		}
+		
+		// If camID is specified, we can optionally switch IP webcam camera via API
+		// curl -s "http://127.0.0.1:8080/settings/ffc?set=$(if [ "$camID" = "1" ]; then echo "on"; else echo "off"; fi)"
+		ffc := "off"
+		if camID == "1" {
+			ffc = "on"
+		}
+		exec.Command("curl", "-s", fmt.Sprintf("%s/settings/ffc?set=%s", ipcam, ffc)).Run()
+		
+		videoURL := ipcam
+		if !strings.HasSuffix(videoURL, ".mjpg") && !strings.HasSuffix(videoURL, "/video") {
+			videoURL = strings.TrimRight(ipcam, "/") + "/video"
+		}
 
-		stopCmd := exec.CommandContext(ctx, "termux-video-stop")
-		stopCmd.Env = append(stopCmd.Environ(), "LD_PRELOAD=")
-		stopCmd.Run()
+		// Use ffmpeg to stream from the IP Webcam to MP4 for durationSec
+		ffmpegCmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-t", fmt.Sprintf("%d", durationSec), "-i", videoURL, "-c:v", "libx264", "-preset", "ultrafast", outPath)
+		ffmpegCmd.Env = append(ffmpegCmd.Environ(), "LD_PRELOAD=")
+		
+		var ffmpegErr bytes.Buffer
+		ffmpegCmd.Stderr = &ffmpegErr
+		
+		if err := ffmpegCmd.Run(); err != nil {
+			return ErrorResult(fmt.Sprintf("Failed to capture video using IP Webcam & ffmpeg: %v\nstderr: %s", err, ffmpegErr.String()))
+		}
 
 		return &ToolResult{
 			ForLLM:  fmt.Sprintf("Video captured successfully at %s", outPath),
