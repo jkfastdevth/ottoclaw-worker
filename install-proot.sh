@@ -75,7 +75,8 @@ get_local_ip() {
 install_deps() {
     banner "Installing PRoot Dependencies"
     apt-get update -y -q
-    apt-get install -y -q curl git golang ffmpeg python3-pip python3-av procps psmisc sudo xargs 2>/dev/null || true
+    apt-get install -y -q curl git golang ffmpeg python3-pip procps psmisc sudo xargs 2>/dev/null || true
+    pip3 install opencv-python-headless numpy --break-system-packages 2>/dev/null || true
 }
 
 
