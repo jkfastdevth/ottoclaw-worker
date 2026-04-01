@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // TermuxAPITool provides access to Android hardware features via the termux-api package.
@@ -40,6 +41,7 @@ func (t *TermuxAPITool) Parameters() map[string]any {
 					"camera-photo",
 					"video-start",
 					"video-stop",
+					"video-capture",
 					"clipboard-get",
 					"clipboard-set",
 				},
@@ -48,7 +50,7 @@ func (t *TermuxAPITool) Parameters() map[string]any {
 			"args": map[string]any{
 				"type":        "array",
 				"items":       map[string]any{"type": "string"},
-				"description": "Optional arguments for the action. For vibrate: ['-d', '1000']. For toast: ['-s', 'Message']. For camera-photo: ['-c', '0', '/tmp/photo.jpg']. For video-start: ['-c', '0', '/tmp/vid.mp4'].",
+				"description": "Optional arguments for the action. For vibrate: ['-d', '1000']. For toast: ['-s', 'Message']. For camera-photo: ['-c', '0', '/tmp/photo.jpg']. For video-capture: ['10', '1', '/tmp/vid.mp4'] (duration in sec, camera 0/1, output path).",
 			},
 		},
 		"required": []string{"action"},
@@ -72,6 +74,42 @@ func (t *TermuxAPITool) Execute(ctx context.Context, args map[string]any) *ToolR
 	if rawArgs, ok := args["args"].([]any); ok {
 		for _, arg := range rawArgs {
 			cmdArgs = append(cmdArgs, fmt.Sprint(arg))
+		}
+	}
+
+	if action == "video-capture" {
+		// Custom virtual action for: video-capture <duration_sec> <camera_id> <output_path>
+		if len(cmdArgs) < 3 {
+			return ErrorResult("video-capture requires 3 arguments: duration_sec, camera_id (0=back, 1=front), output_path")
+		}
+		durationSecStr := cmdArgs[0]
+		camID := cmdArgs[1]
+		outPath := cmdArgs[2]
+
+		// Ensure no current video is recording
+		exec.CommandContext(ctx, "termux-video-stop").Run()
+
+		startCmd := exec.CommandContext(ctx, "termux-video-start", "-c", camID, outPath)
+		startCmd.Env = append(startCmd.Environ(), "LD_PRELOAD=")
+		if err := startCmd.Run(); err != nil {
+			return ErrorResult(fmt.Sprintf("Failed to start video recording: %v", err))
+		}
+
+		durationSec := 10
+		fmt.Sscanf(durationSecStr, "%d", &durationSec)
+		if durationSec <= 0 || durationSec > 300 {
+			durationSec = 10
+		}
+
+		time.Sleep(time.Duration(durationSec) * time.Second)
+
+		stopCmd := exec.CommandContext(ctx, "termux-video-stop")
+		stopCmd.Env = append(stopCmd.Environ(), "LD_PRELOAD=")
+		stopCmd.Run()
+
+		return &ToolResult{
+			ForLLM:  fmt.Sprintf("Video captured successfully at %s", outPath),
+			ForUser: fmt.Sprintf("Recorded %d seconds of video to %s", durationSec, outPath),
 		}
 	}
 
