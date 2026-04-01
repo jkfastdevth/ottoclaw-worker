@@ -76,50 +76,8 @@ install_deps() {
     banner "Installing PRoot Dependencies"
     apt-get update -y -q
     apt-get install -y -q curl git golang ffmpeg python3-pip python3-av procps psmisc sudo xargs 2>/dev/null || true
-    
-    if ! command -v ollama &>/dev/null; then
-        info "Installing Ollama (Binary mode for PRoot)..."
-        local _arch
-        case "$(uname -m)" in
-            x86_64)  _arch="amd64" ;;
-            aarch64) _arch="arm64" ;;
-            *)       warn "Unknown arch $(uname -m), defaulting to arm64"; _arch="arm64" ;;
-        esac
-        local _url="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-${_arch}"
-        info "Downloading from: ${_url}"
-        if ! curl -fsSL "$_url" -o /usr/local/bin/ollama; then
-            warn "Ollama download failed — please install manually: curl -fsSL ${_url} -o /usr/local/bin/ollama"
-        else
-            chmod +x /usr/local/bin/ollama
-            info "Ollama installed to /usr/local/bin/ollama"
-        fi
-    fi
 }
 
-pull_vision_model() {
-    banner "Pulling Vision Model (AI)"
-    info "Starting temporary Ollama server to pull models..."
-    mkdir -p /var/lib/ottoclaw/logs
-    nohup ollama serve > /var/lib/ottoclaw/logs/ollama_install.log 2>&1 &
-    local ollama_pid=$!
-    
-    local retry=0
-    while ! ollama list >/dev/null 2>&1 && [ $retry -lt 15 ]; do
-        sleep 2
-        retry=$((retry+1))
-    done
-
-    if ollama list >/dev/null 2>&1; then
-        info "Pulling moondream (Vision model, ~1.6GB)..."
-        ollama pull moondream
-        info "Vision model ready."
-    else
-        warn "Ollama server failed to start in PRoot — ไม่ต้องกังวล ระบบหลักยังทำงานได้ปกติ"
-        warn "รันด้วยตัวเองทีหลัง: ollama serve & && ollama pull moondream"
-    fi
-    
-    pkill -f "ollama serve" 2>/dev/null; kill "$ollama_pid" 2>/dev/null; true
-}
 
 # ── STEP 2: Full Config Wizard ────────────────────────────────────────────────
 run_config_wizard() {
@@ -366,16 +324,14 @@ WORKER="/usr/local/bin/siam-worker"
 case "${1:-}" in
   start)
     /usr/local/bin/ottoclaw-setup
-    nohup ollama serve > /var/lib/ottoclaw/logs/ollama.log 2>&1 &
-    sleep 3
     set -o allexport; source /etc/ottoclaw/env; set +o allexport
     nohup "$WORKER" > /var/lib/ottoclaw/logs/siam-worker.log 2>&1 &
     nohup "$BRAIN" gateway --debug > /var/lib/ottoclaw/logs/ottoclaw-brain.log 2>&1 &
     echo "✅ Services started in background."
     ;;
-  stop) pkill -f "ottoclaw-brain|siam-worker|ollama serve" || true; echo "✅ Stopped." ;;
+  stop) pkill -f "ottoclaw-brain|siam-worker" || true; echo "✅ Stopped." ;;
   restart) $0 stop; sleep 1; $0 start ;;
-  status) pgrep -fl "ottoclaw|siam-worker|ollama" || echo "No services running." ;;
+  status) pgrep -fl "ottoclaw|siam-worker" || echo "No services running." ;;
   update)
     echo "🔄 OttoClaw Update"
     INSTALL_SH="$(find /opt/siam-synapse /home -name install-proot.sh -path '*/ottoclaw-worker/*' 2>/dev/null | head -1)"
@@ -425,7 +381,6 @@ install_deps
 run_config_wizard
 install_setup_helper
 build_binaries
-pull_vision_model
 install_wrapper
 
 banner "✅ PRoot Installation Ready!"
