@@ -75,6 +75,21 @@ func (t *TermuxAPITool) Execute(ctx context.Context, args map[string]any) *ToolR
 		for _, arg := range rawArgs {
 			cmdArgs = append(cmdArgs, fmt.Sprint(arg))
 		}
+	} else if strArgs, ok := args["args"].(string); ok {
+		// Orchestrator map[string]string workaround
+		// Pass space-separated or comma-separated if needed.
+		// For simple args like "-c,0,/tmp/photo.jpg", split by comma
+		if strings.Contains(strArgs, ",") {
+			parts := strings.Split(strArgs, ",")
+			for _, p := range parts {
+				cmdArgs = append(cmdArgs, strings.TrimSpace(p))
+			}
+		} else {
+			parts := strings.Split(strArgs, " ")
+			for _, p := range parts {
+				cmdArgs = append(cmdArgs, strings.TrimSpace(p))
+			}
+		}
 	}
 
 	if action == "video-capture" {
