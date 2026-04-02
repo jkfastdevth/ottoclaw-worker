@@ -105,6 +105,7 @@ func NewAgentInstance(
 	if os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN") != "" || os.Getenv("TELEGRAM_BOT_TOKEN") != "" {
 		toolsRegistry.Register(tools.NewTelegramSendTool())
 		toolsRegistry.Register(tools.NewTelegramDownloadTool())
+		toolsRegistry.Register(tools.NewTelegramApprovalTool())
 	}
 
 	// Register Facebook Tool explicitly
