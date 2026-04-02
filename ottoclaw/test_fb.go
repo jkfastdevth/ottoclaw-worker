@@ -11,10 +11,11 @@ func main() {
 	
 	fbTool := tools.NewFacebookTool()
 	
-	// เตรียม parameter เหมือนที่ Kaidos/AI จะส่งมา
+	// เตรียม parameter สำหรับลองโพสต์
 	args := map[string]any{
-		"action":   "save_session",
-		"headless": false,
+		"action":   "post",
+		"message":  "สวัสดีโลก! นี่คือการทดสอบโพสต์อัตโนมัติจาก Kaidos (Private Session) 🤖🚀",
+		"headless": false, // ตั้งเป็น false เพื่อให้เห็นหน้าจอตอนโหลด Feed
 	}
 	
 	fmt.Println("⏳ กำลังเรียกใช้งาน Facebook Tool (Action: save_session)")
