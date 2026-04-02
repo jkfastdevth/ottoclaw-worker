@@ -110,6 +110,19 @@ def run_steps(params):
                     page.wait_for_selector(selector, timeout=timeout)
                     step_result["found"] = True
 
+                elif action == "upload_file":
+                    selector = step["selector"]
+                    file_path = step["file_path"]
+                    # Provide an option to use expect_file_chooser if clicking a button is needed,
+                    # but fallback to set_input_files if selector points to <input type=file>
+                    if step.get("use_file_chooser"):
+                        with page.expect_file_chooser(timeout=timeout) as fc_info:
+                            page.click(selector)
+                        fc_info.value.set_files(file_path)
+                    else:
+                        page.set_input_files(selector, file_path, timeout=timeout)
+                    step_result["uploaded"] = True
+
                 elif action == "evaluate_js":
                     js = step["js"]
                     value = page.evaluate(js)

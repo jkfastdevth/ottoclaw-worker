@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // FacebookTool lets agents post to Facebook using the existing Playwright bridge.
@@ -47,6 +46,10 @@ func (t *FacebookTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Text content to post on Facebook. Required when action is 'post'.",
 			},
+			"image_path": map[string]any{
+				"type":        "string",
+				"description": "Optional absolute path to an image file to upload with the post.",
+			},
 			"headless": map[string]any{
 				"type":        "boolean",
 				"description": "Force headless mode. Default: false for save_session, true for post.",
@@ -67,10 +70,11 @@ func (t *FacebookTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 		return t.saveSession(ctx)
 	case "post":
 		msg, _ := args["message"].(string)
+		img, _ := args["image_path"].(string)
 		if strings.TrimSpace(msg) == "" {
 			return ErrorResult("'message' is required for action 'post' and must not be empty")
 		}
-		return t.post(ctx, msg)
+		return t.post(ctx, msg, img)
 	default:
 		return ErrorResult(fmt.Sprintf("unknown facebook action: %q — valid: post, save_session", action))
 	}
@@ -107,8 +111,8 @@ func (t *FacebookTool) saveSession(ctx context.Context) *ToolResult {
 		result.ForLLM)
 }
 
-// post publishes a text message to the user's Facebook feed.
-func (t *FacebookTool) post(ctx context.Context, message string) *ToolResult {
+// post publishes a text message to the user's Facebook feed, optionally with an image.
+func (t *FacebookTool) post(ctx context.Context, message, imagePath string) *ToolResult {
 	sessFile := t.sessionFile()
 	if _, err := os.Stat(sessFile); os.IsNotExist(err) {
 		return ErrorResult("❌ Facebook session not found.\n" +
@@ -160,7 +164,22 @@ func (t *FacebookTool) post(ctx context.Context, message string) *ToolResult {
 			"action": "type_text",
 			"text":   message,
 		},
+	}
 
+	if imagePath != "" {
+		steps = append(steps, map[string]any{
+			"action":     "upload_file",
+			"selector":   "input[type='file'][accept*='image']",
+			"file_path":  imagePath,
+			"timeout_ms": 15000,
+		})
+		steps = append(steps, map[string]any{
+			"action": "evaluate_js",
+			"js":     "new Promise(r => setTimeout(r, 4000))", // wait for image to upload
+		})
+	}
+
+	steps = append(steps, []map[string]any{
 		// Short pause before posting
 		{"action": "evaluate_js", "js": "new Promise(r => setTimeout(r, 2000))"},
 
@@ -182,11 +201,11 @@ func (t *FacebookTool) post(ctx context.Context, message string) *ToolResult {
 		},
 
 		// Wait for post to be submitted
-		{"action": "evaluate_js", "js": fmt.Sprintf("new Promise(r => setTimeout(r, %d))", int(5*time.Second/time.Millisecond))},
+		{"action": "evaluate_js", "js": "new Promise(r => setTimeout(r, 8000))"},
 
 		// Screenshot for confirmation
 		{"action": "screenshot", "path": "/tmp/fb_posted.png"},
-	}
+	}...)
 
 	result := browser.Execute(ctx, map[string]any{
 		"session_id":        "facebook",
