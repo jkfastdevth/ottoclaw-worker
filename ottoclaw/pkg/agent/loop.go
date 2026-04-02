@@ -1204,6 +1204,34 @@ func (al *AgentLoop) runLLMIteration(
 			"temperature":      agent.Temperature,
 			"prompt_cache_key": agent.ID,
 		}
+
+		// 🧭 Smart Routing: Override model based on [ROUTING:xxx] hint in message
+		// This ensures tool-calling tasks use capable models (Qwen3, Llama-4) instead of default.
+		// Strategy: override the model-name string only — the same provider/gateway handles routing.
+		effectiveModel := agent.Model
+		effectiveCandidates := agent.Candidates
+		if routingProfile := parseRoutingHint(opts.UserMessage); routingProfile != "" {
+			if overrideName := routingModelName(routingProfile); overrideName != "" {
+				if _, cfgErr := al.cfg.GetModelConfig(overrideName); cfgErr == nil {
+					// Model name exists in config — route to it via same provider/gateway
+					effectiveModel = overrideName
+					effectiveCandidates = []providers.FallbackCandidate{{Provider: "", Model: overrideName}}
+					if iteration == 1 {
+						logger.InfoCF("agent", "🧭 Routing override applied",
+							map[string]any{
+								"profile":  routingProfile,
+								"model":    overrideName,
+								"agent_id": agent.ID,
+							})
+					}
+				} else if iteration == 1 {
+					// No dedicated model for this profile in config — log once and continue with default
+					logger.InfoCF("agent", "🧭 No routing model configured for profile, using default",
+						map[string]any{"profile": routingProfile, "model_name": overrideName})
+				}
+			}
+		}
+
 		// parseThinkingLevel guarantees ThinkingOff for empty/unknown values,
 		// so checking != ThinkingOff is sufficient.
 		if agent.ThinkingLevel != ThinkingOff {
@@ -1230,10 +1258,11 @@ func (al *AgentLoop) runLLMIteration(
 		}
 
 		callLLM := func() (*providers.LLMResponse, error) {
-			if len(agent.Candidates) > 1 && al.fallback != nil {
+			// Use effectiveCandidates/effectiveModel which may be overridden by routing hint
+			if len(effectiveCandidates) > 1 && al.fallback != nil {
 				fbResult, fbErr := al.fallback.Execute(
 					ctx,
-					agent.Candidates,
+					effectiveCandidates,
 					func(ctx context.Context, provider, model string) (*providers.LLMResponse, error) {
 						return agent.Provider.Chat(ctx, messages, providerToolDefs, model, llmOpts)
 					},
@@ -1251,7 +1280,7 @@ func (al *AgentLoop) runLLMIteration(
 				}
 				return fbResult.Response, nil
 			}
-			return agent.Provider.Chat(ctx, messages, providerToolDefs, agent.Model, llmOpts)
+			return agent.Provider.Chat(ctx, messages, providerToolDefs, effectiveModel, llmOpts)
 		}
 
 		// Retry loop for context/token/rate-limit errors

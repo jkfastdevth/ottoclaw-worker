@@ -114,6 +114,18 @@ if [ ! -f "$CONFIG_PATH" ]; then
       "api_base": "${API_BASE_OVERRIDE}",
       "api_key": "${API_KEY_OVERRIDE}"
     },
+    {
+      "model_name": "tool_calling",
+      "model": "${TOOL_CALLING_MODEL_ID:-${MODEL_ID}}",
+      "api_base": "${API_BASE_OVERRIDE}",
+      "api_key": "${API_KEY_OVERRIDE}"
+    },
+    {
+      "model_name": "creative",
+      "model": "${CREATIVE_MODEL_ID:-${MODEL_ID}}",
+      "api_base": "${API_BASE_OVERRIDE}",
+      "api_key": "${API_KEY_OVERRIDE}"
+    },
     ${HEARTBEAT_MODEL_FRAG}
   ]${CHANNELS_JSON}${HEARTBEAT_JSON}
 }
