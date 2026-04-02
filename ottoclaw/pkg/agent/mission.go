@@ -389,11 +389,64 @@ func (m *MissionManager) pollMissions(ctx context.Context, masterURL, apiKey str
 	}
 }
 
+// markInProgress PATCHes the mission status to "in_progress" on the Master
+// so it no longer appears in the pending poll, preventing infinite re-polling.
+func (m *MissionManager) markInProgress(ctx context.Context, missionID string) error {
+	masterURL := m.cfg.Channels.SiamSync.MasterURL
+	if masterURL == "" {
+		masterURL = os.Getenv("MASTER_API_URL")
+	}
+	if masterURL == "" {
+		masterURL = "http://master:8080"
+	}
+
+	apiKey := m.cfg.Channels.SiamSync.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("MASTER_API_KEY")
+	}
+
+	url := fmt.Sprintf("%s/api/agent/v1/missions/%s", masterURL, missionID)
+	payload := map[string]string{"status": "in_progress"}
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("master returned status %d when marking in_progress", resp.StatusCode)
+	}
+	return nil
+}
+
 func (m *MissionManager) injectMission(ctx context.Context, mission Mission) {
 	logger.InfoCF("mission", "Received mission from Master", map[string]any{
 		"id":          mission.ID,
 		"description": mission.Description,
 	})
+
+	// ⭐ Mark as in_progress FIRST so Master stops returning this in pending polls.
+	// This is the critical fix for the infinite re-poll loop.
+	if err := m.markInProgress(ctx, mission.ID); err != nil {
+		logger.WarnCF("mission", "Failed to mark mission in_progress — will still attempt execution", map[string]any{
+			"mission_id": mission.ID,
+			"error":      err.Error(),
+		})
+	} else {
+		logger.InfoCF("mission", "Mission marked in_progress", map[string]any{"mission_id": mission.ID})
+	}
 
 	// Inject into bus as an inbound message
 	peer := bus.Peer{

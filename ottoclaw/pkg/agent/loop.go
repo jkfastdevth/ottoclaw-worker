@@ -54,7 +54,7 @@ type AgentLoop struct {
 
 	// 🕵️ Stability & Anti-Zombie Tracking
 	processedMessages sync.Map // Map[string]time.Time (MessageID -> ReceivedAt)
-	busySessions      sync.Map // Map[string]bool (SessionKey -> isProcessing)
+	busySessions      sync.Map // Map[string]time.Time (SessionKey -> lockedAt) — TTL-based to prevent stuck locks
 
 	// 🎯 Mission Control
 	missionManager *MissionManager
@@ -774,10 +774,22 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		sessionKey = msg.SessionKey
 	}
 
-	// 2. 🛡️ Session Locking: Prevent concurrent AI threads on the same session
-	if _, busy := al.busySessions.LoadOrStore(sessionKey, true); busy {
-		logger.WarnCF("agent", "Concurrent request blocked for session", map[string]any{"session_key": sessionKey})
-		return "DUPLICATE_CONCURRENT_REQUEST_BLOCKED", nil
+	// 2. 🛡️ Session Locking: Prevent concurrent AI threads on the same session.
+	// Uses time.Time instead of bool so we can detect and evict stale locks (e.g. after a crash).
+	const sessionLockTTL = 10 * time.Minute
+	now := time.Now()
+	if lockedAt, busy := al.busySessions.LoadOrStore(sessionKey, now); busy {
+		// If the existing lock is older than TTL, it's stale — evict and take over.
+		if lockedTime, ok := lockedAt.(time.Time); ok && now.Sub(lockedTime) > sessionLockTTL {
+			logger.WarnCF("agent", "Stale session lock evicted (TTL exceeded)", map[string]any{
+				"session_key": sessionKey,
+				"locked_for":  now.Sub(lockedTime).String(),
+			})
+			al.busySessions.Store(sessionKey, now)
+		} else {
+			logger.WarnCF("agent", "Concurrent request blocked for session", map[string]any{"session_key": sessionKey})
+			return "DUPLICATE_CONCURRENT_REQUEST_BLOCKED", nil
+		}
 	}
 	defer al.busySessions.Delete(sessionKey)
 
