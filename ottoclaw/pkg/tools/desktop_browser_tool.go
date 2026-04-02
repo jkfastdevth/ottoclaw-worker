@@ -134,7 +134,7 @@ func (t *DesktopBrowserTool) Execute(ctx context.Context, args map[string]any) *
 	}
 
 	// Run bridge with timeout
-	timeout := 120 * time.Second
+	timeout := 300 * time.Second
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
