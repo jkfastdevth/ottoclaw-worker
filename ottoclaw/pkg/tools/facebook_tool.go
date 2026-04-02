@@ -164,10 +164,42 @@ func (t *FacebookTool) post(ctx context.Context, message string) *ToolResult {
 		// Short pause before posting
 		{"action": "evaluate_js", "js": "new Promise(r => setTimeout(r, 2000))"},
 
-		// Click the Post button
+		// Smart Click: Handle "Next" -> "Post" dynamic flow
 		{
-			"action":   "click",
-			"selector": "[aria-label='โพสต์'],[aria-label='Post']",
+			"action": "evaluate_js",
+			"js": `
+				(async function() {
+					function getButton(texts) {
+						let dialog = document.querySelector("[role='dialog']");
+						if (!dialog) return null;
+						
+						let buttons = dialog.querySelectorAll("div[role='button'], button, span");
+						for (let btn of buttons) {
+							if (btn.innerText && texts.includes(btn.innerText.trim())) return btn;
+						}
+						// Fallback: aria-label
+						for (let btn of buttons) {
+							let label = btn.getAttribute('aria-label');
+							if (label && texts.some(t => label === t)) return btn;
+						}
+						return null;
+					}
+					
+					let nextBtn = getButton(["Next", "ถัดไป"]);
+					if (nextBtn) {
+						nextBtn.click();
+						await new Promise(r => setTimeout(r, 2000));
+					}
+					
+					let postBtn = getButton(["Post", "โพสต์"]);
+					if (postBtn) {
+						postBtn.click();
+						return 'Success: Clicked Post';
+					}
+					
+					return 'Warning: Post button not found';
+				})()
+			`,
 		},
 
 		// Wait for post to be submitted
