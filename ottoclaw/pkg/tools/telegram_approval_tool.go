@@ -60,6 +60,14 @@ func (t *TelegramApprovalTool) Execute(ctx context.Context, args map[string]any)
 	timeoutMinutes := 5
 	if val, ok := args["timeout_minutes"].(float64); ok && val > 0 {
 		timeoutMinutes = int(val)
+	} else if valStr, ok := args["timeout_minutes"].(string); ok {
+		importStrconv := false
+		_ = importStrconv // we need to import strconv, I will do it next
+		var v int
+		fmt.Sscanf(valStr, "%d", &v)
+		if v > 0 {
+			timeoutMinutes = v
+		}
 	}
 
 	token := os.Getenv("ORCHESTRATOR_TELEGRAM_TOKEN")
