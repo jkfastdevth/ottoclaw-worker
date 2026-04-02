@@ -126,14 +126,14 @@ func (t *FacebookTool) post(ctx context.Context, message string) *ToolResult {
 		// Wait for the post composer to appear
 		{
 			"action":     "wait_for",
-			"selector":   "[aria-label='สร้างโพสต์'],[aria-label='Create post'],[data-testid='status-attachment-mentions-input']",
+			"selector":   "[aria-label='สร้างโพสต์'],[aria-label='Create post'],[data-testid='status-attachment-mentions-input'],text=\"คุณคิดอะไรอยู่\",text=\"What's on your mind?\"",
 			"timeout_ms": 20000,
 		},
 
 		// Click the "What's on your mind?" / "คุณคิดอะไรอยู่" box
 		{
 			"action":   "click",
-			"selector": "[aria-label='สร้างโพสต์'],[aria-label='Create post']",
+			"selector": "[aria-label='สร้างโพสต์'],[aria-label='Create post'],text=\"คุณคิดอะไรอยู่\",text=\"What's on your mind?\"",
 		},
 
 		// Wait for the composer modal to open
