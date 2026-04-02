@@ -62,18 +62,19 @@ def run_steps(params):
         for step in steps:
             action = step.get("action", "")
             step_result = {"action": action}
+            timeout = step.get("timeout_ms", 10000)
 
             try:
                 if action == "navigate":
                     url = step["url"]
-                    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    page.goto(url, wait_until="domcontentloaded", timeout=timeout)
                     step_result.update({"url": page.url, "title": page.title()})
 
                 elif action == "click":
                     selector = step.get("selector")
                     x, y = step.get("x"), step.get("y")
                     if selector:
-                        page.click(selector, timeout=10000)
+                        page.click(selector, timeout=timeout)
                     elif x is not None and y is not None:
                         page.mouse.click(float(x), float(y))
                     else:
@@ -97,7 +98,7 @@ def run_steps(params):
 
                 elif action == "get_text":
                     selector = step.get("selector", "body")
-                    text = page.text_content(selector, timeout=10000) or ""
+                    text = page.text_content(selector, timeout=timeout) or ""
                     max_len = step.get("max_len", 3000)
                     step_result["text"] = text[:max_len]
 
@@ -106,7 +107,6 @@ def run_steps(params):
 
                 elif action == "wait_for":
                     selector = step["selector"]
-                    timeout = step.get("timeout_ms", 10000)
                     page.wait_for_selector(selector, timeout=timeout)
                     step_result["found"] = True
 
@@ -134,7 +134,7 @@ def run_steps(params):
 
                 elif action == "hover":
                     selector = step["selector"]
-                    page.hover(selector, timeout=10000)
+                    page.hover(selector, timeout=timeout)
                     step_result["hovered"] = True
 
                 else:
@@ -148,9 +148,10 @@ def run_steps(params):
 
             results.append(step_result)
 
-            # Stop on error unless caller wants to continue
-            if not step_result.get("ok") and not params.get("continue_on_error"):
-                break
+            # Stop on error unless caller wants to continue or step is optional
+            if not step_result.get("ok"):
+                if not step.get("optional") and not params.get("continue_on_error"):
+                    break
 
         # Persist session (cookies, localStorage)
         try:

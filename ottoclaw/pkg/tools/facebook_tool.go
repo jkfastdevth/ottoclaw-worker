@@ -164,42 +164,21 @@ func (t *FacebookTool) post(ctx context.Context, message string) *ToolResult {
 		// Short pause before posting
 		{"action": "evaluate_js", "js": "new Promise(r => setTimeout(r, 2000))"},
 
-		// Smart Click: Handle "Next" -> "Post" dynamic flow
+		// Optionally click "Next" if Facebook forces audience selection first
 		{
-			"action": "evaluate_js",
-			"js": `
-				(async function() {
-					function getButton(texts) {
-						let dialog = document.querySelector("[role='dialog']");
-						if (!dialog) return null;
-						
-						let buttons = dialog.querySelectorAll("div[role='button'], button, span");
-						for (let btn of buttons) {
-							if (btn.innerText && texts.includes(btn.innerText.trim())) return btn;
-						}
-						// Fallback: aria-label
-						for (let btn of buttons) {
-							let label = btn.getAttribute('aria-label');
-							if (label && texts.some(t => label === t)) return btn;
-						}
-						return null;
-					}
-					
-					let nextBtn = getButton(["Next", "ถัดไป"]);
-					if (nextBtn) {
-						nextBtn.click();
-						await new Promise(r => setTimeout(r, 2000));
-					}
-					
-					let postBtn = getButton(["Post", "โพสต์"]);
-					if (postBtn) {
-						postBtn.click();
-						return 'Success: Clicked Post';
-					}
-					
-					return 'Warning: Post button not found';
-				})()
-			`,
+			"action":     "click",
+			"selector":   "[role='dialog'] [aria-label='Next'], [role='dialog'] [aria-label='ถัดไป'], [role='dialog'] :text-is(\"Next\"), [role='dialog'] :text-is(\"ถัดไป\")",
+			"optional":   true,
+			"timeout_ms": 3000,
+		},
+		// Short pause to allow modal to change if Next was clicked
+		{"action": "evaluate_js", "js": "new Promise(r => setTimeout(r, 2000))"},
+
+		// Click the final Post button
+		{
+			"action":     "click",
+			"selector":   "[aria-label='โพสต์'], [aria-label='Post'], [role='dialog'] :text-is(\"โพสต์\"), [role='dialog'] :text-is(\"Post\")",
+			"timeout_ms": 10000,
 		},
 
 		// Wait for post to be submitted
