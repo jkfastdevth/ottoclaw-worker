@@ -113,12 +113,20 @@ func (t *TelegramApprovalTool) Execute(ctx context.Context, args map[string]any)
 	// 2. Send the question
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
 	
-	payloadMsg := fmt.Sprintf("🛡️ <b>[Approval Required]</b>\n\n%s\n\n👉 <i>Reply with <code>approve</code> to proceed, or <code>reject</code> to abort.</i>", message)
+	payloadMsg := fmt.Sprintf("🛡️ <b>[Approval Required]</b>\n\n%s", message)
 	
 	payload := map[string]interface{}{
 		"chat_id":    chatID,
 		"text":       payloadMsg,
 		"parse_mode": "HTML",
+		"reply_markup": map[string]interface{}{
+			"inline_keyboard": [][]map[string]interface{}{
+				{
+					{"text": "✅ Approve", "callback_data": "approve"},
+					{"text": "❌ Reject", "callback_data": "reject"},
+				},
+			},
+		},
 	}
 	bodyData, _ := json.Marshal(payload)
 	
@@ -156,12 +164,22 @@ func (t *TelegramApprovalTool) Execute(ctx context.Context, args map[string]any)
 				OK     bool `json:"ok"`
 				Result []struct {
 					UpdateID int `json:"update_id"`
-					Message  struct {
+					Message  *struct {
 						Chat struct {
 							ID json.Number `json:"id"`
 						} `json:"chat"`
 						Text string `json:"text"`
 					} `json:"message"`
+					CallbackQuery *struct {
+						ID   string `json:"id"`
+						Data string `json:"data"`
+						Message *struct {
+							Chat struct {
+								ID json.Number `json:"id"`
+							} `json:"chat"`
+							MessageID int `json:"message_id"`
+						} `json:"message"`
+					} `json:"callback_query"`
 				} `json:"result"`
 			}
 			json.NewDecoder(tResp.Body).Decode(&guResp)
@@ -170,13 +188,36 @@ func (t *TelegramApprovalTool) Execute(ctx context.Context, args map[string]any)
 			if guResp.OK {
 				for _, update := range guResp.Result {
 					curOffset = update.UpdateID + 1
-					
-					// Validate chat matching
-					if update.Message.Chat.ID.String() != chatID {
+
+					var activeChatID string
+					var textLower string
+					var callbackID string
+					var messageID int
+
+					if update.CallbackQuery != nil && update.CallbackQuery.Message != nil {
+						activeChatID = update.CallbackQuery.Message.Chat.ID.String()
+						textLower = strings.ToLower(strings.TrimSpace(update.CallbackQuery.Data))
+						callbackID = update.CallbackQuery.ID
+						messageID = update.CallbackQuery.Message.MessageID
+					} else if update.Message != nil {
+						activeChatID = update.Message.Chat.ID.String()
+						textLower = strings.ToLower(strings.TrimSpace(update.Message.Text))
+					} else {
 						continue
 					}
-					
-					textLower := strings.ToLower(strings.TrimSpace(update.Message.Text))
+
+					// Validate chat matching
+					if activeChatID != chatID {
+						continue
+					}
+
+					// Acknowledge callback query if present to stop loading spinner
+					if callbackID != "" {
+						cbURL := fmt.Sprintf("https://api.telegram.org/bot%s/answerCallbackQuery", token)
+						cbBody, _ := json.Marshal(map[string]interface{}{"callback_query_id": callbackID})
+						http.Post(cbURL, "application/json", bytes.NewBuffer(cbBody))
+					}
+
 					if textLower == "approve" || textLower == "yes" || textLower == "y" {
 						// Send confirmation
 						confirmPayload := map[string]interface{}{
@@ -192,8 +233,19 @@ func (t *TelegramApprovalTool) Execute(ctx context.Context, args map[string]any)
 							cResp.Body.Close()
 						}
 						
+						// Remove inline keyboard from original message if it was a button click
+						if messageID != 0 {
+							editURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageReplyMarkup", token)
+							editBody, _ := json.Marshal(map[string]interface{}{
+								"chat_id": chatID,
+								"message_id": messageID,
+								"reply_markup": map[string]interface{}{"inline_keyboard": [][]interface{}{}},
+							})
+							http.Post(editURL, "application/json", bytes.NewBuffer(editBody))
+						}
+
 						return &ToolResult{
-							ForLLM:  "User has APPROVED the action. Please proceed.",
+							ForLLM:  "User has APPROVED the action. Please proceed. Your execution has resumed.",
 							ForUser: "Approved by human admin.",
 						}
 					} else if textLower == "reject" || textLower == "cancel" || textLower == "no" || textLower == "n" || textLower == "abort" {
@@ -209,6 +261,16 @@ func (t *TelegramApprovalTool) Execute(ctx context.Context, args map[string]any)
 						cResp, _ := http.DefaultClient.Do(cReq)
 						if cResp != nil {
 							cResp.Body.Close()
+						}
+
+						if messageID != 0 {
+							editURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageReplyMarkup", token)
+							editBody, _ := json.Marshal(map[string]interface{}{
+								"chat_id": chatID,
+								"message_id": messageID,
+								"reply_markup": map[string]interface{}{"inline_keyboard": [][]interface{}{}},
+							})
+							http.Post(editURL, "application/json", bytes.NewBuffer(editBody))
 						}
 						
 						return ErrorResult("User REJECTED the action. STOP processing and abort.")
