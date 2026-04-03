@@ -23,7 +23,9 @@ COPY ottoclaw-worker/siam-arm/go.mod ottoclaw-worker/siam-arm/go.sum ./
 COPY ottoclaw-worker/siam-arm/proto/ ./proto/
 RUN rm -f ./proto/control*
 
-COPY ottoclaw-worker/siam-arm/main.go ./
+COPY ottoclaw-worker/siam-arm/*.go ./
+# Fix: copy the ottoclaw local dependency to satisfy go.mod "replace github.com/sipeed/ottoclaw => ../ottoclaw"
+COPY ottoclaw-worker/ottoclaw/ ../ottoclaw/
 RUN go mod download && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/siam-worker .
 
