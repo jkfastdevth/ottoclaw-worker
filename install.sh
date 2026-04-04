@@ -378,26 +378,46 @@ EOF
 # BUILD
 # ══════════════════════════════════════════════════════════════════════════════
 build_binaries() {
-    banner "Installing OttoClaw Binaries (Bare-Metal Source Build)"
+    banner "Installing OttoClaw Binaries"
     
     local use_binary=false
-    # FORCE Source compile for the baremetal branch to avoid downloading Heavy/Docker bundles
     if [[ -n "${SUFFIX:-}" ]]; then
-        echo -e "  [Baremetal Mode] Forcing source compilation to ensure ultra-lightweight binaries..."
+        echo -e "  Attempting to download pre-compiled binary for ${SUFFIX}..."
+        if curl -fsSL --head "${BINARY_URL}" >/dev/null 2>&1; then
+            local tmp_bin=$(mktemp -d)
+            if curl -fsSL "${BINARY_URL}" -o "${tmp_bin}/release.tar.gz"; then
+                echo -e "  Extracting binaries..."
+                tar -xzf "${tmp_bin}/release.tar.gz" -C "${tmp_bin}"
+                [[ -f "${tmp_bin}/ottoclaw-brain" ]] && cp "${tmp_bin}/ottoclaw-brain" /usr/local/bin/ottoclaw-brain
+                [[ -f "${tmp_bin}/siam-worker" ]] && cp "${tmp_bin}/siam-worker" /usr/local/bin/siam-worker
+                chmod +x /usr/local/bin/ottoclaw-brain /usr/local/bin/siam-worker
+                
+                # Update SCRIPT_DIR to point to where workspace/skills are
+                SCRIPT_DIR="${tmp_bin}"
+                use_binary=true
+                info "Installed pre-compiled binaries."
+            fi
+        else
+            warn "No pre-compiled binary found for ${SUFFIX} at ${VERSION}."
+            echo -e "     ${YELLOW}💡 Tip:${RESET} To avoid building on low-spec remote machines:"
+            echo -e "        1. Run ${CYAN}./build-releases.sh v1.0.0${RESET} on your local machine."
+            echo -e "        2. ${CYAN}git tag v1.0.0${RESET} and ${CYAN}git push --tags${RESET} to GitHub."
+            echo -e "     The installer will then find the binaries automatically.\n"
+        fi
     fi
 
     if [[ "$use_binary" == "false" ]]; then
         # Check if source exists, if not clone it (for one-liner source build)
         if [[ ! -d "${SCRIPT_DIR}/ottoclaw" ]]; then
-            warn "Source code not found in ${SCRIPT_DIR}. Downloading baremetal branch from GitHub..."
+            warn "Source code not found in ${SCRIPT_DIR}. Downloading from GitHub..."
             local tmp_src=$(mktemp -d)
             if command -v git >/dev/null 2>&1; then
-                git clone --branch baremetal --depth 1 "https://github.com/${REPO}.git" "${tmp_src}" >/dev/null 2>&1
+                git clone --depth 1 "https://github.com/${REPO}.git" "${tmp_src}" >/dev/null 2>&1
             else
                 # Fallback to downloading zip if git is missing
-                curl -fsSL "https://github.com/${REPO}/archive/refs/heads/baremetal.zip" -o "${tmp_src}/source.zip"
+                curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.zip" -o "${tmp_src}/source.zip"
                 unzip -q "${tmp_src}/source.zip" -d "${tmp_src}"
-                mv "${tmp_src}/ottoclaw-worker-baremetal/"* "${tmp_src}/"
+                mv "${tmp_src}/ottoclaw-worker-main/"* "${tmp_src}/"
             fi
             SCRIPT_DIR="${tmp_src}"
         fi
@@ -428,7 +448,7 @@ build_binaries() {
         info "ottoclaw-brain → /usr/local/bin/ottoclaw-brain"
 
         echo -e "  Building ${BOLD}siam-worker${RESET} (Arm)..."
-        pushd "${REPO_ROOT}/worker" >/dev/null
+        pushd "${SCRIPT_DIR}/siam-arm" >/dev/null
         CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /usr/local/bin/siam-worker .
         popd >/dev/null
         info "siam-worker → /usr/local/bin/siam-worker"
@@ -541,7 +561,7 @@ SOULEOF
     else
         warn "Not a git repository — downloading latest install.sh from GitHub..."
         local FRESH_INSTALL=$(mktemp /tmp/ottoclaw-install-XXXXXX.sh)
-        if curl -fsSL "https://raw.githubusercontent.com/${REPO}/baremetal/install.sh" -o "$FRESH_INSTALL" 2>/dev/null; then
+        if curl -fsSL "https://raw.githubusercontent.com/${REPO}/main/install.sh" -o "$FRESH_INSTALL" 2>/dev/null; then
             chmod +x "$FRESH_INSTALL"
             cp "$FRESH_INSTALL" "$INSTALL_SH" 2>/dev/null || true
             info "install.sh updated from GitHub"
@@ -560,7 +580,7 @@ SOULEOF
     echo "   ✓ ottoclaw-brain rebuilt"
 
     echo "🔨 Rebuilding siam-worker..."
-    pushd "$(dirname "$INSTALL_SH")/../worker" >/dev/null
+    pushd "$(dirname "$INSTALL_SH")/siam-arm" >/dev/null
     CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -ldflags="-s -w" -o /tmp/siam-worker-new .
     popd >/dev/null
     echo "   ✓ siam-worker rebuilt"

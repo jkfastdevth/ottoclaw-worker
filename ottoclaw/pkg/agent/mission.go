@@ -93,13 +93,12 @@ func (m *MissionManager) Start(ctx context.Context) {
 		apiKey = os.Getenv("MASTER_API_KEY")
 	}
 
-	logger.InfoCF("mission", "Starting mission polling loop", map[string]any{
-		"agent":    m.agentID,
-		"interval": m.interval.String(),
+	logger.InfoCF("mission", "Starting EVENT-DRIVEN mission polling loop (Nudge Only)", map[string]any{
+		"agent": m.agentID,
 	})
 
-	ticker := time.NewTicker(m.interval)
-	defer ticker.Stop()
+	// Perform a single initial poll to catch any missed missions while disconnected
+	m.pollMissions(ctx, masterURL, apiKey)
 
 	// 💓 Heartbeat ticker (every 60s)
 	heartbeatTicker := time.NewTicker(60 * time.Second)
@@ -119,8 +118,6 @@ func (m *MissionManager) Start(ctx context.Context) {
 			return
 		case <-nudgeChan:
 			logger.InfoC("mission", "🚀 Received SIGUSR1 nudge! Polling missions immediately...")
-			m.pollMissions(ctx, masterURL, apiKey)
-		case <-ticker.C:
 			m.pollMissions(ctx, masterURL, apiKey)
 		case <-heartbeatTicker.C:
 			m.reportHeartbeats(ctx, masterURL, apiKey)
